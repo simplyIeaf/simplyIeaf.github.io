@@ -1,2 +1,2 @@
-# simplyIeaf.github.io
-My website
+# My website
+Repository i made to make my own website for my YouTube channel
