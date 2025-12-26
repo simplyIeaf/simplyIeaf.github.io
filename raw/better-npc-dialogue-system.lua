@@ -1,4 +1,4 @@
--- Note : Put the localscript inside of StarterGui instead of StarterPlayerScripts
+-- Note : Put the localscript inside of StarterGui instead of StarterPlayerScripts yes
 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
