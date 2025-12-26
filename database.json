@@ -1,13 +1,3 @@
 {
-  "scripts": {
-    "system-messages": {
-      "title": "System Messages",
-      "visibility": "PUBLIC",
-      "description": "",
-      "expiration": "",
-      "filename": "system-messages.lua",
-      "created": "2025-12-26T20:37:20.357Z",
-      "updated": "2025-12-26T20:37:20.357Z"
-    }
-  }
+  "scripts": {}
 }
