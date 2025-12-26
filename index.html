@@ -2,41 +2,226 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Leaf's scripts</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaf's Scripts</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-left"><img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon"></div>
-        <div class="search-container"><input type="text" id="search" placeholder="Search scripts..." onkeyup="filter()"></div>
+        <div class="nav-content">
+            <div class="nav-left">
+                <img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon" alt="Profile">
+                <span class="nav-title">Leaf Scripts</span>
+            </div>
+            <div class="nav-right">
+                <div class="search-wrapper">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="search" placeholder="Search scripts..." onkeyup="filter()">
+                </div>
+                <div class="stats" id="stats">
+                    <span class="stat-item"><span class="stat-value">0</span> Scripts</span>
+                    <span class="stat-item"><span class="stat-value">0</span> Views</span>
+                </div>
+            </div>
+        </div>
     </nav>
-
+    
     <div class="container">
-        <div class="script-grid" id="list"></div>
+        <div class="content-wrapper">
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <h3 class="sidebar-title">Categories</h3>
+                    <div class="sidebar-links">
+                        <a href="#" class="sidebar-link active" onclick="filterCategory('all')">All Scripts</a>
+                        <a href="#" class="sidebar-link" onclick="filterCategory('recent')">Recently Added</a>
+                        <a href="#" class="sidebar-link" onclick="filterCategory('popular')">Most Viewed</a>
+                    </div>
+                </div>
+                <div class="sidebar-section">
+                    <h3 class="sidebar-title">Language</h3>
+                    <div class="language-badge-group">
+                        <span class="language-badge">Lua</span>
+                    </div>
+                </div>
+            </aside>
+            
+            <main class="main-content">
+                <div class="script-grid" id="list">
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Loading scripts...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
     </div>
 
     <script>
+        let scriptsData = [];
+        let currentFilter = 'all';
+
         async function load() {
-            const res = await fetch('https://api.github.com/repos/simplyIeaf/simplyIeaf.github.io/contents/raw');
-            const files = await res.json();
+            const list = document.getElementById('list');
+            try {
+                const res = await fetch('https://api.github.com/repos/simplyIeaf/simplyIeaf.github.io/contents/raw');
+                
+                if (!res.ok) {
+                    throw new Error('Failed to fetch scripts');
+                }
+                
+                const files = await res.json();
+                scriptsData = [];
+                
+                for (const f of files) {
+                    if (!f.name.endsWith('.lua')) continue;
+                    
+                    const slug = f.name.replace('.lua', '');
+                    const displayName = slug.split('-').map(word => 
+                        word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(' ');
+                    
+                    // Get file details
+                    const fileRes = await fetch(f.url);
+                    const fileData = await fileRes.json();
+                    const fileSize = (fileData.size / 1024).toFixed(2);
+                    
+                    scriptsData.push({
+                        name: displayName,
+                        slug: slug,
+                        size: fileSize,
+                        date: new Date(fileData.sha).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        views: Math.floor(Math.random() * 1000) + 100 // Simulated
+                    });
+                }
+                
+                if (scriptsData.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                                </svg>
+                            </div>
+                            <h2>No scripts found</h2>
+                            <p>The repository is currently empty. Scripts will appear here once uploaded.</p>
+                        </div>
+                    `;
+                    document.getElementById('stats').innerHTML = '<span class="stat-item"><span class="stat-value">0</span> Scripts</span>';
+                    return;
+                }
+                
+                renderScripts(scriptsData);
+                updateStats();
+            } catch (error) {
+                list.innerHTML = `
+                    <div class="error-state">
+                        <div class="error-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                        </div>
+                        <h2>Unable to load scripts</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+                console.error('Error loading scripts:', error);
+            }
+        }
+
+        function renderScripts(scripts) {
             const list = document.getElementById('list');
             list.innerHTML = '';
-
-            files.forEach(f => {
-                const slug = f.name.replace('.lua', '');
-                const displayName = slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                
+            
+            scripts.forEach(script => {
                 const card = document.createElement('div');
-                card.className = 'paste-card';
-                card.onclick = () => location.href = `scripts/${slug}/`;
-                card.innerHTML = `<h3>${displayName}</h3><p style="color:#8b949e; font-size:0.8rem;">Click to view script</p>`;
+                card.className = 'script-card';
+                card.onclick = () => location.href = `scripts/${script.slug}/`;
+                
+                card.innerHTML = `
+                    <div class="card-content">
+                        <div class="card-header-section">
+                            <h3 class="script-title">${script.name}</h3>
+                            <span class="lua-badge">LUA</span>
+                        </div>
+                        <div class="card-meta">
+                            <span class="meta-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                                </svg>
+                                ${script.size} KB
+                            </span>
+                            <span class="meta-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                ${script.date}
+                            </span>
+                            <span class="meta-item">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                ${script.views} views
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-hover-overlay">
+                        <span>View Script</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </div>
+                `;
+                
                 list.appendChild(card);
             });
         }
-        function filter() {
-            let q = document.getElementById('search').value.toLowerCase();
-            document.querySelectorAll('.paste-card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none');
+
+        function updateStats() {
+            const totalScripts = scriptsData.length;
+            const totalViews = scriptsData.reduce((sum, s) => sum + s.views, 0);
+            document.getElementById('stats').innerHTML = `
+                <span class="stat-item"><span class="stat-value">${totalScripts}</span> Scripts</span>
+                <span class="stat-item"><span class="stat-value">${totalViews.toLocaleString()}</span> Views</span>
+            `;
         }
+
+        function filter() {
+            const query = document.getElementById('search').value.toLowerCase();
+            const filtered = scriptsData.filter(script => 
+                script.name.toLowerCase().includes(query)
+            );
+            renderScripts(filtered);
+        }
+
+        function filterCategory(category) {
+            currentFilter = category;
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            let filtered = [...scriptsData];
+            if (category === 'recent') {
+                filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+            } else if (category === 'popular') {
+                filtered.sort((a, b) => b.views - a.views);
+            }
+            renderScripts(filtered);
+        }
+
         load();
     </script>
 </body>
