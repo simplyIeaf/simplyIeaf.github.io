@@ -1,0 +1,99 @@
+:root {
+    --bg: #050505;
+    --card: #0d1117;
+    --accent: #10b981;
+    --border: #27272a;
+    --text: #e6edf3;
+    --nav-height: 60px;
+}
+
+body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding-top: var(--nav-height);
+}
+
+/* Top Navigation Bar */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--nav-height);
+    background: #000;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+.nav-left {
+    position: absolute;
+    left: 20px;
+}
+
+.nav-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    object-fit: cover;
+}
+
+/* Search Bar in Navbar */
+.search-container {
+    width: 100%;
+    max-width: 400px;
+}
+
+#search {
+    width: 100%;
+    background: #161b22;
+    border: 1px solid var(--border);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 6px;
+    outline: none;
+}
+
+#search:focus { border-color: var(--accent); }
+
+/* Grid and Cards */
+.container { padding: 40px 20px; max-width: 1100px; margin: auto; }
+
+.script-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.paste-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.paste-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+
+.badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #10b98122;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    font-weight: bold;
+}
+
+/* Code Display Logic */
+.code-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.toolbar { background: #161b22; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+.btn { background: var(--accent); color: #000; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; }
