@@ -15,7 +15,6 @@ body {
     padding-top: var(--nav-height);
 }
 
-/* Top Navigation Bar */
 .navbar {
     position: fixed;
     top: 0;
@@ -32,25 +31,10 @@ body {
     box-sizing: border-box;
 }
 
-.nav-left {
-    position: absolute;
-    left: 20px;
-}
+.nav-left { position: absolute; left: 20px; }
+.nav-icon { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; object-fit: cover; }
 
-.nav-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    object-fit: cover;
-}
-
-/* Search Bar in Navbar */
-.search-container {
-    width: 100%;
-    max-width: 400px;
-}
-
+.search-container { width: 100%; max-width: 400px; }
 #search {
     width: 100%;
     background: #161b22;
@@ -60,12 +44,9 @@ body {
     border-radius: 6px;
     outline: none;
 }
-
 #search:focus { border-color: var(--accent); }
 
-/* Grid and Cards */
 .container { padding: 40px 20px; max-width: 1100px; margin: auto; }
-
 .script-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -80,7 +61,6 @@ body {
     cursor: pointer;
     transition: 0.2s;
 }
-
 .paste-card:hover { border-color: var(--accent); transform: translateY(-3px); }
 
 .badge {
@@ -93,7 +73,6 @@ body {
     font-weight: bold;
 }
 
-/* Code Display Logic */
 .code-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .toolbar { background: #161b22; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
-.btn { background: var(--accent); color: #000; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; }
+.btn { background: var(--accent); color: #000; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; }
