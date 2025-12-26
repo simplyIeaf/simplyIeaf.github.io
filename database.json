@@ -6,6 +6,15 @@
       "description": "",
       "expiration": "",
       "filename": "better-npc-dialogue-system.lua"
+    },
+    "better-npc-dialogue-systems": {
+      "title": "Better NPC Dialogue Systems",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "better-npc-dialogue-systems.lua",
+      "created": "2025-12-26T19:44:43.205Z",
+      "updated": "2025-12-26T19:44:43.206Z"
     }
   }
 }
