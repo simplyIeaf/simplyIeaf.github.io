@@ -1,3 +1,4 @@
+-- PUBLIC
 -- Note : Put the localscript inside of StarterGui instead of StarterPlayerScripts
 
 local TweenService = game:GetService("TweenService")
