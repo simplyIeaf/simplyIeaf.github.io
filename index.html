@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Leaf's Scripts</title>
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/220599690?v=4">
-    
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26,13 +25,13 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" id="search" placeholder="Search scripts..." onkeyup="app.renderList()">
+                    <input type="text" id="search" placeholder="Search scripts..." onkeyup="app.debouncedRender()">
                 </div>
             </div>
 
             <div class="nav-right">
                 <div id="auth-section">
-                    <button class="btn btn-secondary btn-sm" onclick="app.toggleLoginModal()">Login</button>
+                    <button class="btn btn-secondary btn-sm" onclick="app.debouncedToggleLogin()">Login</button>
                 </div>
                 <div id="user-section" style="display: none;">
                     <button class="btn btn-primary btn-sm" onclick="navigate('admin')">Manage</button>
@@ -56,17 +55,24 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Token</label>
+                    <label style="display:block;margin-bottom:8px;font-size:12px;color:#888;">Token</label>
                     <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
                 </div>
-                <div id="login-error" class="error-msg" style="display: none;"></div>
-                <button class="btn btn-full" onclick="app.login()">Login</button>
+                <div id="login-error" style="color:var(--danger);font-size:12px;margin:12px 0;text-align:center;display:none;"></div>
+                <button class="btn btn-full" onclick="app.debouncedLogin()">Login</button>
             </div>
         </div>
     </div>
 
     <div class="container">
         <div id="view-home" class="view-section animate__animated animate__fadeIn" style="display: block;">
+            
+            <div class="mobile-controls" style="display: none;">
+                <div class="mobile-pill active" onclick="app.filterCategory('all', event)">All</div>
+                <div class="mobile-pill" onclick="app.filterCategory('public', event)">Public</div>
+                <div class="mobile-pill" id="mob-private" style="display:none" onclick="app.filterCategory('private', event)">Private</div>
+            </div>
+            
             <div class="content-wrapper">
                 <aside class="sidebar">
                     <div class="sidebar-section">
@@ -79,7 +85,7 @@
                     </div>
                     <div class="sidebar-section">
                         <h3 class="sidebar-title">Sort By</h3>
-                        <select class="input-field select-sm" onchange="app.setSort(this.value)">
+                        <select class="input-field select-sm" style="padding:8px" onchange="app.setSort(this.value)">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
                             <option value="views">Most Views</option>
@@ -90,7 +96,7 @@
                 
                 <main class="main-content">
                     <div class="script-grid" id="script-list">
-                        <div class="loading-state">
+                        <div style="text-align:center;padding:60px 0;grid-column:1/-1;">
                             <div class="spinner"></div>
                             <p>Loading library...</p>
                         </div>
@@ -100,14 +106,13 @@
         </div>
 
         <div id="view-admin" class="view-section animate__animated animate__fadeIn">
-            <div class="breadcrumb">
-                <button class="btn-text" onclick="navigate('')">← Back to Site</button>
+            <div style="margin-bottom:24px;">
+                <button style="background:none;border:none;color:#888;cursor:pointer;font-weight:600;" onclick="navigate('')">← Back to Site</button>
             </div>
             
             <div class="admin-panel">
                 <div class="admin-header-flex">
                     <h2>Admin Panel</h2>
-                    
                     <div class="tab-switcher">
                         <button class="tab-btn active" onclick="app.switchAdminTab('list')">Manage Scripts</button>
                         <button class="tab-btn" onclick="app.switchAdminTab('create')">Add New</button>
@@ -115,16 +120,16 @@
                 </div>
 
                 <div id="admin-tab-editor" class="admin-tab">
-                    <div class="editor-card">
+                    <div style="background:var(--surface);padding:24px;border-radius:12px;border:1px solid var(--border);">
                         <h3 id="editor-heading" style="margin-bottom: 20px;">Create New Script</h3>
-                        <div class="form-row">
-                            <div class="form-group flex-grow">
-                                <label>Script Title</label>
+                        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+                            <div style="flex:1;min-width:200px;">
+                                <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#888;">Script Title</label>
                                 <input type="text" id="edit-title" class="input-field" placeholder="e.g. Advanced NPC System">
                             </div>
-                            <div class="form-group">
-                                <label>Visibility</label>
-                                <select id="edit-visibility" class="input-field select">
+                            <div style="min-width:140px;">
+                                <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#888;">Visibility</label>
+                                <select id="edit-visibility" class="input-field">
                                     <option value="PUBLIC">Public</option>
                                     <option value="PRIVATE">Private</option>
                                     <option value="UNLISTED">Unlisted</option>
@@ -132,46 +137,48 @@
                             </div>
                         </div>
                         
-                        <div class="form-row">
-                             <div class="form-group flex-grow">
-                                <label>Description</label>
+                        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+                             <div style="flex:1;min-width:200px;">
+                                <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#888;">Description</label>
                                 <input type="text" id="edit-desc" class="input-field" placeholder="Brief explanation...">
                             </div>
-                            <div class="form-group">
-                                <label>Expiration Date</label>
+                            <div>
+                                <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#888;">Expiration</label>
                                 <input type="date" id="edit-expire" class="input-field">
                             </div>
                         </div>
     
-                        <div class="form-group">
-                            <label>Lua Source (No headers needed)</label>
-                            <textarea id="edit-code" class="input-field code-input" placeholder="Paste your Lua code here..."></textarea>
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:700;color:#888;">Lua Source</label>
+                            <textarea id="edit-code" class="input-field" style="min-height:400px;font-family:monospace;background:#080808;" placeholder="Paste your Lua code here..."></textarea>
                         </div>
     
-                        <div class="action-bar">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px;">
                             <div id="admin-msg"></div>
-                            <div class="btn-group">
-                                <button class="btn btn-secondary" onclick="app.switchAdminTab('list')" style="margin-right: 10px;">Cancel</button>
-                                <button class="btn btn-delete" onclick="app.deleteScript()" id="btn-delete" style="display: none;">Delete Script</button>
-                                <button class="btn" onclick="app.saveScript()">Save & Publish</button>
+                            <div style="display:flex;gap:10px;">
+                                <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
+                                <button class="btn btn-delete" onclick="app.debouncedDelete()" id="btn-delete" style="display: none;">Delete</button>
+                                <button class="btn" onclick="app.debouncedSave()">Save & Publish</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div id="admin-tab-list" class="admin-tab" style="display: block;">
-                    <div class="repo-list-container">
-                        <div class="list-header">
-                            <h3>Existing Scripts</h3>
-                            <span class="text-muted" id="total-stats">Loading stats...</span>
-                        </div>
-                        <div id="admin-list" class="admin-list"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                        <h3>Existing Scripts</h3>
+                        <span style="color:#888;" id="total-stats">Loading stats...</span>
                     </div>
+                    <div id="admin-list"></div>
                 </div>
             </div>
         </div>
     </div>
-
+    <script>
+        if(window.innerWidth <= 768) {
+            document.querySelector('.mobile-controls').style.display = 'flex';
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
