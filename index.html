@@ -20,11 +20,16 @@
             const res = await fetch('https://api.github.com/repos/simplyIeaf/simplyIeaf.github.io/contents/raw');
             const files = await res.json();
             const list = document.getElementById('list');
+            list.innerHTML = '';
+
             files.forEach(f => {
+                const slug = f.name.replace('.lua', '');
+                const displayName = slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                
                 const card = document.createElement('div');
                 card.className = 'paste-card';
-                card.onclick = () => location.href = `scripts/${f.name}/${f.name}`;
-                card.innerHTML = `<div style="display:flex;justify-content:space-between;"><h3>${f.name}</h3><span class="badge">LUA</span></div>`;
+                card.onclick = () => location.href = `scripts/${slug}/`;
+                card.innerHTML = `<h3>${displayName}</h3><p style="color:#8b949e; font-size:0.8rem;">Click to view script</p>`;
                 list.appendChild(card);
             });
         }
