@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>SimplyIeaf | Scripts</title>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-left">
+            <img src="https://avatars.githubusercontent.com/u/220599690?s=48&v=4" class="nav-icon">
+        </div>
+        <div class="search-container">
+            <input type="text" id="search" placeholder="Search scripts...">
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="list" class="script-grid">
+            <p>Scanning directory...</p>
+        </div>
+    </div>
+
+    <script>
+        const user = "simplyIeaf";
+        const repo = "simplyIeaf.github.io";
+        let scripts = [];
+
+        fetch(`https://api.github.com/repos/${user}/${repo}/contents/scripts`)
+            .then(res => res.json())
+            .then(data => {
+                scripts = data.filter(i => i.type === "dir");
+                render(scripts);
+            });
+
+        document.getElementById('search').addEventListener('input', e => {
+            const val = e.target.value.toLowerCase();
+            render(scripts.filter(s => s.name.toLowerCase().includes(val)));
+        });
+
+        function render(data) {
+            const list = document.getElementById('list');
+            list.innerHTML = data.length ? "" : "No results.";
+            data.forEach(item => {
+                list.innerHTML += `
+                    <div class="paste-card" onclick="location.href='scripts/${item.name}'">
+                        <div style="font-weight:bold; font-size:1.1rem;">${item.name}</div>
+                        <div style="margin-top:10px; color:#8b949e; font-size:0.9rem;">View Lua Source</div>
+                    </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
