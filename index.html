@@ -445,6 +445,8 @@
         const app = {
             db: { scripts: {} },
             dbSha: null,
+            viewsData: {},
+            viewsSha: null,
             token: localStorage.getItem('gh_token'),
             currentUser: null,
             currentFilter: 'all',
@@ -539,45 +541,101 @@
             },
 
             async fetchAllViews() {
+                await this.loadViewsData();
                 const scripts = Object.keys(this.db.scripts || {});
                 for (const slug of scripts) {
-                    await this.getScriptViewCount(slug);
+                    this.viewCounts[slug] = this.viewsData[slug] || 0;
+                }
+            },
+
+            async loadViewsData() {
+                try {
+                    const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json?t=${Date.now()}`);
+                    
+                    if (res.status === 404) {
+                        this.viewsData = {};
+                        this.viewsSha = null;
+                    } else if (res.ok) {
+                        const file = await res.json();
+                        this.viewsSha = file.sha;
+                        this.viewsData = JSON.parse(atob(file.content));
+                    }
+                } catch (e) {
+                    console.log('Views data load error:', e);
+                    this.viewsData = {};
+                    this.viewsSha = null;
                 }
             },
 
             async getScriptViewCount(slug) {
                 if(this.viewCounts[slug] !== undefined) return this.viewCounts[slug];
-                try {
-                    const namespace = `leaf-${CONFIG.user}`.toLowerCase();
-                    const res = await fetch(`https://api.counterapi.dev/v1/${namespace}/${slug}/`);
-                    if(res.ok) {
-                        const data = await res.json();
-                        this.viewCounts[slug] = data.count || 0;
-                        return data.count || 0;
-                    }
-                } catch(e) {
-                    console.log('View count fetch error:', e);
-                }
-                this.viewCounts[slug] = 0;
-                return 0;
+                
+                await this.loadViewsData();
+                const count = this.viewsData[slug] || 0;
+                this.viewCounts[slug] = count;
+                return count;
             },
 
             async incrementView(slug) {
                 const key = `seen_${slug}`;
-                if(localStorage.getItem(key)) return;
+                if(localStorage.getItem(key)) {
+                    return;
+                }
 
-                try {
-                    const namespace = `leaf-${CONFIG.user}`.toLowerCase();
-                    const res = await fetch(`https://api.counterapi.dev/v1/${namespace}/${slug}/up`, {
-                        method: 'GET'
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        this.viewCounts[slug] = data.count || 0;
-                        localStorage.setItem(key, 'true');
+                const maxRetries = 5;
+                let attempt = 0;
+
+                while (attempt < maxRetries) {
+                    try {
+                        await this.loadViewsData();
+                        
+                        this.viewsData[slug] = (this.viewsData[slug] || 0) + 1;
+                        this.viewCounts[slug] = this.viewsData[slug];
+
+                        const response = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json`, {
+                            method: 'PUT',
+                            headers: { 
+                                'Authorization': `token ${this.token || ''}`,
+                                'Content-Type': 'application/json' 
+                            },
+                            body: JSON.stringify({
+                                message: `Update view count for ${slug}`,
+                                content: btoa(JSON.stringify(this.viewsData, null, 2)),
+                                sha: this.viewsSha
+                            })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.viewsSha = data.content.sha;
+                            localStorage.setItem(key, 'true');
+                            
+                            const viewerEl = document.getElementById('viewer-views');
+                            if (viewerEl) {
+                                const span = viewerEl.querySelector('span');
+                                if (span) span.textContent = `${this.viewsData[slug]} Views`;
+                            }
+                            
+                            return;
+                        } else if (response.status === 409 || response.status === 422) {
+                            attempt++;
+                            const delay = Math.min(1000 * Math.pow(2, attempt), 5000) + Math.random() * 1000;
+                            console.log(`Conflict detected, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            this.viewsSha = null;
+                        } else {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                    } catch(e) { 
+                        console.log('View increment error:', e);
+                        attempt++;
+                        if (attempt >= maxRetries) {
+                            console.error('Failed to increment view after max retries');
+                            return;
+                        }
+                        const delay = Math.min(1000 * Math.pow(2, attempt), 5000) + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
                     }
-                } catch(e) { 
-                    console.log('View increment error:', e); 
                 }
             },
 
@@ -609,26 +667,10 @@
                             </div>
                             <div class="card-meta">
                                 <span>${new Date(s.created || Date.now()).toLocaleDateString()}</span>
-                                <span id="card-views-${s.slug}" class="view-pill">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                    <span>...</span>
-                                </span>
                             </div>
                         </div>
                     </div>
                 `).join('');
-
-                sorted.forEach(async s => {
-                    const count = await this.getScriptViewCount(s.slug);
-                    const el = document.getElementById(`card-views-${s.slug}`);
-                    if(el) {
-                        const span = el.querySelector('span');
-                        if (span) span.textContent = count;
-                    }
-                });
             },
 
             filterLogic(scripts) {
@@ -691,7 +733,7 @@
                 content.style.display = 'block';
                 accessDenied.style.display = 'none';
 
-                this.incrementView(slug);
+                await this.incrementView(slug);
                 const views = await this.getScriptViewCount(slug);
 
                 document.getElementById('viewer-title').textContent = scriptData.title;
