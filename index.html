@@ -1,4 +1,12 @@
-<!DOCTYPE html>
+<div class="action-bar">
+                            <div id="admin-msg"></div>
+                            <div class="btn-group">
+                                <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
+                                <button class="btn btn-delete" onclick="app.deleteScript()" id="btn-delete" style="display: none;">Delete Script</button>
+                                <button class="btn" onclick="app.saveScript()" id="btn-save">Save Script</button>
+                                <button class="btn" onclick="app.republishScript()" id="btn-republish" style="display: none;">Re-publish</button>
+                            </div>
+                        </div><!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -61,7 +69,10 @@
         }
         #search:focus { border-color: var(--accent); background: var(--bg-secondary); }
 
-        .nav-right { flex: 0 0 auto; display: flex; gap: 12px; align-items: center; }
+        .nav-right { flex: 0 0 auto; display: flex; gap: 16px; align-items: center; }
+
+        .btn-group { display: flex; gap: 10px; align-items: center; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .container {
             max-width: 1400px; margin: 80px auto 40px; padding: 0 24px;
@@ -452,6 +463,8 @@
             currentFilter: 'all',
             currentSort: 'newest',
             viewCounts: {},
+            actionInProgress: false,
+            originalSlug: null,
             
             async init() {
                 if (this.token) await this.verifyToken(true);
@@ -468,8 +481,14 @@
             },
 
             async login() {
+                if (this.actionInProgress) return;
+                this.actionInProgress = true;
+
                 const token = document.getElementById('auth-token').value.trim();
-                if (!token) return;
+                if (!token) {
+                    this.actionInProgress = false;
+                    return;
+                }
                 
                 this.token = token;
                 const success = await this.verifyToken(false);
@@ -480,9 +499,14 @@
                     await this.loadDatabase();
                     this.renderList();
                 }
+
+                setTimeout(() => { this.actionInProgress = false; }, 750);
             },
 
             logout() {
+                if (this.actionInProgress) return;
+                this.actionInProgress = true;
+
                 localStorage.removeItem('gh_token');
                 this.token = null;
                 this.currentUser = null;
@@ -850,7 +874,10 @@
                 document.getElementById('edit-expire').value = '';
                 document.getElementById('edit-code').value = '';
                 document.getElementById('btn-delete').style.display = 'none';
+                document.getElementById('btn-save').style.display = 'inline-flex';
+                document.getElementById('btn-republish').style.display = 'none';
                 this.currentEditingSlug = null;
+                this.originalSlug = null;
             },
 
             async populateEditor(slug) {
@@ -858,6 +885,7 @@
                 if(!s) return;
 
                 this.currentEditingSlug = slug;
+                this.originalSlug = slug;
                 this.currentEditingFile = s.filename;
 
                 this.switchAdminTab('create');
@@ -878,9 +906,32 @@
                 const btnDelete = document.getElementById('btn-delete');
                 btnDelete.style.display = 'inline-flex';
                 btnDelete.onclick = () => this.deleteScript(slug, s.filename);
+
+                const newSlug = document.getElementById('edit-title').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                if (newSlug !== slug) {
+                    document.getElementById('btn-save').style.display = 'none';
+                    document.getElementById('btn-republish').style.display = 'inline-flex';
+                } else {
+                    document.getElementById('btn-save').style.display = 'inline-flex';
+                    document.getElementById('btn-republish').style.display = 'none';
+                }
+
+                document.getElementById('edit-title').addEventListener('input', () => {
+                    const currentSlug = document.getElementById('edit-title').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                    if (currentSlug !== this.originalSlug) {
+                        document.getElementById('btn-save').style.display = 'none';
+                        document.getElementById('btn-republish').style.display = 'inline-flex';
+                    } else {
+                        document.getElementById('btn-save').style.display = 'inline-flex';
+                        document.getElementById('btn-republish').style.display = 'none';
+                    }
+                });
             },
 
             async saveScript() {
+                if (this.actionInProgress) return;
+                this.actionInProgress = true;
+
                 const title = document.getElementById('edit-title').value.trim();
                 const visibility = document.getElementById('edit-visibility').value;
                 const desc = document.getElementById('edit-desc').value.trim();
@@ -888,12 +939,16 @@
                 const code = document.getElementById('edit-code').value; 
                 const msg = document.getElementById('admin-msg');
 
-                if(!title || !code) return alert('Title and Code are required');
+                if(!title || !code) {
+                    alert('Title and Code are required');
+                    this.actionInProgress = false;
+                    return;
+                }
 
                 const slug = this.currentEditingSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
                 const filename = `${slug}.lua`;
 
-                msg.innerHTML = '<span class="loading">Publishing...</span>';
+                msg.innerHTML = '<span class="loading">Saving...</span>';
 
                 try {
                     let fileSha = null;
@@ -940,16 +995,111 @@
                     setTimeout(() => {
                         msg.innerHTML = '';
                         this.switchAdminTab('list');
+                        this.actionInProgress = false;
                     }, 1500);
 
                 } catch(e) {
                     msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+                    setTimeout(() => { this.actionInProgress = false; }, 750);
+                }
+            },
+
+            async republishScript() {
+                if (this.actionInProgress) return;
+                this.actionInProgress = true;
+
+                const title = document.getElementById('edit-title').value.trim();
+                const visibility = document.getElementById('edit-visibility').value;
+                const desc = document.getElementById('edit-desc').value.trim();
+                const expiration = document.getElementById('edit-expire').value;
+                const code = document.getElementById('edit-code').value; 
+                const msg = document.getElementById('admin-msg');
+
+                if(!title || !code) {
+                    alert('Title and Code are required');
+                    this.actionInProgress = false;
+                    return;
+                }
+
+                const newSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                const newFilename = `${newSlug}.lua`;
+                const oldSlug = this.originalSlug;
+                const oldFilename = this.db.scripts[oldSlug]?.filename;
+
+                msg.innerHTML = '<span class="loading">Re-publishing...</span>';
+
+                try {
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${newFilename}`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: `Create ${newFilename}`,
+                            content: btoa(unescape(encodeURIComponent(code)))
+                        })
+                    });
+
+                    if (oldFilename && oldSlug !== newSlug) {
+                        const oldFileRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${oldFilename}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
+                        if (oldFileRes.ok) {
+                            const oldFileSha = (await oldFileRes.json()).sha;
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${oldFilename}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    message: `Delete ${oldFilename}`,
+                                    sha: oldFileSha
+                                })
+                            });
+                        }
+                    }
+
+                    await this.loadDatabase();
+
+                    if (oldSlug && oldSlug !== newSlug) {
+                        delete this.db.scripts[oldSlug];
+                    }
+                    
+                    this.db.scripts[newSlug] = {
+                        title: title,
+                        visibility: visibility,
+                        description: desc,
+                        expiration: expiration,
+                        filename: newFilename,
+                        created: new Date().toISOString(),
+                        updated: new Date().toISOString()
+                    };
+
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: `Update database - republish ${newSlug}`,
+                            content: btoa(JSON.stringify(this.db, null, 2)),
+                            sha: this.dbSha
+                        })
+                    });
+
+                    msg.innerHTML = '<span style="color:var(--accent)">Re-published successfully!</span>';
+                    setTimeout(() => {
+                        msg.innerHTML = '';
+                        this.switchAdminTab('list');
+                        this.actionInProgress = false;
+                    }, 1500);
+
+                } catch(e) {
+                    msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+                    setTimeout(() => { this.actionInProgress = false; }, 750);
                 }
             },
 
             async deleteScript(slug, filename) {
+                if (this.actionInProgress) return;
                 if(!confirm('Delete this script permanently?')) return;
                 
+                this.actionInProgress = true;
+
                 try {
                     const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${filename}`, {
                          headers: { 'Authorization': `token ${this.token}` }
@@ -976,9 +1126,13 @@
                         })
                     });
 
-                    this.switchAdminTab('list');
+                    setTimeout(() => {
+                        this.switchAdminTab('list');
+                        this.actionInProgress = false;
+                    }, 750);
                 } catch(e) {
                     alert('Delete failed: ' + e.message);
+                    setTimeout(() => { this.actionInProgress = false; }, 750);
                 }
             },
 
