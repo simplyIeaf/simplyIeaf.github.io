@@ -308,6 +308,10 @@ body {
     justify-content: space-between; 
     align-items: center; 
 }
+.toolbar-left {
+    display: flex;
+    align-items: center;
+}
 .file-info { 
     font-family: monospace; 
     font-size: 12px; 
@@ -462,9 +466,34 @@ code {
     border-color: var(--border); 
     background: var(--surface); 
 }
+.admin-item-left {
+    flex: 1;
+}
+.admin-item-right {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+}
 .admin-meta { 
     margin-top: 4px; 
     font-size: 12px; 
+}
+
+.action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.text-muted {
+    color: var(--text-muted);
 }
 
 .btn {
@@ -480,6 +509,7 @@ code {
     gap: 8px;
     font-size: 13px; 
     transition: 0.2s;
+    text-decoration: none;
 }
 .btn:hover { background: #059669; }
 .btn-secondary { 
@@ -510,6 +540,10 @@ code {
     margin-top: 10px;
 }
 .btn-icon-only { padding: 8px; }
+.btn-primary {
+    background: var(--accent);
+    color: #000;
+}
 
 .loading-state, 
 .empty-state, 
@@ -544,6 +578,22 @@ code {
     font-size: 32px;
 }
 
+.view-section {
+    display: none;
+}
+
+.admin-tab {
+    display: none;
+}
+
+.admin-list {
+    /* Container for admin items */
+}
+
+.repo-list-container {
+    /* Container styling */
+}
+
 @media (max-width: 768px) {
     .content-wrapper { 
         grid-template-columns: 1fr; 
@@ -561,5 +611,17 @@ code {
         flex-direction: column; 
         gap: 16px; 
         align-items: flex-start; 
+    }
+    .action-bar {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+    .btn-group {
+        width: 100%;
+        flex-direction: column;
+    }
+    .btn-group button {
+        width: 100%;
     }
 }
