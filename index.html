@@ -1,12 +1,4 @@
-<div class="action-bar">
-                            <div id="admin-msg"></div>
-                            <div class="btn-group">
-                                <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
-                                <button class="btn btn-delete" onclick="app.deleteScript()" id="btn-delete" style="display: none;">Delete Script</button>
-                                <button class="btn" onclick="app.saveScript()" id="btn-save">Save Script</button>
-                                <button class="btn" onclick="app.republishScript()" id="btn-republish" style="display: none;">Re-publish</button>
-                            </div>
-                        </div><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -228,14 +220,10 @@
 
             <div class="nav-right">
                 <div id="auth-section">
-                    <button class="btn btn-secondary btn-sm" onclick="app.toggleLoginModal()">
-                        Login
-                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="app.toggleLoginModal()">Login</button>
                 </div>
                 <div id="user-section" style="display: none;">
-                    <button class="btn btn-primary btn-sm" onclick="navigate('admin')">
-                        Manage
-                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="navigate('admin')">Manage</button>
                     <button class="btn btn-secondary btn-sm btn-icon-only" onclick="app.logout()" title="Logout">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -361,9 +349,7 @@
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                 Copy
                             </button>
-                            <button class="btn btn-secondary btn-sm" onclick="app.viewRaw()">
-                                Raw
-                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="app.viewRaw()">Raw</button>
                         </div>
                     </div>
                     <pre><code id="code-display" class="language-lua">Loading source...</code></pre>
@@ -425,7 +411,7 @@
                             <div class="btn-group">
                                 <button class="btn btn-secondary" onclick="app.switchAdminTab('list')" style="margin-right: 10px;">Cancel</button>
                                 <button class="btn btn-delete" onclick="app.deleteScript()" id="btn-delete" style="display: none;">Delete Script</button>
-                                <button class="btn" onclick="app.saveScript()">Save Script</button>
+                                <button class="btn" onclick="app.saveScript()">Save</button>
                             </div>
                         </div>
                     </div>
@@ -448,23 +434,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     
     <script>
-        const CONFIG = {
-            user: 'simplyIeaf',
-            repo: 'simplyIeaf.github.io',
-        };
+        const CONFIG = { user: 'simplyIeaf', repo: 'simplyIeaf.github.io' };
 
         const app = {
-            db: { scripts: {} },
-            dbSha: null,
-            viewsData: {},
-            viewsSha: null,
-            token: localStorage.getItem('gh_token'),
-            currentUser: null,
-            currentFilter: 'all',
-            currentSort: 'newest',
-            viewCounts: {},
-            actionInProgress: false,
-            originalSlug: null,
+            db: { scripts: {} }, dbSha: null, viewsData: {}, viewsSha: null,
+            token: localStorage.getItem('gh_token'), currentUser: null,
+            currentFilter: 'all', currentSort: 'newest', viewCounts: {},
+            actionInProgress: false, originalSlug: null,
             
             async init() {
                 if (this.token) await this.verifyToken(true);
@@ -483,30 +459,22 @@
             async login() {
                 if (this.actionInProgress) return;
                 this.actionInProgress = true;
-
                 const token = document.getElementById('auth-token').value.trim();
-                if (!token) {
-                    this.actionInProgress = false;
-                    return;
-                }
-                
+                if (!token) { this.actionInProgress = false; return; }
                 this.token = token;
                 const success = await this.verifyToken(false);
-                
                 if (success) {
                     localStorage.setItem('gh_token', token);
                     this.toggleLoginModal();
                     await this.loadDatabase();
                     this.renderList();
                 }
-
                 setTimeout(() => { this.actionInProgress = false; }, 750);
             },
 
             logout() {
                 if (this.actionInProgress) return;
                 this.actionInProgress = true;
-
                 localStorage.removeItem('gh_token');
                 this.token = null;
                 this.currentUser = null;
@@ -519,14 +487,11 @@
                     const res = await fetch('https://api.github.com/user', {
                         headers: { 'Authorization': `token ${this.token}` }
                     });
-                    
                     if (!res.ok) throw new Error('Invalid token');
                     const user = await res.json();
-                    
                     if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
                         throw new Error(`Token belongs to ${user.login}, not repo owner.`);
                     }
-
                     this.currentUser = user;
                     document.getElementById('auth-section').style.display = 'none';
                     document.getElementById('user-section').style.display = 'flex';
@@ -548,7 +513,6 @@
                     const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${Date.now()}`, {
                          headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
                     });
-
                     if (res.status === 404) {
                         this.db = { scripts: {} };
                         this.dbSha = null;
@@ -559,9 +523,7 @@
                     }
                     this.renderList();
                     this.renderAdminList();
-                } catch (e) {
-                    console.error("DB Error", e);
-                }
+                } catch (e) { console.error("DB Error", e); }
             },
 
             async fetchAllViews() {
@@ -575,7 +537,6 @@
             async loadViewsData() {
                 try {
                     const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json?t=${Date.now()}`);
-                    
                     if (res.status === 404) {
                         this.viewsData = {};
                         this.viewsSha = null;
@@ -593,7 +554,6 @@
 
             async getScriptViewCount(slug) {
                 if(this.viewCounts[slug] !== undefined) return this.viewCounts[slug];
-                
                 await this.loadViewsData();
                 const count = this.viewsData[slug] || 0;
                 this.viewCounts[slug] = count;
@@ -602,44 +562,32 @@
 
             async incrementView(slug) {
                 const key = `seen_${slug}`;
-                if(localStorage.getItem(key)) {
-                    return;
-                }
-
+                if(localStorage.getItem(key)) return;
                 const maxRetries = 5;
                 let attempt = 0;
-
                 while (attempt < maxRetries) {
                     try {
                         await this.loadViewsData();
-                        
                         this.viewsData[slug] = (this.viewsData[slug] || 0) + 1;
                         this.viewCounts[slug] = this.viewsData[slug];
-
                         const response = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json`, {
                             method: 'PUT',
-                            headers: { 
-                                'Authorization': `token ${this.token || ''}`,
-                                'Content-Type': 'application/json' 
-                            },
+                            headers: { 'Authorization': `token ${this.token || ''}`, 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 message: `Update view count for ${slug}`,
                                 content: btoa(JSON.stringify(this.viewsData, null, 2)),
                                 sha: this.viewsSha
                             })
                         });
-
                         if (response.ok) {
                             const data = await response.json();
                             this.viewsSha = data.content.sha;
                             localStorage.setItem(key, 'true');
-                            
                             const viewerEl = document.getElementById('viewer-views');
                             if (viewerEl) {
                                 const span = viewerEl.querySelector('span');
                                 if (span) span.textContent = `${this.viewsData[slug]} Views`;
                             }
-                            
                             return;
                         } else if (response.status === 409 || response.status === 422) {
                             attempt++;
@@ -647,9 +595,7 @@
                             console.log(`Conflict detected, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
                             await new Promise(resolve => setTimeout(resolve, delay));
                             this.viewsSha = null;
-                        } else {
-                            throw new Error(`HTTP ${response.status}`);
-                        }
+                        } else { throw new Error(`HTTP ${response.status}`); }
                     } catch(e) { 
                         console.log('View increment error:', e);
                         attempt++;
@@ -668,46 +614,21 @@
                 const scripts = Object.entries(this.db.scripts || {}).map(([slug, data]) => ({ slug, ...data }));
                 const filtered = this.filterLogic(scripts);
                 const sorted = this.sortLogic(filtered);
-
                 if (sorted.length === 0) {
-                    list.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                                </svg>
-                            </div>
-                            <h2>No scripts found</h2>
-                        </div>`;
+                    list.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div><h2>No scripts found</h2></div>`;
                     return;
                 }
-
-                list.innerHTML = sorted.map(s => `
-                    <div class="script-card animate__animated animate__fadeInUp" onclick="navigate('script/${s.slug}')">
-                        <div class="card-content">
-                            <div class="card-header-section">
-                                <h3 class="script-title">${s.title}</h3>
-                                ${s.visibility === 'PRIVATE' ? '<span class="badge badge-private">PRIVATE</span>' : ''}
-                            </div>
-                            <div class="card-meta">
-                                <span>${new Date(s.created || Date.now()).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
+                list.innerHTML = sorted.map(s => `<div class="script-card animate__animated animate__fadeInUp" onclick="navigate('script/${s.slug}')"><div class="card-content"><div class="card-header-section"><h3 class="script-title">${s.title}</h3>${s.visibility === 'PRIVATE' ? '<span class="badge badge-private">PRIVATE</span>' : ''}</div><div class="card-meta"><span>${new Date(s.created || Date.now()).toLocaleDateString()}</span></div></div></div>`).join('');
             },
 
             filterLogic(scripts) {
                 const query = document.getElementById('search').value.toLowerCase();
                 return scripts.filter(s => {
                     if (!s.title.toLowerCase().includes(query)) return false;
-                    
                     if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
                     if (s.visibility === 'UNLISTED') return false; 
-                    
                     if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
                     if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
-
                     return true;
                 });
             },
@@ -731,51 +652,37 @@
                 this.renderList();
             },
 
-            setSort(val) {
-                this.currentSort = val;
-                this.renderList();
-            },
+            setSort(val) { this.currentSort = val; this.renderList(); },
 
             async loadViewer(slug) {
                 const scriptData = this.db.scripts?.[slug];
                 const content = document.getElementById('script-viewer-content');
                 const accessDenied = document.getElementById('access-denied');
-                
                 if (!scriptData) {
                     if(!this.dbLoaded) { this.dbLoaded=true; await this.loadDatabase(); return this.loadViewer(slug); }
                     location.hash = ''; return;
                 }
-
                 const isExpired = scriptData.expiration && new Date(scriptData.expiration) < new Date();
-                
                 if ((scriptData.visibility === 'PRIVATE' && !this.currentUser) || (isExpired && !this.currentUser)) {
                     content.style.display = 'none';
                     accessDenied.style.display = 'flex';
                     return;
                 }
-
                 content.style.display = 'block';
                 accessDenied.style.display = 'none';
-
                 await this.incrementView(slug);
                 const views = await this.getScriptViewCount(slug);
-
                 document.getElementById('viewer-title').textContent = scriptData.title;
                 document.getElementById('viewer-desc').textContent = scriptData.description || '';
                 document.getElementById('viewer-meta').textContent = `File: ${scriptData.filename}`;
-                
                 const viewsEl = document.getElementById('viewer-views');
                 viewsEl.querySelector('span').textContent = `${views} Views`;
-                
                 const dateEl = document.getElementById('viewer-date');
                 dateEl.querySelector('span').textContent = new Date(scriptData.created || Date.now()).toLocaleDateString();
-                
                 const badgeContainer = document.getElementById('viewer-badges');
                 badgeContainer.innerHTML = `<span class="badge badge-${scriptData.visibility.toLowerCase()}">${scriptData.visibility}</span>`;
-
                 const expireBanner = document.getElementById('expiration-banner');
                 const codeContainer = document.getElementById('code-box-container');
-
                 if (isExpired) {
                     expireBanner.style.display = 'block';
                     codeContainer.style.opacity = '0.5';
@@ -783,20 +690,16 @@
                     expireBanner.style.display = 'none';
                     codeContainer.style.opacity = '1';
                 }
-
                 try {
                     const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${scriptData.filename}`);
                     const data = await res.json();
                     const code = atob(data.content);
-                    
                     document.getElementById('code-display').textContent = code;
                     this.currentScriptUrl = data.download_url;
                     this.currentScriptCode = code;
                     this.currentScriptFilename = scriptData.filename;
                     Prism.highlightAll();
-                } catch(e) {
-                    document.getElementById('code-display').textContent = "Error loading raw file.";
-                }
+                } catch(e) { document.getElementById('code-display').textContent = "Error loading raw file."; }
             },
 
             copyScript(btn) {
@@ -819,14 +722,11 @@
                 document.body.removeChild(element);
             },
 
-            viewRaw() {
-                if(this.currentScriptUrl) window.open(this.currentScriptUrl, '_blank');
-            },
+            viewRaw() { if(this.currentScriptUrl) window.open(this.currentScriptUrl, '_blank'); },
 
             switchAdminTab(tab) {
                 document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                
                 if (tab === 'list') {
                     document.getElementById('admin-tab-list').style.display = 'block';
                     document.querySelectorAll('.tab-btn')[0].classList.add('active');
@@ -841,24 +741,8 @@
             async renderAdminList() {
                 const list = document.getElementById('admin-list');
                 const scripts = Object.entries(this.db.scripts || {}).map(([slug, data]) => ({ slug, ...data }));
-                
                 document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
-
-                list.innerHTML = scripts.map(s => `
-                    <div class="admin-item" onclick="app.populateEditor('${s.slug}')">
-                        <div class="admin-item-left">
-                            <strong>${s.title}</strong>
-                            <div class="admin-meta">
-                                <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
-                                <span class="text-muted"> • <span id="admin-view-${s.slug}">...</span> Views</span>
-                            </div>
-                        </div>
-                        <div class="admin-item-right">
-                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                        </div>
-                    </div>
-                `).join('');
-
+                list.innerHTML = scripts.map(s => `<div class="admin-item" onclick="app.populateEditor('${s.slug}')"><div class="admin-item-left"><strong>${s.title}</strong><div class="admin-meta"><span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span><span class="text-muted"> • <span id="admin-view-${s.slug}">...</span> Views</span></div></div><div class="admin-item-right"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></div></div>`).join('');
                 scripts.forEach(async s => {
                     const count = await this.getScriptViewCount(s.slug);
                     const el = document.getElementById(`admin-view-${s.slug}`);
@@ -874,8 +758,6 @@
                 document.getElementById('edit-expire').value = '';
                 document.getElementById('edit-code').value = '';
                 document.getElementById('btn-delete').style.display = 'none';
-                document.getElementById('btn-save').style.display = 'inline-flex';
-                document.getElementById('btn-republish').style.display = 'none';
                 this.currentEditingSlug = null;
                 this.originalSlug = null;
             },
@@ -883,162 +765,57 @@
             async populateEditor(slug) {
                 const s = this.db.scripts[slug];
                 if(!s) return;
-
                 this.currentEditingSlug = slug;
                 this.originalSlug = slug;
                 this.currentEditingFile = s.filename;
-
                 this.switchAdminTab('create');
                 document.getElementById('editor-heading').textContent = `Edit: ${s.title}`;
                 document.getElementById('edit-title').value = s.title;
                 document.getElementById('edit-visibility').value = s.visibility;
                 document.getElementById('edit-desc').value = s.description || '';
                 document.getElementById('edit-expire').value = s.expiration || '';
-
                 try {
                     const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${s.filename}`);
                     const data = await res.json();
                     document.getElementById('edit-code').value = atob(data.content);
-                } catch(e) {
-                    document.getElementById('edit-code').value = "Error loading content";
-                }
-
+                } catch(e) { document.getElementById('edit-code').value = "Error loading content"; }
                 const btnDelete = document.getElementById('btn-delete');
                 btnDelete.style.display = 'inline-flex';
                 btnDelete.onclick = () => this.deleteScript(slug, s.filename);
-
-                const newSlug = document.getElementById('edit-title').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                if (newSlug !== slug) {
-                    document.getElementById('btn-save').style.display = 'none';
-                    document.getElementById('btn-republish').style.display = 'inline-flex';
-                } else {
-                    document.getElementById('btn-save').style.display = 'inline-flex';
-                    document.getElementById('btn-republish').style.display = 'none';
-                }
-
-                document.getElementById('edit-title').addEventListener('input', () => {
-                    const currentSlug = document.getElementById('edit-title').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                    if (currentSlug !== this.originalSlug) {
-                        document.getElementById('btn-save').style.display = 'none';
-                        document.getElementById('btn-republish').style.display = 'inline-flex';
-                    } else {
-                        document.getElementById('btn-save').style.display = 'inline-flex';
-                        document.getElementById('btn-republish').style.display = 'none';
-                    }
-                });
             },
 
             async saveScript() {
                 if (this.actionInProgress) return;
                 this.actionInProgress = true;
-
                 const title = document.getElementById('edit-title').value.trim();
                 const visibility = document.getElementById('edit-visibility').value;
                 const desc = document.getElementById('edit-desc').value.trim();
                 const expiration = document.getElementById('edit-expire').value;
                 const code = document.getElementById('edit-code').value; 
                 const msg = document.getElementById('admin-msg');
-
-                if(!title || !code) {
-                    alert('Title and Code are required');
-                    this.actionInProgress = false;
-                    return;
-                }
-
-                const slug = this.currentEditingSlug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                const filename = `${slug}.lua`;
-
-                msg.innerHTML = '<span class="loading">Saving...</span>';
-
-                try {
-                    let fileSha = null;
-                    const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${filename}`, {
-                         headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (checkRes.ok) fileSha = (await checkRes.json()).sha;
-
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${filename}`, {
-                        method: 'PUT',
-                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            message: `Update ${filename}`,
-                            content: btoa(unescape(encodeURIComponent(code))),
-                            sha: fileSha
-                        })
-                    });
-
-                    await this.loadDatabase();
-                    
-                    const existing = this.db.scripts[slug] || {};
-                    
-                    this.db.scripts[slug] = {
-                        title: title,
-                        visibility: visibility,
-                        description: desc,
-                        expiration: expiration,
-                        filename: filename,
-                        created: existing.created || new Date().toISOString(),
-                        updated: new Date().toISOString()
-                    };
-
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                        method: 'PUT',
-                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            message: `Update database`,
-                            content: btoa(JSON.stringify(this.db, null, 2)),
-                            sha: this.dbSha
-                        })
-                    });
-
-                    msg.innerHTML = '<span style="color:var(--accent)">Saved successfully!</span>';
-                    setTimeout(() => {
-                        msg.innerHTML = '';
-                        this.switchAdminTab('list');
-                        this.actionInProgress = false;
-                    }, 1500);
-
-                } catch(e) {
-                    msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-                    setTimeout(() => { this.actionInProgress = false; }, 750);
-                }
-            },
-
-            async republishScript() {
-                if (this.actionInProgress) return;
-                this.actionInProgress = true;
-
-                const title = document.getElementById('edit-title').value.trim();
-                const visibility = document.getElementById('edit-visibility').value;
-                const desc = document.getElementById('edit-desc').value.trim();
-                const expiration = document.getElementById('edit-expire').value;
-                const code = document.getElementById('edit-code').value; 
-                const msg = document.getElementById('admin-msg');
-
-                if(!title || !code) {
-                    alert('Title and Code are required');
-                    this.actionInProgress = false;
-                    return;
-                }
-
+                if(!title || !code) { alert('Title and Code are required'); this.actionInProgress = false; return; }
                 const newSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
                 const newFilename = `${newSlug}.lua`;
                 const oldSlug = this.originalSlug;
-                const oldFilename = this.db.scripts[oldSlug]?.filename;
-
-                msg.innerHTML = '<span class="loading">Re-publishing...</span>';
-
+                const oldFilename = oldSlug ? this.db.scripts[oldSlug]?.filename : null;
+                const isRename = oldSlug && oldSlug !== newSlug;
+                msg.innerHTML = `<span class="loading">${isRename ? 'Re-publishing' : 'Saving'}...</span>`;
                 try {
+                    let fileSha = null;
+                    const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${newFilename}`, {
+                         headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (checkRes.ok) fileSha = (await checkRes.json()).sha;
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${newFilename}`, {
                         method: 'PUT',
                         headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            message: `Create ${newFilename}`,
-                            content: btoa(unescape(encodeURIComponent(code)))
+                            message: `${isRename ? 'Create' : 'Update'} ${newFilename}`,
+                            content: btoa(unescape(encodeURIComponent(code))),
+                            sha: fileSha
                         })
                     });
-
-                    if (oldFilename && oldSlug !== newSlug) {
+                    if (isRename && oldFilename) {
                         const oldFileRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${oldFilename}`, {
                             headers: { 'Authorization': `token ${this.token}` }
                         });
@@ -1047,47 +824,30 @@
                             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${oldFilename}`, {
                                 method: 'DELETE',
                                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    message: `Delete ${oldFilename}`,
-                                    sha: oldFileSha
-                                })
+                                body: JSON.stringify({ message: `Delete ${oldFilename}`, sha: oldFileSha })
                             });
                         }
                     }
-
                     await this.loadDatabase();
-
-                    if (oldSlug && oldSlug !== newSlug) {
-                        delete this.db.scripts[oldSlug];
-                    }
-                    
+                    if (isRename && oldSlug) delete this.db.scripts[oldSlug];
+                    const existing = this.db.scripts[newSlug] || {};
                     this.db.scripts[newSlug] = {
-                        title: title,
-                        visibility: visibility,
-                        description: desc,
-                        expiration: expiration,
+                        title: title, visibility: visibility, description: desc, expiration: expiration,
                         filename: newFilename,
-                        created: new Date().toISOString(),
+                        created: isRename ? new Date().toISOString() : (existing.created || new Date().toISOString()),
                         updated: new Date().toISOString()
                     };
-
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                         method: 'PUT',
                         headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            message: `Update database - republish ${newSlug}`,
+                            message: isRename ? `Update database - republish ${newSlug}` : `Update database`,
                             content: btoa(JSON.stringify(this.db, null, 2)),
                             sha: this.dbSha
                         })
                     });
-
-                    msg.innerHTML = '<span style="color:var(--accent)">Re-published successfully!</span>';
-                    setTimeout(() => {
-                        msg.innerHTML = '';
-                        this.switchAdminTab('list');
-                        this.actionInProgress = false;
-                    }, 1500);
-
+                    msg.innerHTML = `<span style="color:var(--accent)">${isRename ? 'Re-published' : 'Saved'} successfully!</span>`;
+                    setTimeout(() => { msg.innerHTML = ''; this.switchAdminTab('list'); this.actionInProgress = false; }, 1500);
                 } catch(e) {
                     msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
                     setTimeout(() => { this.actionInProgress = false; }, 750);
@@ -1097,9 +857,7 @@
             async deleteScript(slug, filename) {
                 if (this.actionInProgress) return;
                 if(!confirm('Delete this script permanently?')) return;
-                
                 this.actionInProgress = true;
-
                 try {
                     const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${filename}`, {
                          headers: { 'Authorization': `token ${this.token}` }
@@ -1112,10 +870,8 @@
                             body: JSON.stringify({ message: `Delete ${filename}`, sha: sha })
                         });
                     }
-
                     await this.loadDatabase();
                     delete this.db.scripts[slug];
-
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                         method: 'PUT',
                         headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
@@ -1125,11 +881,7 @@
                             sha: this.dbSha
                         })
                     });
-
-                    setTimeout(() => {
-                        this.switchAdminTab('list');
-                        this.actionInProgress = false;
-                    }, 750);
+                    setTimeout(() => { this.switchAdminTab('list'); this.actionInProgress = false; }, 750);
                 } catch(e) {
                     alert('Delete failed: ' + e.message);
                     setTimeout(() => { this.actionInProgress = false; }, 750);
@@ -1140,7 +892,6 @@
                 const hash = location.hash.slice(1);
                 document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
                 window.scrollTo(0,0);
-
                 if (hash.startsWith('script/')) {
                     const slug = hash.split('/')[1];
                     document.getElementById('view-script').style.display = 'block';
@@ -1160,4 +911,4 @@
         app.init();
     </script>
 </body>
-</html>
+         </html>
