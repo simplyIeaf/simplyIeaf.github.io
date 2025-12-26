@@ -1,8 +1,7 @@
 const CONFIG = { 
     user: 'simplyIeaf', 
     repo: 'simplyIeaf.github.io',
-    cacheBuster: () => Date.now(),
-    counterApi: 'https://api.countapi.xyz' 
+    cacheBuster: () => Date.now()
 };
 
 const utils = {
@@ -22,13 +21,9 @@ const utils = {
     safeAtob(str) {
         return decodeURIComponent(escape(window.atob(str)));
     },
-    
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    },
 
-    formatNumber(num) {
-        return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num;
+    sanitizeTitle(title) {
+        return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     }
 };
 
@@ -39,26 +34,26 @@ const app = {
     currentUser: null,
     currentFilter: 'all', 
     currentSort: 'newest', 
-    viewCounts: {},
     actionInProgress: false, 
     currentEditingId: null,
+    originalTitle: null,
     
     async init() {
         if (this.token) await this.verifyToken(true);
         await this.loadDatabase();
-        this.fetchViewCounts(); 
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
-        this.debouncedRender = utils.debounce(() => this.renderList(), 750);
+        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
         this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
         this.debouncedDelete = utils.debounce(() => this.deleteScript(this.currentEditingId), 750);
         this.debouncedLogin = utils.debounce(() => this.login(), 750);
         this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
     },
 
-    generateScriptHTML(id, scriptData) {
-        const namespace = `leafs-scripts-${CONFIG.repo.replace(/\./g, '-')}`;
+    generateScriptHTML(title, scriptData) {
+        const scriptId = utils.sanitizeTitle(title);
+        
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -91,10 +86,6 @@ const app = {
                 <h1>${scriptData.title}</h1>
                 <div class="meta-row">
                     <span class="meta-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        <span id="view-count">...</span>
-                    </span>
-                    <span class="meta-badge">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                         <span>${new Date(scriptData.created).toLocaleDateString()}</span>
                     </span>
@@ -124,8 +115,7 @@ const app = {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script>
         const filename = '${scriptData.filename}';
-        const scriptId = '${id}';
-        const namespace = '${namespace}';
+        const scriptId = '${scriptId}';
         
         async function loadScript() {
             try {
@@ -136,27 +126,6 @@ const app = {
             } catch(e) {
                 document.getElementById('code-display').textContent = '-- Error loading source';
             }
-        }
-        
-        function trackView() {
-            if(localStorage.getItem('view_' + scriptId)) {
-                 fetch(\`https://api.countapi.xyz/get/\${namespace}/\${scriptId}\`)
-                    .then(r => r.json())
-                    .then(d => document.getElementById('view-count').textContent = d.value + ' Views')
-                    .catch(() => document.getElementById('view-count').textContent = 'N/A');
-                return;
-            }
-            
-            fetch(\`https://api.countapi.xyz/hit/\${namespace}/\${scriptId}\`)
-                .then(r => r.json())
-                .then(d => {
-                    document.getElementById('view-count').textContent = d.value + ' Views';
-                    localStorage.setItem('view_' + scriptId, 'true');
-                })
-                .catch(e => {
-                    console.error(e);
-                    document.getElementById('view-count').textContent = 'Views';
-                });
         }
         
         function copyScript(btn) {
@@ -180,7 +149,6 @@ const app = {
         }
         
         loadScript();
-        trackView();
     </script>
 </body>
 </html>`;
@@ -259,31 +227,14 @@ const app = {
             }
             this.renderList();
             this.renderAdminList();
-        } catch (e) { console.error("DB Error", e); }
-    },
-
-    async fetchViewCounts() {
-        const namespace = `leafs-scripts-${CONFIG.repo.replace(/\./g, '-')}`;
-        const ids = Object.keys(this.db.scripts || {});
-        if(ids.length === 0) return;
-
-        ids.forEach(id => {
-            fetch(`https://api.countapi.xyz/get/${namespace}/${id}`)
-                .then(r => r.json())
-                .then(d => {
-                    this.viewCounts[id] = d.value || 0;
-                    const el = document.getElementById(`view-${id}`);
-                    if(el) el.textContent = utils.formatNumber(d.value) + ' Views';
-                    const adminEl = document.getElementById(`admin-view-${id}`);
-                    if(adminEl) adminEl.textContent = d.value;
-                })
-                .catch(() => { this.viewCounts[id] = 0; });
-        });
+        } catch (e) { 
+            console.error("DB Error", e); 
+        }
     },
 
     renderList() {
         const list = document.getElementById('script-list');
-        const scripts = Object.entries(this.db.scripts || {}).map(([id, data]) => ({ id, ...data }));
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const filtered = this.filterLogic(scripts);
         const sorted = this.sortLogic(filtered);
         
@@ -292,8 +243,10 @@ const app = {
             return;
         }
         
-        list.innerHTML = sorted.map(s => `
-            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${s.id}/index.html'">
+        list.innerHTML = sorted.map(s => {
+            const scriptId = utils.sanitizeTitle(s.title);
+            return `
+            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${s.title}</h3>
@@ -301,11 +254,10 @@ const app = {
                     </div>
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
-                        <span id="view-${s.id}">${utils.formatNumber(this.viewCounts[s.id] || 0)} Views</span>
                     </div>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     },
 
     filterLogic(scripts) {
@@ -325,7 +277,6 @@ const app = {
             if (this.currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
             if (this.currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
             if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
-            if (this.currentSort === 'views') return (this.viewCounts[b.id] || 0) - (this.viewCounts[a.id] || 0);
             return 0;
         });
     },
@@ -364,21 +315,22 @@ const app = {
 
     async renderAdminList() {
         const list = document.getElementById('admin-list');
-        const scripts = Object.entries(this.db.scripts || {}).map(([id, data]) => ({ id, ...data }));
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         
         document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
         
-        list.innerHTML = scripts.map(s => `
-            <div class="admin-item" onclick="app.populateEditor('${s.id}')">
+        list.innerHTML = scripts.map(s => {
+            return `
+            <div class="admin-item" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
                     <strong>${s.title}</strong>
                     <div class="admin-meta">
                         <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
-                        <span class="text-muted"> • <span id="admin-view-${s.id}">${this.viewCounts[s.id] || '...'}</span> Views</span>
+                        <span class="text-muted"> • ${new Date(s.created).toLocaleDateString()}</span>
                     </div>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     },
 
     resetEditor() {
@@ -390,13 +342,15 @@ const app = {
         document.getElementById('edit-code').value = '';
         document.getElementById('btn-delete').style.display = 'none';
         this.currentEditingId = null;
+        this.originalTitle = null;
     },
 
-    async populateEditor(id) {
-        const s = this.db.scripts[id];
+    async populateEditor(title) {
+        const s = this.db.scripts[title];
         if (!s) return;
         
-        this.currentEditingId = id;
+        this.currentEditingId = title;
+        this.originalTitle = title;
         this.switchAdminTab('create');
         
         document.getElementById('editor-heading').textContent = `Edit: ${s.title}`;
@@ -405,16 +359,17 @@ const app = {
         document.getElementById('edit-desc').value = s.description || '';
         document.getElementById('edit-expire').value = s.expiration || '';
         
+        const scriptId = utils.sanitizeTitle(title);
+        
         try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/raw/${s.filename}`);
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`);
             const data = await res.json();
             document.getElementById('edit-code').value = utils.safeAtob(data.content);
         } catch(e) { 
-            document.getElementById('edit-code').value = "Error loading content"; 
+            document.getElementById('edit-code').value = "-- Error loading content"; 
         }
         
-        const btnDelete = document.getElementById('btn-delete');
-        btnDelete.style.display = 'inline-flex';
+        document.getElementById('btn-delete').style.display = 'inline-flex';
     },
 
     async saveScript() {
@@ -429,25 +384,35 @@ const app = {
         const msg = document.getElementById('admin-msg');
         
         if (!title || !code) { 
-            alert('Title and Code are required'); 
-            this.actionInProgress = false; 
+            msg.innerHTML = `<span style="color:var(--danger)">Title and Code required</span>`;
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2000);
             return; 
         }
         
         const isNew = !this.currentEditingId;
-        const id = isNew ? utils.generateId() : this.currentEditingId;
-        const filename = title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.lua';
+        const scriptId = utils.sanitizeTitle(title);
+        const filename = scriptId + '.lua';
+        
+        if (this.db.scripts[title] && title !== this.originalTitle) {
+            msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
+            return;
+        }
         
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
+            if (!isNew && this.originalTitle && this.originalTitle !== title) {
+                await this.deleteScriptFiles(this.originalTitle);
+            }
+            
             let luaSha = null;
-            if (!isNew) {
-                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/raw/${this.db.scripts[id].filename}`);
+            if (!isNew && title === this.originalTitle) {
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`);
                 if (check.ok) luaSha = (await check.json()).sha;
             }
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/raw/${filename}`, {
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -465,10 +430,15 @@ const app = {
                 description: desc, 
                 expiration: expiration,
                 filename: filename,
-                created: isNew ? new Date().toISOString() : this.db.scripts[id].created,
+                created: (isNew || title !== this.originalTitle) ? new Date().toISOString() : this.db.scripts[title]?.created || new Date().toISOString(),
                 updated: new Date().toISOString()
             };
-            this.db.scripts[id] = scriptData;
+            
+            if (!isNew && this.originalTitle && this.originalTitle !== title) {
+                delete this.db.scripts[this.originalTitle];
+            }
+            
+            this.db.scripts[title] = scriptData;
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
@@ -480,14 +450,14 @@ const app = {
                 })
             });
 
-            const indexHTML = this.generateScriptHTML(id, scriptData);
+            const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
-            if (!isNew) {
-                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/index.html`);
+            if (!isNew && title === this.originalTitle) {
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`);
                 if (check.ok) indexSha = (await check.json()).sha;
             }
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/index.html`, {
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -505,40 +475,49 @@ const app = {
             }, 1500);
         } catch(e) {
             msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            this.actionInProgress = false;
+            setTimeout(() => { this.actionInProgress = false; }, 2000);
         }
     },
 
-    async deleteScript(id) {
-        if (this.actionInProgress) return;
-        if (!confirm('Delete permanently?')) return;
-        this.actionInProgress = true;
+    async deleteScriptFiles(title) {
+        const scriptId = utils.sanitizeTitle(title);
+        const s = this.db.scripts[title];
+        if (!s) return;
         
         try {
-            const s = this.db.scripts[id];
-            
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/raw/${s.filename}`);
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`);
             if (luaRes.ok) {
                 const sha = (await luaRes.json()).sha;
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/raw/${s.filename}`, {
+                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: 'Del lua', sha: sha })
                 });
             }
 
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/index.html`);
+            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`);
             if (idxRes.ok) {
                 const sha = (await idxRes.json()).sha;
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${id}/index.html`, {
+                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: 'Del index', sha: sha })
                 });
             }
-            
+        } catch(e) {
+            console.error('Error deleting files:', e);
+        }
+    },
+
+    async deleteScript(title) {
+        if (this.actionInProgress) return;
+        if (!confirm('Delete permanently?')) return;
+        this.actionInProgress = true;
+        
+        try {
+            await this.deleteScriptFiles(title);
             await this.loadDatabase();
-            delete this.db.scripts[id];
+            delete this.db.scripts[title];
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
@@ -556,7 +535,7 @@ const app = {
             }, 750);
         } catch(e) {
             alert('Delete failed: ' + e.message);
-            this.actionInProgress = false;
+            setTimeout(() => { this.actionInProgress = false; }, 1000);
         }
     },
 
