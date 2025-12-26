@@ -1,54 +1,38 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <title>Leaf's scripts</title>
     <link rel="stylesheet" href="style.css">
-    <title>SimplyIeaf | Scripts</title>
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-left">
-            <img src="https://avatars.githubusercontent.com/u/220599690?s=48&v=4" class="nav-icon">
-        </div>
-        <div class="search-container">
-            <input type="text" id="search" placeholder="Search scripts...">
-        </div>
+        <div class="nav-left"><img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon"></div>
+        <div class="search-container"><input type="text" id="search" placeholder="Search scripts..." onkeyup="filter()"></div>
     </nav>
 
     <div class="container">
-        <div id="list" class="script-grid">
-            <p>Scanning directory...</p>
-        </div>
+        <div class="script-grid" id="list"></div>
     </div>
 
     <script>
-        const user = "simplyIeaf";
-        const repo = "simplyIeaf.github.io";
-        let scripts = [];
-
-        fetch(`https://api.github.com/repos/${user}/${repo}/contents/scripts`)
-            .then(res => res.json())
-            .then(data => {
-                scripts = data.filter(i => i.type === "dir");
-                render(scripts);
-            });
-
-        document.getElementById('search').addEventListener('input', e => {
-            const val = e.target.value.toLowerCase();
-            render(scripts.filter(s => s.name.toLowerCase().includes(val)));
-        });
-
-        function render(data) {
+        async function load() {
+            const res = await fetch('https://api.github.com/repos/simplyIeaf/simplyIeaf.github.io/contents/raw');
+            const files = await res.json();
             const list = document.getElementById('list');
-            list.innerHTML = data.length ? "" : "No results.";
-            data.forEach(item => {
-                list.innerHTML += `
-                    <div class="paste-card" onclick="location.href='scripts/${item.name}'">
-                        <div style="font-weight:bold; font-size:1.1rem;">${item.name}</div>
-                        <div style="margin-top:10px; color:#8b949e; font-size:0.9rem;">View Lua Source</div>
-                    </div>`;
+            files.forEach(f => {
+                const card = document.createElement('div');
+                card.className = 'paste-card';
+                card.onclick = () => location.href = `scripts/${f.name}/${f.name}`;
+                card.innerHTML = `<div style="display:flex;justify-content:space-between;"><h3>${f.name}</h3><span class="badge">LUA</span></div>`;
+                list.appendChild(card);
             });
         }
+        function filter() {
+            let q = document.getElementById('search').value.toLowerCase();
+            document.querySelectorAll('.paste-card').forEach(c => c.style.display = c.innerText.toLowerCase().includes(q) ? '' : 'none');
+        }
+        load();
     </script>
 </body>
 </html>
