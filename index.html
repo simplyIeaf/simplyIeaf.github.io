@@ -7,7 +7,6 @@
     <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/220599690?v=4">
     
     <link rel="stylesheet" href="style.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -15,7 +14,7 @@
     <nav class="navbar animate__animated animate__fadeInDown">
         <div class="nav-content">
             <div class="nav-left">
-                <div class="brand" onclick="navigate('home')">
+                <div class="brand" onclick="location.hash=''">
                     <img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon" alt="Profile">
                     <span class="nav-title">Leaf's Scripts</span>
                 </div>
@@ -67,7 +66,7 @@
     </div>
 
     <div class="container">
-        <div id="view-home" class="view-section animate__animated animate__fadeIn">
+        <div id="view-home" class="view-section animate__animated animate__fadeIn" style="display: block;">
             <div class="content-wrapper">
                 <aside class="sidebar">
                     <div class="sidebar-section">
@@ -100,79 +99,9 @@
             </div>
         </div>
 
-        <div id="view-script" class="view-section animate__animated animate__fadeIn" style="display: none;">
+        <div id="view-admin" class="view-section animate__animated animate__fadeIn">
             <div class="breadcrumb">
-                <button class="btn-text" onclick="navigate('home')">← Back to Scripts</button>
-            </div>
-            
-            <div id="access-denied" class="error-state" style="display: none; margin-top: 40px;">
-                <div class="error-icon" style="border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.1);">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                </div>
-                <h2>Access Denied</h2>
-                <p>This script is private or expired.</p>
-                <button class="btn btn-secondary" onclick="navigate('home')" style="margin-top: 20px;">Return Home</button>
-            </div>
-
-            <div id="script-viewer-content">
-                <div class="script-header-lg">
-                    <div>
-                        <h1 id="viewer-title">Script Title</h1>
-                        <div class="meta-row">
-                            <span id="viewer-views" class="meta-badge">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                </svg>
-                                <span>0 Views</span>
-                            </span>
-                            <span id="viewer-date" class="meta-badge">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                                </svg>
-                                <span>-</span>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="badges" id="viewer-badges"></div>
-                </div>
-
-                <div id="expiration-banner" class="alert-banner" style="display:none">
-                    This script has expired and is no longer available.
-                </div>
-                <p id="viewer-desc" class="script-desc"></p>
-                
-                <div class="code-box" id="code-box-container">
-                    <div class="toolbar">
-                        <div class="toolbar-left">
-                            <span class="file-info" id="viewer-meta">Loading...</span>
-                        </div>
-                        <div class="toolbar-right">
-                            <button class="btn btn-sm" onclick="app.downloadScript()">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                Download
-                            </button>
-                            <button class="btn btn-sm" onclick="app.copyScript(this)">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                Copy
-                            </button>
-                            <button class="btn btn-secondary btn-sm" onclick="app.viewRaw()">Raw</button>
-                        </div>
-                    </div>
-                    <pre><code id="code-display" class="language-lua">Loading source...</code></pre>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-admin" class="view-section animate__animated animate__fadeIn" style="display: none;">
-            <div class="breadcrumb">
-                <button class="btn-text" onclick="navigate('home')">← Back to Site</button>
+                <button class="btn-text" onclick="navigate('')">← Back to Site</button>
             </div>
             
             <div class="admin-panel">
@@ -185,7 +114,7 @@
                     </div>
                 </div>
 
-                <div id="admin-tab-editor" class="admin-tab" style="display:none;">
+                <div id="admin-tab-editor" class="admin-tab">
                     <div class="editor-card">
                         <h3 id="editor-heading" style="margin-bottom: 20px;">Create New Script</h3>
                         <div class="form-row">
@@ -224,13 +153,13 @@
                             <div class="btn-group">
                                 <button class="btn btn-secondary" onclick="app.switchAdminTab('list')" style="margin-right: 10px;">Cancel</button>
                                 <button class="btn btn-delete" onclick="app.deleteScript()" id="btn-delete" style="display: none;">Delete Script</button>
-                                <button class="btn" onclick="app.saveScript()">Save</button>
+                                <button class="btn" onclick="app.saveScript()">Save & Publish</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="admin-tab-list" class="admin-tab">
+                <div id="admin-tab-list" class="admin-tab" style="display: block;">
                     <div class="repo-list-container">
                         <div class="list-header">
                             <h3>Existing Scripts</h3>
@@ -243,8 +172,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script src="app.js"></script>
 </body>
-    </html>
+</html>
