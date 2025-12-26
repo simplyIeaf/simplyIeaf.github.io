@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "better-npc-dialogue-system": {
+      "title": "Better NPC Dialogue System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "better-npc-dialogue-system.lua"
+    }
+  }
+}
