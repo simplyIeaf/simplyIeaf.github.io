@@ -691,7 +691,7 @@
                     codeContainer.style.opacity = '1';
                 }
                 try {
-                    const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${scriptData.filename}`);
+                    const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${scriptData.filename}`);
                     const data = await res.json();
                     const code = atob(data.content);
                     document.getElementById('code-display').textContent = code;
@@ -775,7 +775,7 @@
                 document.getElementById('edit-desc').value = s.description || '';
                 document.getElementById('edit-expire').value = s.expiration || '';
                 try {
-                    const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${s.filename}`);
+                    const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${s.filename}`);
                     const data = await res.json();
                     document.getElementById('edit-code').value = atob(data.content);
                 } catch(e) { document.getElementById('edit-code').value = "Error loading content"; }
@@ -802,11 +802,11 @@
                 msg.innerHTML = `<span class="loading">${isRename ? 'Re-publishing' : 'Saving'}...</span>`;
                 try {
                     let fileSha = null;
-                    const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${newFilename}`, {
+                    const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/raw/${newFilename}`, {
                          headers: { 'Authorization': `token ${this.token}` }
                     });
                     if (checkRes.ok) fileSha = (await checkRes.json()).sha;
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${newFilename}`, {
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/raw/${newFilename}`, {
                         method: 'PUT',
                         headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -815,17 +815,38 @@
                             sha: fileSha
                         })
                     });
-                    if (isRename && oldFilename) {
-                        const oldFileRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${oldFilename}`, {
-                            headers: { 'Authorization': `token ${this.token}` }
-                        });
-                        if (oldFileRes.ok) {
-                            const oldFileSha = (await oldFileRes.json()).sha;
-                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${oldFilename}`, {
-                                method: 'DELETE',
-                                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ message: `Delete ${oldFilename}`, sha: oldFileSha })
+                    if (isRename && oldFilename && oldSlug) {
+                        try {
+                            const oldFileRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw/${oldFilename}`, {
+                                headers: { 'Authorization': `token ${this.token}` }
                             });
+                            if (oldFileRes.ok) {
+                                const oldFileSha = (await oldFileRes.json()).sha;
+                                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw/${oldFilename}`, {
+                                    method: 'DELETE',
+                                    headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ message: `Delete ${oldFilename}`, sha: oldFileSha })
+                                });
+                            }
+                            const folderCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw`, {
+                                headers: { 'Authorization': `token ${this.token}` }
+                            });
+                            if (folderCheckRes.ok) {
+                                const folderContents = await folderCheckRes.json();
+                                if (Array.isArray(folderContents) && folderContents.length === 0) {
+                                    const parentFolderRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}`, {
+                                        headers: { 'Authorization': `token ${this.token}` }
+                                    });
+                                    if (parentFolderRes.ok) {
+                                        const parentContents = await parentFolderRes.json();
+                                        if (Array.isArray(parentContents) && parentContents.length === 1) {
+                                            console.log('Old folder structure cleaned up');
+                                        }
+                                    }
+                                }
+                            }
+                        } catch(e) {
+                            console.log('Cleanup error (non-critical):', e);
                         }
                     }
                     await this.loadDatabase();
@@ -859,12 +880,12 @@
                 if(!confirm('Delete this script permanently?')) return;
                 this.actionInProgress = true;
                 try {
-                    const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${filename}`, {
+                    const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${filename}`, {
                          headers: { 'Authorization': `token ${this.token}` }
                     });
                     if (checkRes.ok) {
                         const sha = (await checkRes.json()).sha;
-                        await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/raw/${filename}`, {
+                        await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${filename}`, {
                             method: 'DELETE',
                             headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                             body: JSON.stringify({ message: `Delete ${filename}`, sha: sha })
@@ -911,4 +932,4 @@
         app.init();
     </script>
 </body>
-         </html>
+                        </html>
