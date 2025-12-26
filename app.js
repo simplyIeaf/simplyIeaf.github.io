@@ -31,6 +31,183 @@ const app = {
         window.addEventListener('hashchange', () => this.handleRouting());
     },
 
+    generateScriptHTML(slug, scriptData) {
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${scriptData.title} - Leaf's Scripts</title>
+    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/220599690?v=4">
+    <link rel="stylesheet" href="../../style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="nav-left">
+                <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
+                    <img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon" alt="Profile">
+                    <span class="nav-title">Leaf's Scripts</span>
+                </a>
+            </div>
+            <div class="nav-right">
+                <a href="../../index.html" class="btn btn-secondary btn-sm">← Back to Home</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <div class="script-header-lg">
+            <div>
+                <h1>${scriptData.title}</h1>
+                <div class="meta-row">
+                    <span class="meta-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span id="view-count">Loading...</span>
+                    </span>
+                    <span class="meta-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span>${new Date(scriptData.created || Date.now()).toLocaleDateString()}</span>
+                    </span>
+                </div>
+            </div>
+            <div class="badges">
+                <span class="badge badge-${scriptData.visibility.toLowerCase()}">${scriptData.visibility}</span>
+            </div>
+        </div>
+
+        ${scriptData.description ? `<p class="script-desc">${scriptData.description}</p>` : ''}
+        
+        <div class="code-box">
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <span class="file-info">raw/${scriptData.filename}</span>
+                </div>
+                <div class="toolbar-right">
+                    <button class="btn btn-sm" onclick="downloadScript()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download
+                    </button>
+                    <button class="btn btn-sm" onclick="copyScript(this)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    </button>
+                    <a href="raw/${scriptData.filename}" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
+                </div>
+            </div>
+            <pre><code id="code-display" class="language-lua">Loading source...</code></pre>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script>
+        const slug = '${slug}';
+        const filename = '${scriptData.filename}';
+        
+        async function loadScript() {
+            try {
+                const res = await fetch(\`raw/\${filename}\`);
+                const code = await res.text();
+                document.getElementById('code-display').textContent = code;
+                Prism.highlightAll();
+            } catch(e) {
+                document.getElementById('code-display').textContent = 'Error loading script.';
+            }
+        }
+        
+        async function loadViewCount() {
+            try {
+                const res = await fetch('../../views.json?t=' + Date.now());
+                const views = await res.json();
+                document.getElementById('view-count').textContent = (views[slug] || 0) + ' Views';
+            } catch(e) {
+                document.getElementById('view-count').textContent = '0 Views';
+            }
+        }
+        
+        async function incrementView() {
+            const key = 'seen_' + slug;
+            if (localStorage.getItem(key)) return;
+            
+            try {
+                const token = localStorage.getItem('gh_token') || '';
+                const res = await fetch('../../views.json?t=' + Date.now());
+                let views = {};
+                let sha = null;
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    views = data;
+                }
+                
+                const shaRes = await fetch('https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json');
+                if (shaRes.ok) sha = (await shaRes.json()).sha;
+                
+                views[slug] = (views[slug] || 0) + 1;
+                
+                await fetch('https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json', {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: 'Update view count for ' + slug,
+                        content: btoa(JSON.stringify(views, null, 2)),
+                        sha: sha
+                    })
+                });
+                
+                localStorage.setItem(key, 'true');
+                document.getElementById('view-count').textContent = views[slug] + ' Views';
+            } catch(e) {
+                console.log('View increment failed:', e);
+            }
+        }
+        
+        function copyScript(btn) {
+            const code = document.getElementById('code-display').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const original = btn.innerHTML;
+                btn.innerHTML = 'Copied!';
+                setTimeout(() => btn.innerHTML = original, 2000);
+            });
+        }
+        
+        function downloadScript() {
+            const code = document.getElementById('code-display').textContent;
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(code));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+        
+        loadScript();
+        loadViewCount();
+        incrementView();
+    </script>
+</body>
+</html>`;
+    },
+
     toggleLoginModal() {
         const modal = document.getElementById('login-modal');
         modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
@@ -147,65 +324,6 @@ const app = {
         return count;
     },
 
-    async incrementView(slug) {
-        const key = `seen_${slug}`;
-        if (localStorage.getItem(key)) return;
-        
-        const maxRetries = 5;
-        let attempt = 0;
-        
-        while (attempt < maxRetries) {
-            try {
-                await this.loadViewsData();
-                this.viewsData[slug] = (this.viewsData[slug] || 0) + 1;
-                this.viewCounts[slug] = this.viewsData[slug];
-                
-                const response = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/views.json`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Authorization': `token ${this.token || ''}`, 
-                        'Content-Type': 'application/json' 
-                    },
-                    body: JSON.stringify({
-                        message: `Update view count for ${slug}`,
-                        content: btoa(JSON.stringify(this.viewsData, null, 2)),
-                        sha: this.viewsSha
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    this.viewsSha = data.content.sha;
-                    localStorage.setItem(key, 'true');
-                    
-                    const viewerEl = document.getElementById('viewer-views');
-                    if (viewerEl) {
-                        const span = viewerEl.querySelector('span');
-                        if (span) span.textContent = `${this.viewsData[slug]} Views`;
-                    }
-                    return;
-                } else if (response.status === 409 || response.status === 422) {
-                    attempt++;
-                    const delay = Math.min(1000 * Math.pow(2, attempt), 5000) + Math.random() * 1000;
-                    console.log(`Conflict detected, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    this.viewsSha = null;
-                } else { 
-                    throw new Error(`HTTP ${response.status}`); 
-                }
-            } catch(e) { 
-                console.log('View increment error:', e);
-                attempt++;
-                if (attempt >= maxRetries) {
-                    console.error('Failed to increment view after max retries');
-                    return;
-                }
-                const delay = Math.min(1000 * Math.pow(2, attempt), 5000) + Math.random() * 1000;
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-    },
-
     async renderList() {
         const list = document.getElementById('script-list');
         const scripts = Object.entries(this.db.scripts || {}).map(([slug, data]) => ({ slug, ...data }));
@@ -227,7 +345,7 @@ const app = {
         }
         
         list.innerHTML = sorted.map(s => `
-            <div class="script-card animate__animated animate__fadeInUp" onclick="navigate('script/${s.slug}')">
+            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${s.slug}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${s.title}</h3>
@@ -276,95 +394,6 @@ const app = {
     setSort(val) { 
         this.currentSort = val; 
         this.renderList(); 
-    },
-
-    async loadViewer(slug) {
-        const scriptData = this.db.scripts?.[slug];
-        const content = document.getElementById('script-viewer-content');
-        const accessDenied = document.getElementById('access-denied');
-        
-        if (!scriptData) {
-            if (!this.dbLoaded) { 
-                this.dbLoaded = true; 
-                await this.loadDatabase(); 
-                return this.loadViewer(slug); 
-            }
-            location.hash = ''; 
-            return;
-        }
-        
-        const isExpired = scriptData.expiration && new Date(scriptData.expiration) < new Date();
-        if ((scriptData.visibility === 'PRIVATE' && !this.currentUser) || (isExpired && !this.currentUser)) {
-            content.style.display = 'none';
-            accessDenied.style.display = 'flex';
-            return;
-        }
-        
-        content.style.display = 'block';
-        accessDenied.style.display = 'none';
-        
-        await this.incrementView(slug);
-        const views = await this.getScriptViewCount(slug);
-        
-        document.getElementById('viewer-title').textContent = scriptData.title;
-        document.getElementById('viewer-desc').textContent = scriptData.description || '';
-        document.getElementById('viewer-meta').textContent = `File: ${scriptData.filename}`;
-        
-        const viewsEl = document.getElementById('viewer-views');
-        viewsEl.querySelector('span').textContent = `${views} Views`;
-        
-        const dateEl = document.getElementById('viewer-date');
-        dateEl.querySelector('span').textContent = new Date(scriptData.created || Date.now()).toLocaleDateString();
-        
-        const badgeContainer = document.getElementById('viewer-badges');
-        badgeContainer.innerHTML = `<span class="badge badge-${scriptData.visibility.toLowerCase()}">${scriptData.visibility}</span>`;
-        
-        const expireBanner = document.getElementById('expiration-banner');
-        const codeContainer = document.getElementById('code-box-container');
-        if (isExpired) {
-            expireBanner.style.display = 'block';
-            codeContainer.style.opacity = '0.5';
-        } else {
-            expireBanner.style.display = 'none';
-            codeContainer.style.opacity = '1';
-        }
-        
-        try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${scriptData.filename}`);
-            const data = await res.json();
-            const code = atob(data.content);
-            document.getElementById('code-display').textContent = code;
-            this.currentScriptUrl = data.download_url;
-            this.currentScriptCode = code;
-            this.currentScriptFilename = scriptData.filename;
-            Prism.highlightAll();
-        } catch(e) { 
-            document.getElementById('code-display').textContent = "Error loading raw file."; 
-        }
-    },
-
-    copyScript(btn) {
-        const code = document.getElementById('code-display').textContent;
-        navigator.clipboard.writeText(code).then(() => {
-            const original = btn.innerHTML;
-            btn.innerHTML = 'Copied';
-            setTimeout(() => btn.innerHTML = original, 2000);
-        });
-    },
-
-    downloadScript() {
-        if (!this.currentScriptCode) return;
-        const element = document.createElement('a');
-        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(this.currentScriptCode));
-        element.setAttribute('download', this.currentScriptFilename);
-        element.style.display = 'none';
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
-    },
-
-    viewRaw() { 
-        if (this.currentScriptUrl) window.open(this.currentScriptUrl, '_blank'); 
     },
 
     switchAdminTab(tab) {
@@ -473,17 +502,17 @@ const app = {
         const newSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         const newFilename = `${newSlug}.lua`;
         const oldSlug = this.originalSlug;
-        const oldFilename = oldSlug ? this.db.scripts[oldSlug]?.filename : null;
         const isRename = oldSlug && oldSlug !== newSlug;
         
-        msg.innerHTML = `<span class="loading">${isRename ? 'Re-publishing' : 'Saving'}...</span>`;
+        msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            let fileSha = null;
-            const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/raw/${newFilename}`, {
+            // Create/update the Lua file
+            let luaSha = null;
+            const luaCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/raw/${newFilename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
-            if (checkRes.ok) fileSha = (await checkRes.json()).sha;
+            if (luaCheckRes.ok) luaSha = (await luaCheckRes.json()).sha;
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/raw/${newFilename}`, {
                 method: 'PUT',
@@ -494,40 +523,16 @@ const app = {
                 body: JSON.stringify({
                     message: `${isRename ? 'Create' : 'Update'} ${newFilename}`,
                     content: btoa(unescape(encodeURIComponent(code))),
-                    sha: fileSha
+                    sha: luaSha
                 })
             });
-            
-            if (isRename && oldFilename && oldSlug) {
-                try {
-                    const oldFileRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw/${oldFilename}`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (oldFileRes.ok) {
-                        const oldFileSha = (await oldFileRes.json()).sha;
-                        await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw/${oldFilename}`, {
-                            method: 'DELETE',
-                            headers: { 
-                                'Authorization': `token ${this.token}`, 
-                                'Content-Type': 'application/json' 
-                            },
-                            body: JSON.stringify({ 
-                                message: `Delete ${oldFilename}`, 
-                                sha: oldFileSha 
-                            })
-                        });
-                    }
-                } catch(e) {
-                    console.log('Cleanup error (non-critical):', e);
-                }
-            }
-            
+
+            // Update database
             await this.loadDatabase();
-            
             if (isRename && oldSlug) delete this.db.scripts[oldSlug];
             
             const existing = this.db.scripts[newSlug] || {};
-            this.db.scripts[newSlug] = {
+            const scriptData = {
                 title: title, 
                 visibility: visibility, 
                 description: desc, 
@@ -536,6 +541,7 @@ const app = {
                 created: isRename ? new Date().toISOString() : (existing.created || new Date().toISOString()),
                 updated: new Date().toISOString()
             };
+            this.db.scripts[newSlug] = scriptData;
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
@@ -544,13 +550,79 @@ const app = {
                     'Content-Type': 'application/json' 
                 },
                 body: JSON.stringify({
-                    message: isRename ? `Update database - republish ${newSlug}` : `Update database`,
+                    message: `Update database - ${isRename ? 'republish' : 'update'} ${newSlug}`,
                     content: btoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
+
+            // Create/update index.html for the script
+            const indexHTML = this.generateScriptHTML(newSlug, scriptData);
+            let indexSha = null;
+            const indexCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/index.html`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (indexCheckRes.ok) indexSha = (await indexCheckRes.json()).sha;
             
-            msg.innerHTML = `<span style="color:var(--accent)">${isRename ? 'Re-published' : 'Saved'} successfully!</span>`;
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${newSlug}/index.html`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({
+                    message: `${isRename ? 'Create' : 'Update'} index.html for ${newSlug}`,
+                    content: btoa(indexHTML),
+                    sha: indexSha
+                })
+            });
+
+            // Delete old files if renamed
+            if (isRename && oldSlug) {
+                try {
+                    // Delete old lua file
+                    const oldLuaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw/${oldSlug}.lua`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (oldLuaRes.ok) {
+                        const oldLuaSha = (await oldLuaRes.json()).sha;
+                        await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/raw/${oldSlug}.lua`, {
+                            method: 'DELETE',
+                            headers: { 
+                                'Authorization': `token ${this.token}`, 
+                                'Content-Type': 'application/json' 
+                            },
+                            body: JSON.stringify({ 
+                                message: `Delete old ${oldSlug}.lua`, 
+                                sha: oldLuaSha 
+                            })
+                        });
+                    }
+
+                    // Delete old index.html
+                    const oldIndexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/index.html`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (oldIndexRes.ok) {
+                        const oldIndexSha = (await oldIndexRes.json()).sha;
+                        await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${oldSlug}/index.html`, {
+                            method: 'DELETE',
+                            headers: { 
+                                'Authorization': `token ${this.token}`, 
+                                'Content-Type': 'application/json' 
+                            },
+                            body: JSON.stringify({ 
+                                message: `Delete old index.html for ${oldSlug}`, 
+                                sha: oldIndexSha 
+                            })
+                        });
+                    }
+                } catch(e) {
+                    console.log('Cleanup error (non-critical):', e);
+                }
+            }
+            
+            msg.innerHTML = `<span style="color:var(--accent)">Published successfully!</span>`;
             setTimeout(() => { 
                 msg.innerHTML = ''; 
                 this.switchAdminTab('list'); 
@@ -568,11 +640,12 @@ const app = {
         this.actionInProgress = true;
         
         try {
-            const checkRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${filename}`, {
+            // Delete lua file
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${filename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
-            if (checkRes.ok) {
-                const sha = (await checkRes.json()).sha;
+            if (luaRes.ok) {
+                const sha = (await luaRes.json()).sha;
                 await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/raw/${filename}`, {
                     method: 'DELETE',
                     headers: { 
@@ -581,6 +654,25 @@ const app = {
                     },
                     body: JSON.stringify({ 
                         message: `Delete ${filename}`, 
+                        sha: sha 
+                    })
+                });
+            }
+
+            // Delete index.html
+            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/index.html`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (indexRes.ok) {
+                const sha = (await indexRes.json()).sha;
+                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${slug}/index.html`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Authorization': `token ${this.token}`, 
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({ 
+                        message: `Delete index.html for ${slug}`, 
                         sha: sha 
                     })
                 });
@@ -617,13 +709,9 @@ const app = {
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
         window.scrollTo(0, 0);
         
-        if (hash.startsWith('script/')) {
-            const slug = hash.split('/')[1];
-            document.getElementById('view-script').style.display = 'block';
-            this.loadViewer(slug);
-        } else if (hash === 'admin') {
+        if (hash === 'admin') {
             if (!this.currentUser) { 
-                navigate('home'); 
+                location.hash = ''; 
                 return; 
             }
             document.getElementById('view-admin').style.display = 'block';
