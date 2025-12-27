@@ -179,6 +179,16 @@
       "size": 1645,
       "created": "2025-12-27T19:56:06.437Z",
       "updated": "2025-12-27T19:56:06.437Z"
+    },
+    "Death Screen LocalScript": {
+      "title": "Death Screen LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "death-screen-localscript.lua",
+      "size": 4653,
+      "created": "2025-12-27T19:56:40.464Z",
+      "updated": "2025-12-27T19:56:40.464Z"
     }
   }
 }
