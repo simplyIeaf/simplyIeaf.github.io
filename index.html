@@ -2,124 +2,84 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaf's Scripts</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar animate__animated animate__fadeInDown">
+    <nav class="navbar">
         <div class="nav-content">
-            <div class="nav-left">
-                <div class="brand" data-action="navigate" data-param="">
-                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
-                    <span class="nav-title">Leaf's Scripts</span>
-                </div>
+            <div class="brand" onclick="location.hash=''">
+                <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon">
+                <span>Leaf's Scripts</span>
             </div>
-            <div class="nav-center">
-                <div class="search-wrapper">
-                    <input type="text" id="search" placeholder="Search scripts...">
-                </div>
+            <div class="search-container">
+                <input type="text" id="search" placeholder="Search scripts..." onkeyup="app.debouncedRender()">
             </div>
-            <div class="nav-right">
-                <div id="auth-section">
-                    <button class="btn btn-secondary btn-sm" data-action="login-modal">Login</button>
-                </div>
-                <div id="user-section" style="display: none;">
-                    <button class="btn btn-primary btn-sm" data-action="navigate" data-param="admin">Manage</button>
-                </div>
+            <div id="auth-section">
+                <button class="btn-primary" onclick="app.showLogin()">Login</button>
+            </div>
+            <div id="user-section" style="display: none;">
+                <button class="btn-primary" onclick="location.hash='admin'">Manage</button>
             </div>
         </div>
     </nav>
-    
-    <div id="login-modal" class="modal-overlay animate__animated animate__fadeIn" style="display: none;">
-        <div class="modal animate__animated animate__zoomIn">
-            <div class="modal-header"><h3>Login</h3><button class="close-btn" data-action="login-modal">×</button></div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>GitHub Token</label>
-                    <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
-                </div>
-                <button class="btn btn-full" data-action="login">Login</button>
-            </div>
-        </div>
-    </div>
 
     <div class="container">
-        <div id="view-home" class="view-section animate__animated animate__fadeIn">
+        <div id="view-home" class="view-section">
             <div class="content-wrapper">
-                <aside class="sidebar">
-                    <div class="sidebar-section">
-                        <h3 class="sidebar-title">Filters</h3>
-                        <div class="sidebar-links">
-                            <a href="#" class="sidebar-link active" data-action="filter" data-param="all">All Scripts</a>
-                            <a href="#" class="sidebar-link" data-action="filter" data-param="public">Public</a>
-                            <a href="#" class="sidebar-link" id="private-filter" style="display:none" data-action="filter" data-param="private">Private</a>
-                        </div>
+                <aside class="sidebar mobile-hide">
+                    <div class="sidebar-group">
+                        <h3>Filters</h3>
+                        <button onclick="app.filter('all')">All Scripts</button>
+                        <button onclick="app.filter('public')">Public</button>
                     </div>
                 </aside>
                 <main class="main-content">
-                    <div class="script-grid" id="script-list"></div>
+                    <div id="script-list" class="grid"></div>
                 </main>
             </div>
         </div>
 
-        <div id="view-script" class="view-section animate__animated animate__fadeIn" style="display: none;">
-            <div id="script-content-view"></div>
+        <div id="view-admin" class="view-section" style="display:none">
+            <div class="content-wrapper">
+                <aside class="sidebar">
+                    <div class="sidebar-group">
+                        <h3>Admin</h3>
+                        <button onclick="app.showEditor()">+ Add New</button>
+                        <button onclick="app.logout()" class="btn-danger">Logout</button>
+                    </div>
+                </aside>
+                <main class="main-content">
+                    <div id="admin-list" class="grid"></div>
+                </main>
+            </div>
         </div>
 
-        <div id="view-admin" class="view-section animate__animated animate__fadeIn" style="display: none;">
-            <div class="admin-top-controls">
-                <button class="btn-back" data-action="navigate" data-param="">Back to Site</button>
-                <button class="btn btn-secondary btn-sm" data-action="logout">Logout</button>
-            </div>
-            <div class="admin-panel">
-                <div class="admin-header-flex">
-                    <h2>Admin Panel</h2>
-                    <div class="tab-switcher">
-                        <button class="tab-btn" data-action="admin-tab" data-param="list">Manage</button>
-                        <button class="tab-btn" data-action="admin-tab" data-param="create">Add New</button>
-                    </div>
-                </div>
-
-                <div id="admin-tab-editor" class="admin-tab" style="display: none;">
-                    <div class="editor-container">
-                        <h3 id="editor-heading">Create New Script</h3>
-                        <div class="form-row">
-                            <div class="form-group"><label>Title</label><input type="text" id="edit-title" class="input-field"></div>
-                            <div class="form-group">
-                                <label>Visibility</label>
-                                <select id="edit-visibility" class="input-field">
-                                    <option value="PUBLIC">Public</option>
-                                    <option value="PRIVATE">Private</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-group"><label>Description</label><input type="text" id="edit-desc" class="input-field"></div>
-                        <div class="form-group"><label>Expiration</label><input type="date" id="edit-expire" class="input-field"></div>
-                        <div class="form-group"><label>Source</label><textarea id="edit-code" class="input-field code-textarea"></textarea></div>
-                        <div class="editor-actions">
-                            <div class="action-buttons">
-                                <button class="btn btn-secondary" data-action="admin-tab" data-param="list">Cancel</button>
-                                <button class="btn btn-delete" id="btn-delete" style="display: none;">Delete</button>
-                                <button class="btn" data-action="save-script">Save</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="admin-tab-list" class="admin-tab">
-                    <div class="admin-list-header"><h3>Existing Scripts</h3><span id="total-stats"></span></div>
-                    <div id="admin-list"></div>
+        <div id="view-editor" class="view-section" style="display:none">
+            <div class="editor-ui">
+                <input type="text" id="edit-title" class="title-input" placeholder="Script Title">
+                <textarea id="edit-code" class="code-input" placeholder="Lua code here..."></textarea>
+                <div class="editor-footer">
+                    <button class="btn-secondary" onclick="location.hash='admin'">Cancel</button>
+                    <button id="del-btn" class="btn-danger" style="display:none" onclick="app.deleteFlow()">Delete</button>
+                    <button class="btn-primary" onclick="app.save()">Save & Publish</button>
                 </div>
             </div>
         </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/lua.min.js"></script>
+
+    <div id="login-modal" class="modal" style="display:none">
+        <div class="modal-content">
+            <h2>Admin Panel</h2>
+            <input type="password" id="token-input" placeholder="Token">
+            <button class="btn-primary" onclick="app.login()">Login</button>
+            <button onclick="app.closeLogin()">Cancel</button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="app.js"></script>
 </body>
