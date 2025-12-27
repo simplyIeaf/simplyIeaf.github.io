@@ -7,7 +7,9 @@
     <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar animate__animated animate__fadeInDown">
@@ -21,12 +23,11 @@
             
             <div class="nav-center">
                 <div class="search-wrapper">
-                    <label for="search" class="sr-only">Search scripts</label>
                     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" id="search" name="search" placeholder="Search scripts...">
+                    <input type="text" id="search" name="search" placeholder="Search scripts..." aria-label="Search">
                 </div>
             </div>
 
@@ -52,13 +53,13 @@
                     <label for="auth-token">GitHub Token</label>
                     <input type="password" id="auth-token" name="auth-token" class="input-field" placeholder="ghp_..." autocomplete="off">
                 </div>
-                <div id="login-error" style="color:var(--danger);font-size:13px;margin:16px 0;text-align:center;display:none;"></div>
                 <button class="btn btn-full" data-action="login">Login</button>
             </div>
         </div>
     </div>
 
     <div class="container">
+        
         <div id="view-home" class="view-section animate__animated animate__fadeIn" style="display: block;">
             <div class="content-wrapper">
                 <aside class="sidebar">
@@ -81,7 +82,6 @@
                     </div>
                     <div class="sidebar-section sidebar-sort">
                         <h3 class="sidebar-title">Sort By</h3>
-                        <label for="sort-select" class="sr-only">Sort scripts by</label>
                         <select id="sort-select" name="sort-select" class="input-field select-sm">
                             <option value="newest">Newest First</option>
                             <option value="alpha">A-Z</option>
@@ -91,15 +91,55 @@
                 
                 <main class="main-content">
                     <div class="script-grid" id="script-list">
-                        <div style="text-align:center;padding:60px 0;grid-column:1/-1;">
-                            <div class="spinner"></div>
-                            <p>Loading library...</p>
-                        </div>
+                        <div class="spinner"></div>
                     </div>
                 </main>
             </div>
         </div>
 
+        
+        <div id="view-detail" class="view-section animate__animated animate__fadeIn" style="display: none;">
+            <div class="content-wrapper">
+                <div class="detail-container" style="grid-column: 1/-1;">
+                    <button class="btn-back" data-action="navigate" data-param="">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                        Back to Library
+                    </button>
+
+                    <div class="detail-header">
+                        <div class="detail-title-row">
+                            <h1 id="detail-title">Script Title</h1>
+                            <div id="detail-badges"></div>
+                        </div>
+                        <p id="detail-desc" class="script-desc">Description goes here...</p>
+                        
+                        <div class="action-bar">
+                            <button class="btn btn-emerald" id="btn-copy">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                Copy Script
+                            </button>
+                            <button class="btn btn-secondary" id="btn-raw">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                Raw
+                            </button>
+                            <a id="btn-download" class="btn btn-secondary" download="script.lua">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="code-box">
+                        <div class="toolbar">
+                            <span class="file-info">source.lua</span>
+                        </div>
+                        <pre><code id="detail-code" class="language-lua"></code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
         <div id="view-admin" class="view-section animate__animated animate__fadeIn" style="display: none;">
             <div class="admin-top-controls">
                 <button class="btn-back" data-action="navigate" data-param="">
@@ -113,9 +153,8 @@
                 <div class="admin-header-flex">
                     <h2>Admin Panel</h2>
                     <div class="tab-switcher">
-                        <button class="tab-btn" data-action="admin-tab" data-param="list">Manage</button>
+                        <button class="tab-btn active" data-action="admin-tab" data-param="list">Manage</button>
                         <button class="tab-btn" data-action="admin-tab" data-param="create">Add New</button>
-                        <button class="tab-btn" data-action="admin-tab" data-param="stats">Stats</button>
                     </div>
                 </div>
 
@@ -125,32 +164,26 @@
                         <div class="form-row">
                             <div class="form-group form-group-flex">
                                 <label for="edit-title">Script Title</label>
-                                <input type="text" id="edit-title" name="edit-title" class="input-field" autocomplete="off">
+                                <input type="text" id="edit-title" class="input-field" autocomplete="off">
                             </div>
                             <div class="form-group">
                                 <label for="edit-visibility">Visibility</label>
-                                <select id="edit-visibility" name="edit-visibility" class="input-field">
-                                    <option value="PUBLIC">Public</option>
-                                    <option value="PRIVATE">Private</option>
-                                    <option value="UNLISTED">Unlisted</option>
+                                <select id="edit-visibility" class="input-field">
+                                    <option value="true">Public</option>
+                                    <option value="false">Secret (Private)</option>
                                 </select>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="edit-desc">Description</label>
-                            <input type="text" id="edit-desc" name="edit-desc" class="input-field" autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-expire">Expiration</label>
-                            <input type="date" id="edit-expire" name="edit-expire" class="input-field">
+                            <input type="text" id="edit-desc" class="input-field" autocomplete="off">
                         </div>
                         <div class="form-group">
                             <label for="edit-code">Lua Source</label>
-                            <textarea id="edit-code" name="edit-code" class="input-field code-textarea" spellcheck="false"></textarea>
+                            <textarea id="edit-code" class="input-field code-textarea" spellcheck="false"></textarea>
                         </div>
     
                         <div class="editor-actions">
-                            <div id="admin-msg"></div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" data-action="admin-tab" data-param="list">Cancel</button>
                                 <button class="btn btn-delete" id="btn-delete" style="display: none;">Delete</button>
@@ -161,16 +194,16 @@
                 </div>
 
                 <div id="admin-tab-list" class="admin-tab">
-                    <div class="admin-list-header"><h3>Existing Scripts</h3><span id="total-stats"></span></div>
+                    <div class="admin-list-header"><h3>Existing Scripts</h3></div>
                     <div id="admin-list"></div>
-                </div>
-
-                <div id="admin-tab-stats" class="admin-tab" style="display: none;">
-                    <div id="stats-content"></div>
                 </div>
             </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
