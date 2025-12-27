@@ -48,9 +48,9 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Token</label>
+                    <label>GitHub Token</label>
                     <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
-                    <small style="color:var(--color-text-muted);margin-top:6px;display:block">ik your NOT a admin buddy</small>
+                    <small style="color:var(--color-text-muted);margin-top:6px;display:block">i know that your NOT a admin bro</small>
                 </div>
                 <div id="login-error" role="alert" aria-live="polite" style="color:var(--color-danger);font-size:13px;margin:16px 0;text-align:center;display:none"></div>
                 <button class="btn btn-full" onclick="app.debouncedLogin()">Login</button>
@@ -203,7 +203,7 @@
                             <div id="admin-msg"></div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
-                                <button class="btn btn-delete" onclick="app.handleDelete()" id="btn-delete" style="display:none">Delete</button>
+                                <button class="btn btn-delete" id="btn-delete" style="display:none" onclick="app.handleDelete()">Delete</button>
                                 <button class="btn" onclick="app.debouncedSave()">Save & Publish</button>
                             </div>
                         </div>
