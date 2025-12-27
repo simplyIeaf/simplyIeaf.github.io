@@ -1,7 +1,7 @@
 const CONFIG = { 
     user: 'simplyIeaf', 
     repo: 'simplyIeaf.github.io',
-    cacheBuster: () => Date.now()
+    cacheBuster: () => `?v=${Date.now()}`
 };
 
 const utils = {
@@ -221,7 +221,7 @@ const app = {
 
     async loadDatabase() {
         try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json${CONFIG.cacheBuster()}`, {
                 headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
             if (res.status === 404) {
@@ -398,6 +398,10 @@ const app = {
         document.getElementById('edit-expire').value = '';
         document.getElementById('edit-code').value = '';
         document.getElementById('btn-delete').style.display = 'none';
+        
+        const viewBtn = document.querySelector('.btn-view-script');
+        if (viewBtn) viewBtn.remove();
+        
         this.currentEditingId = null;
         this.originalTitle = null;
     },
@@ -434,6 +438,24 @@ const app = {
         }
         
         document.getElementById('btn-delete').style.display = 'inline-flex';
+        
+        const viewBtn = document.querySelector('.btn-view-script');
+        if (!viewBtn) {
+            const actionButtons = document.querySelector('.action-buttons');
+            const newViewBtn = document.createElement('a');
+            newViewBtn.href = `scripts/${scriptId}/index.html`;
+            newViewBtn.target = '_blank';
+            newViewBtn.className = 'btn btn-secondary btn-view-script';
+            newViewBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                View Script
+            `;
+            actionButtons.appendChild(newViewBtn);
+        }
     },
 
     async saveScript() {
@@ -446,9 +468,11 @@ const app = {
         const expiration = document.getElementById('edit-expire').value;
         const code = document.getElementById('edit-code').value; 
         const msg = document.getElementById('admin-msg');
+        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
+        const originalBtnText = saveBtn.textContent;
         
         if (!title || !code) { 
-            msg.innerHTML = `<span style="color:var(--danger)">Title and Code required</span>`;
+            msg.innerHTML = `<span style="color:var(--color-danger)">Title and Code required</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2000);
             return; 
         }
@@ -458,8 +482,13 @@ const app = {
         const scriptId = utils.sanitizeTitle(title);
         const filename = scriptId + '.lua';
         
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Publishing...';
+        
         if (this.db.scripts[title] && title !== this.originalTitle) {
-            msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
+            msg.innerHTML = `<span style="color:var(--color-danger)">Script with this title already exists</span>`;
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
             return;
         }
@@ -467,25 +496,27 @@ const app = {
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            if (titleChanged) {
+            if (titleChanged && this.originalTitle) {
                 await this.deleteScriptFiles(this.originalTitle);
             }
             
             let luaSha = null;
+            const luaPath = `scripts/${scriptId}/raw/${filename}`;
+            
             if (isEditing && !titleChanged) {
                 try {
-                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                         headers: { 'Authorization': `token ${this.token}` }
                     });
                     if (check.ok) {
                         luaSha = (await check.json()).sha;
                     }
                 } catch(e) {
-                    console.log('File does not exist yet, creating new');
+                    console.log('Creating new Lua file');
                 }
             }
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -494,9 +525,11 @@ const app = {
                     sha: luaSha || undefined
                 })
             });
-
-            await this.loadDatabase();
             
+            if (!luaRes.ok) {
+                throw new Error('Failed to save Lua file');
+            }
+
             const scriptData = {
                 title: title, 
                 visibility: visibility, 
@@ -513,51 +546,81 @@ const app = {
             
             this.db.scripts[title] = scriptData;
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update database`,
+                    message: `${isEditing ? 'Update' : 'Add'} ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
+            
+            if (!dbRes.ok) {
+                throw new Error('Failed to update database');
+            }
+            
+            const newDbData = await dbRes.json();
+            this.dbSha = newDbData.content.sha;
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
+            const indexPath = `scripts/${scriptId}/index.html`;
             
             if (isEditing && !titleChanged) {
                 try {
-                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                         headers: { 'Authorization': `token ${this.token}` }
                     });
                     if (check.ok) {
                         indexSha = (await check.json()).sha;
                     }
                 } catch(e) {
-                    console.log('Index does not exist yet, creating new');
+                    console.log('Creating new index file');
                 }
             }
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update index for ${title}`,
+                    message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
                     content: utils.safeBtoa(indexHTML),
                     sha: indexSha || undefined
                 })
             });
             
-            msg.innerHTML = `<span style="color:var(--accent)">Published successfully!</span>`;
-            setTimeout(() => { 
-                msg.innerHTML = ''; 
-                this.switchAdminTab('list'); 
-                this.actionInProgress = false; 
-            }, 1500);
+            if (!indexRes.ok) {
+                throw new Error('Failed to save index.html');
+            }
+            
+            msg.innerHTML = `<span style="color:var(--color-primary)">Published successfully!</span>`;
+            
+            const actionButtons = document.querySelector('.action-buttons');
+            const viewBtn = actionButtons.querySelector('.btn-view-script');
+            if (!viewBtn) {
+                const newViewBtn = document.createElement('a');
+                newViewBtn.href = `scripts/${scriptId}/index.html`;
+                newViewBtn.target = '_blank';
+                newViewBtn.className = 'btn btn-secondary btn-view-script';
+                newViewBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                    View Script
+                `;
+                actionButtons.appendChild(newViewBtn);
+            }
+            
         } catch(e) {
-            msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            setTimeout(() => { this.actionInProgress = false; }, 2000);
+            msg.innerHTML = `<span style="color:var(--color-danger)">Error: ${e.message}</span>`;
+            console.error('Save error:', e);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
+            this.actionInProgress = false;
         }
     },
 
@@ -568,48 +631,44 @@ const app = {
         const s = this.db.scripts[title];
         if (!s) return;
         
-        try {
-            const luaPath = `scripts/${scriptId}/raw/${s.filename}`;
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (luaRes.ok) {
-                const luaData = await luaRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        message: `Delete ${s.filename}`, 
-                        sha: luaData.sha 
-                    })
+        const filesToDelete = [
+            `scripts/${scriptId}/raw/${s.filename}`,
+            `scripts/${scriptId}/index.html`
+        ];
+        
+        for (const path of filesToDelete) {
+            try {
+                const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
                 });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            message: `Delete ${path.split('/').pop()}`, 
+                            sha: data.sha 
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn(`Failed to delete ${path}:`, e.message);
             }
-
-            const indexPath = `scripts/${scriptId}/index.html`;
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+        }
+        
+        try {
+            const rawRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
-            if (idxRes.ok) {
-                const idxData = await idxRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        message: `Delete index for ${title}`, 
-                        sha: idxData.sha 
-                    })
-                });
+            if (rawRes.ok) {
+                const rawData = await rawRes.json();
+                if (rawData.length === 0) {
+                }
             }
         } catch(e) {
-            console.error('Error deleting files:', e);
-        }
-    },
-
-    handleDelete() {
-        if (this.currentEditingId) {
-            this.deleteScript(this.currentEditingId);
         }
     },
 
@@ -631,15 +690,67 @@ const app = {
         msg.innerHTML = `<span class="loading">Deleting...</span>`;
         
         try {
-            await this.deleteScriptFiles(title);
+            const scriptId = utils.sanitizeTitle(title);
+            const scriptData = this.db.scripts[title];
             
-            await this.loadDatabase();
-            
-            if (this.db.scripts[title]) {
-                delete this.db.scripts[title];
+            const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
+            try {
+                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (luaRes.ok) {
+                    const luaData = await luaRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            message: `Delete ${scriptData.filename}`, 
+                            sha: luaData.sha 
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Lua file deletion error:', e.message);
+            }
+
+            const indexPath = `scripts/${scriptId}/index.html`;
+            try {
+                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (idxRes.ok) {
+                    const idxData = await idxRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            message: `Delete index for ${title}`, 
+                            sha: idxData.sha 
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Index file deletion error:', e.message);
             }
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            try {
+                const folderRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (folderRes.ok) {
+                    const folderData = await folderRes.json();
+                    if (folderData.length <= 1) {
+                    }
+                }
+            } catch(e) {
+            }
+            
+            delete this.db.scripts[title];
+            
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -649,16 +760,32 @@ const app = {
                 })
             });
             
-            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully!</span>`;
-            setTimeout(() => { 
-                msg.innerHTML = '';
-                this.switchAdminTab('list'); 
-            }, 1500);
+            if (dbRes.ok) {
+                const newDbData = await dbRes.json();
+                this.dbSha = newDbData.content.sha;
+                
+                msg.innerHTML = `<span style="color:var(--color-primary)">Deleted successfully!</span>`;
+                setTimeout(() => { 
+                    msg.innerHTML = '';
+                    this.switchAdminTab('list'); 
+                }, 1500);
+                
+                await this.loadDatabase();
+            } else {
+                throw new Error('Failed to update database');
+            }
+            
         } catch(e) {
-            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
-            alert(`Delete failed: ${e.message}`);
+            msg.innerHTML = `<span style="color:var(--color-danger)">Delete failed: ${e.message}</span>`;
+            console.error('Delete error:', e);
         } finally {
             this.actionInProgress = false;
+        }
+    },
+
+    handleDelete() {
+        if (this.currentEditingId) {
+            this.deleteScript(this.currentEditingId);
         }
     },
 
