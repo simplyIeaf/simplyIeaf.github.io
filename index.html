@@ -25,13 +25,13 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" id="search" placeholder="Search scripts..." onkeyup="app.debouncedRender()">
+                    <input type="text" id="search" placeholder="Search scripts..." oninput="app.renderList()">
                 </div>
             </div>
 
             <div class="nav-right">
                 <div id="auth-section">
-                    <button class="btn btn-secondary btn-sm" onclick="app.debouncedToggleLogin()">Login</button>
+                    <button class="btn btn-secondary btn-sm" onclick="app.toggleLoginModal()">Login</button>
                 </div>
                 <div id="user-section" style="display: none;">
                     <button class="btn btn-sm" onclick="navigate('admin')">Manage</button>
@@ -52,7 +52,7 @@
                     <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
                 </div>
                 <div id="login-error" style="color:var(--danger);font-size:12px;margin:12px 0;text-align:center;display:none;"></div>
-                <button class="btn btn-full" onclick="app.debouncedLogin()">Login</button>
+                <button class="btn btn-full" onclick="app.login()">Login</button>
             </div>
         </div>
     </div>
@@ -145,8 +145,8 @@
                             <div id="admin-msg"></div>
                             <div style="display:flex;gap:10px;">
                                 <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
-                                <button class="btn btn-delete" onclick="app.debouncedDelete()" id="btn-delete" style="display: none;">Delete</button>
-                                <button class="btn" onclick="app.debouncedSave()">Save & Publish</button>
+                                <button class="btn btn-delete" onclick="app.deleteScript()" id="btn-delete" style="display: none;">Delete</button>
+                                <button class="btn" onclick="app.saveScript()">Save & Publish</button>
                             </div>
                         </div>
                     </div>
@@ -164,4 +164,4 @@
     </div>
     <script src="app.js"></script>
 </body>
-    </html>
+</html>
