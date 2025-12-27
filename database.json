@@ -139,6 +139,16 @@
       "size": 14704,
       "created": "2025-12-27T19:53:09.735Z",
       "updated": "2025-12-27T19:53:09.735Z"
+    },
+    "Customizable Chat Bubbles": {
+      "title": "Customizable Chat Bubbles",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "customizable-chat-bubbles.lua",
+      "size": 683,
+      "created": "2025-12-27T19:53:48.757Z",
+      "updated": "2025-12-27T19:53:48.757Z"
     }
   }
 }
