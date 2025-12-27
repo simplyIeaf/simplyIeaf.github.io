@@ -25,7 +25,8 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" id="search" placeholder="Search scripts...">
+                    <label for="search" class="sr-only">Search scripts</label>
+                    <input type="text" id="search" name="search" placeholder="Search scripts...">
                 </div>
             </div>
 
@@ -44,12 +45,12 @@
         <div class="modal animate__animated animate__zoomIn">
             <div class="modal-header">
                 <h3>Login</h3>
-                <button class="close-btn" data-action="login-modal">×</button>
+                <button class="close-btn" data-action="login-modal" aria-label="Close modal">×</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>GitHub Token</label>
-                    <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
+                    <label for="auth-token">GitHub Token</label>
+                    <input type="password" id="auth-token" name="auth-token" class="input-field" placeholder="ghp_..." autocomplete="off">
                 </div>
                 <div id="login-error" style="color:var(--danger);font-size:13px;margin:16px 0;text-align:center;display:none;"></div>
                 <button class="btn btn-full" data-action="login">Login</button>
@@ -80,7 +81,8 @@
                     </div>
                     <div class="sidebar-section sidebar-sort">
                         <h3 class="sidebar-title">Sort By</h3>
-                        <select class="input-field select-sm">
+                        <label for="sort-select" class="sr-only">Sort scripts by</label>
+                        <select id="sort-select" name="sort-select" class="input-field select-sm">
                             <option value="newest">Newest First</option>
                             <option value="alpha">A-Z</option>
                         </select>
@@ -122,27 +124,36 @@
                         <h3 id="editor-heading">Create New Script</h3>
                         <div class="form-row">
                             <div class="form-group form-group-flex">
-                                <label>Script Title</label>
-                                <input type="text" id="edit-title" class="input-field">
+                                <label for="edit-title">Script Title</label>
+                                <input type="text" id="edit-title" name="edit-title" class="input-field" autocomplete="off">
                             </div>
                             <div class="form-group">
-                                <label>Visibility</label>
-                                <select id="edit-visibility" class="input-field">
+                                <label for="edit-visibility">Visibility</label>
+                                <select id="edit-visibility" name="edit-visibility" class="input-field">
                                     <option value="PUBLIC">Public</option>
                                     <option value="PRIVATE">Private</option>
                                     <option value="UNLISTED">Unlisted</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="form-group"><label>Description</label><input type="text" id="edit-desc" class="input-field"></div>
-                        <div class="form-group"><label>Expiration</label><input type="date" id="edit-expire" class="input-field"></div>
-                        <div class="form-group"><label>Lua Source</label><textarea id="edit-code" class="input-field code-textarea"></textarea></div>
+                        <div class="form-group">
+                            <label for="edit-desc">Description</label>
+                            <input type="text" id="edit-desc" name="edit-desc" class="input-field" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-expire">Expiration</label>
+                            <input type="date" id="edit-expire" name="edit-expire" class="input-field">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-code">Lua Source</label>
+                            <textarea id="edit-code" name="edit-code" class="input-field code-textarea" spellcheck="false"></textarea>
+                        </div>
     
                         <div class="editor-actions">
                             <div id="admin-msg"></div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" data-action="admin-tab" data-param="list">Cancel</button>
-                                <button class="btn btn-delete" data-action="delete-script" id="btn-delete" style="display: none;">Delete</button>
+                                <button class="btn btn-delete" id="btn-delete" style="display: none;">Delete</button>
                                 <button class="btn" data-action="save-script">Save & Publish</button>
                             </div>
                         </div>
