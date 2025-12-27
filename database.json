@@ -109,6 +109,16 @@
       "size": 2305,
       "created": "2025-12-27T19:49:01.532Z",
       "updated": "2025-12-27T19:49:01.532Z"
+    },
+    "Global Announcements System Script": {
+      "title": "Global Announcements System Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "global-announcements-system-script.lua",
+      "size": 1320,
+      "created": "2025-12-27T19:49:38.736Z",
+      "updated": "2025-12-27T19:49:38.736Z"
     }
   }
 }
