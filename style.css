@@ -118,7 +118,7 @@ body {
 
 .container {
     max-width: 1400px; 
-    margin: 80px auto 40px; 
+    margin: 80px auto 60px; 
     padding: 0 32px;
     min-height: calc(100vh - 120px);
 }
@@ -660,10 +660,6 @@ textarea.input-field {
     font-weight: 500; 
 }
 
-.mobile-controls { 
-    display: none; 
-}
-
 @media (max-width: 768px) {
     .content-wrapper { 
         grid-template-columns: 1fr; 
@@ -674,13 +670,9 @@ textarea.input-field {
         display: none; 
     }
     
-    .sidebar-sort { 
-        display: none; 
-    }
-    
     .nav-content { 
-        padding: 0 16px; 
-        flex-wrap: nowrap; 
+        padding: 0 16px;
+        flex-wrap: nowrap;
     }
     
     .nav-title { 
@@ -721,8 +713,8 @@ textarea.input-field {
     }
     
     .container { 
-        margin-top: 70px; 
-        padding: 0 16px; 
+        margin-top: 76px; 
+        padding: 0 20px; 
     }
     
     .toolbar { 
@@ -743,11 +735,6 @@ textarea.input-field {
         grid-template-columns: 1fr; 
     }
     
-    .admin-top-controls {
-        padding: 0 0 16px 0;
-        margin-bottom: 24px;
-    }
-    
     .admin-header-flex { 
         flex-direction: column; 
         align-items: stretch; 
@@ -762,7 +749,7 @@ textarea.input-field {
     }
     
     .editor-container {
-        padding: 20px;
+        padding: 24px;
     }
     
     .form-row {
@@ -812,4 +799,4 @@ textarea.input-field {
     .nav-content {
         padding: 0 24px;
     }
-    }
+}
