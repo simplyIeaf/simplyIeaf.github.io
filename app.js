@@ -8,11 +8,7 @@ const state = {
     authToken: localStorage.getItem('gh_token'),
     isAdmin: false,
     editingId: null,
-    githubConfig: {
-        username: '',
-        repo: '',
-        path: 'database.json'
-    }
+    githubConfig: null
 };
 
 const UI = {
@@ -43,10 +39,12 @@ function showToast(msg, type = 'success') {
         duration: 3000,
         gravity: "bottom",
         position: "right",
-        className: "animate__animated animate__fadeInUp",
+        className: `animate__animated animate__fadeInUp toast-${type}`,
         style: {
-            background: type === 'error' ? 'var(--danger)' : 'var(--surface)',
-            border: `1px solid ${type === 'error' ? 'var(--danger)' : 'var(--accent)'}`
+            background: 'transparent',
+            border: `1px solid ${type === 'error' ? 'var(--danger)' : 'var(--accent)'}`,
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)'
         }
     }).showToast();
 }
@@ -56,12 +54,24 @@ async function init() {
     setupResponsiveUI();
     
     if (state.authToken) {
-        state.isAdmin = true;
-        UI.userSection.style.display = 'block';
-        UI.authSection.style.display = 'none';
-        document.getElementById('private-filter').style.display = 'flex';
-        await autoDetectRepo();
-        await loadScripts();
+        try {
+            const valid = await validateGitHubToken(state.authToken);
+            if (valid) {
+                state.isAdmin = true;
+                UI.userSection.style.display = 'block';
+                UI.authSection.style.display = 'none';
+                document.getElementById('private-filter').style.display = 'flex';
+                await autoDetectRepo();
+                await loadScripts();
+            } else {
+                localStorage.removeItem('gh_token');
+                state.authToken = null;
+                await loadScripts();
+            }
+        } catch (error) {
+            console.error('Token validation error:', error);
+            await loadScripts();
+        }
     } else {
         await loadScripts();
     }
@@ -82,7 +92,14 @@ function setupEventListeners() {
             target.classList.add('active');
             renderScripts();
         }
-        if (action === 'login-modal') UI.loginModal.style.display = UI.loginModal.style.display === 'none' ? 'flex' : 'none';
+        if (action === 'login-modal') {
+            if (UI.loginModal.style.display === 'none') {
+                UI.loginModal.style.display = 'flex';
+                document.getElementById('auth-token').focus();
+            } else {
+                UI.loginModal.style.display = 'none';
+            }
+        }
         if (action === 'login') handleLogin();
         if (action === 'logout') handleLogout();
         if (action === 'admin-tab') switchAdminTab(param);
@@ -91,6 +108,8 @@ function setupEventListeners() {
         if (action === 'copy-code') copyCode(param);
         if (action === 'download-code') downloadCode(param);
         if (action === 'raw-code') openRaw(param);
+        
+        e.stopPropagation();
     });
 
     UI.search.addEventListener('input', e => {
@@ -105,6 +124,12 @@ function setupEventListeners() {
 
     document.getElementById('btn-delete').addEventListener('click', handleDelete);
     
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && UI.loginModal.style.display === 'flex') {
+            UI.loginModal.style.display = 'none';
+        }
+    });
+    
     window.addEventListener('resize', setupResponsiveUI);
 }
 
@@ -115,21 +140,21 @@ function setupResponsiveUI() {
     if (isMobile) {
         if (isPortrait) {
             UI.sort.style.display = 'none';
-            document.querySelector('.sidebar-sort').style.display = 'none';
+            document.querySelector('.sidebar-sort')?.style.display = 'none';
         } else {
             UI.sort.style.display = 'block';
-            document.querySelector('.sidebar-sort').style.display = 'block';
+            document.querySelector('.sidebar-sort')?.style.display = 'block';
         }
         
         document.querySelectorAll('.admin-item').forEach(item => {
             item.style.flexDirection = 'column';
             item.style.alignItems = 'flex-start';
-            item.style.padding = '12px';
+            item.style.padding = '16px';
         });
         
         document.querySelectorAll('.toolbar-right').forEach(toolbar => {
             toolbar.style.flexWrap = 'wrap';
-            toolbar.style.gap = '6px';
+            toolbar.style.gap = '8px';
         });
         
         document.querySelectorAll('.code-textarea').forEach(textarea => {
@@ -138,65 +163,81 @@ function setupResponsiveUI() {
         });
     } else {
         UI.sort.style.display = 'block';
-        document.querySelector('.sidebar-sort').style.display = 'block';
+        document.querySelector('.sidebar-sort')?.style.display = 'block';
+    }
+}
+
+async function validateGitHubToken(token) {
+    try {
+        const response = await fetch('https://api.github.com/user', {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        });
+        return response.ok;
+    } catch (error) {
+        return false;
     }
 }
 
 async function autoDetectRepo() {
     try {
-        const response = await fetch('https://api.github.com/user/repos', {
-            headers: {
-                'Authorization': `token ${state.authToken}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        
-        if (response.ok) {
-            const repos = await response.json();
-            const currentUrl = window.location.href;
+        const repoPath = window.location.pathname.split('/')[1] || '';
+        if (repoPath) {
+            state.githubConfig = {
+                path: 'database.json',
+                repo: repoPath
+            };
             
-            repos.forEach(repo => {
-                if (currentUrl.includes(repo.name.toLowerCase())) {
-                    state.githubConfig.username = repo.owner.login;
-                    state.githubConfig.repo = repo.name;
-                    localStorage.setItem('gh_repo', JSON.stringify(state.githubConfig));
+            const userResponse = await fetch('https://api.github.com/user', {
+                headers: {
+                    'Authorization': `token ${state.authToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
                 }
             });
             
-            if (!state.githubConfig.username) {
-                const saved = localStorage.getItem('gh_repo');
-                if (saved) {
-                    state.githubConfig = JSON.parse(saved);
-                }
+            if (userResponse.ok) {
+                const userData = await userResponse.json();
+                state.githubConfig.username = userData.login;
+                localStorage.setItem('gh_config', JSON.stringify(state.githubConfig));
+                return true;
             }
         }
     } catch (error) {
         console.error('Auto-detect error:', error);
     }
+    
+    const saved = localStorage.getItem('gh_config');
+    if (saved) {
+        state.githubConfig = JSON.parse(saved);
+        return true;
+    }
+    
+    return false;
 }
 
 async function loadScripts() {
-    if (state.isAdmin && state.authToken && state.githubConfig.username) {
-        try {
+    try {
+        if (state.isAdmin && state.authToken && state.githubConfig) {
             const scripts = await fetchDatabaseFromGitHub();
             if (scripts && Array.isArray(scripts)) {
-                state.scripts = scripts;
+                state.scripts = scripts.filter(script => !script.expire || new Date(script.expire) > new Date());
             } else {
                 state.scripts = [];
             }
-        } catch (error) {
-            console.error('Load error:', error);
-            state.scripts = [];
+        } else {
+            const publicScripts = await fetchPublicScripts();
+            state.scripts = publicScripts;
         }
-    } else {
+    } catch (error) {
+        console.error('Load error:', error);
         state.scripts = [];
     }
     renderScripts();
 }
 
 async function fetchDatabaseFromGitHub() {
-    if (!state.authToken || !state.githubConfig.username) return null;
-    
     try {
         const response = await fetch(
             `https://api.github.com/repos/${state.githubConfig.username}/${state.githubConfig.repo}/contents/${state.githubConfig.path}`,
@@ -209,7 +250,8 @@ async function fetchDatabaseFromGitHub() {
         );
         
         if (response.status === 404) {
-            return [];
+            const created = await createDatabaseFile();
+            return created ? [] : null;
         }
         
         if (response.ok) {
@@ -224,12 +266,56 @@ async function fetchDatabaseFromGitHub() {
     }
 }
 
-async function saveDatabaseToGitHub() {
-    if (!state.authToken || !state.githubConfig.username) {
-        showToast("Cannot save: GitHub not configured", "error");
+async function createDatabaseFile() {
+    try {
+        const content = btoa(JSON.stringify([], null, 2));
+        const payload = {
+            message: 'Create database.json',
+            content: content
+        };
+        
+        const response = await fetch(
+            `https://api.github.com/repos/${state.githubConfig.username}/${state.githubConfig.repo}/contents/${state.githubConfig.path}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${state.authToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            }
+        );
+        
+        return response.ok;
+    } catch (error) {
+        console.error('Create database error:', error);
         return false;
     }
-    
+}
+
+async function fetchPublicScripts() {
+    try {
+        const response = await fetch(
+            `https://api.github.com/repos/${state.githubConfig?.username}/${state.githubConfig?.repo}/contents/database.json`
+        );
+        
+        if (response.ok) {
+            const data = await response.json();
+            const content = atob(data.content.replace(/\n/g, ''));
+            const allScripts = JSON.parse(content);
+            return allScripts.filter(script => 
+                script.visibility === 'PUBLIC' && 
+                (!script.expire || new Date(script.expire) > new Date())
+            );
+        }
+        return [];
+    } catch (error) {
+        return [];
+    }
+}
+
+async function saveDatabaseToGitHub() {
     try {
         let sha = null;
         try {
@@ -250,7 +336,8 @@ async function saveDatabaseToGitHub() {
         } catch (e) {
         }
         
-        const content = btoa(JSON.stringify(state.scripts, null, 2));
+        const filteredScripts = state.scripts.filter(script => !script.expire || new Date(script.expire) > new Date());
+        const content = btoa(JSON.stringify(filteredScripts, null, 2));
         const payload = {
             message: `Update scripts database - ${new Date().toISOString()}`,
             content: content,
@@ -283,7 +370,8 @@ function renderScripts() {
                              s.description.toLowerCase().includes(state.searchQuery);
         const matchesFilter = state.currentFilter === 'all' || 
                              s.visibility.toLowerCase() === state.currentFilter;
-        return matchesSearch && matchesFilter;
+        const notExpired = !s.expire || new Date(s.expire) > new Date();
+        return matchesSearch && matchesFilter && notExpired;
     });
 
     if (state.currentSort === 'alpha') {
@@ -295,7 +383,13 @@ function renderScripts() {
     if (filtered.length === 0) {
         UI.scriptList.innerHTML = `
             <div style="text-align:center;padding:60px 0;grid-column:1/-1;">
-                <p style="color:var(--text-muted);">No scripts found</p>
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" style="margin-bottom:20px;">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <p style="color:var(--text-muted);font-size:16px;font-weight:500;">No scripts found</p>
+                ${!state.isAdmin ? '<p style="color:var(--text-muted);font-size:14px;margin-top:8px;">Login to see private scripts</p>' : ''}
             </div>
         `;
         return;
@@ -307,10 +401,16 @@ function renderScripts() {
                 <span class="script-title">${escapeHtml(s.title)}</span>
                 <span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
             </div>
-            <p class="text-muted" style="font-size:13px;margin-bottom:12px;">${escapeHtml(s.description)}</p>
+            <p class="text-muted" style="font-size:14px;margin-bottom:16px;line-height:1.5;">${escapeHtml(s.description)}</p>
             <div class="card-meta">
-                <span>Lua</span>
-                <span>${new Date(s.created).toLocaleDateString()}</span>
+                <span style="display:flex;align-items:center;gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="16 18 22 12 16 6"></polyline>
+                        <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                    Lua
+                </span>
+                <span>${new Date(s.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             </div>
         </div>
     `).join('');
@@ -322,7 +422,7 @@ function openScript(id) {
 
     showView('script');
     UI.scriptContentView.innerHTML = `
-        <div class="script-header-lg">
+        <div class="script-header-lg animate__animated animate__fadeIn">
             <div class="brand" style="margin-bottom: 24px;">
                 <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon">
                 <span class="nav-title">Leaf's Scripts</span>
@@ -330,22 +430,58 @@ function openScript(id) {
             <h1>${escapeHtml(script.title)}</h1>
             <div class="meta-row">
                 <div class="meta-badge">
-                    ${script.visibility === 'PRIVATE' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path></svg>'}
-                    <span style="margin-left: 4px">${script.visibility}</span>
+                    ${script.visibility === 'PRIVATE' ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' : 
+                      script.visibility === 'UNLISTED' ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>' :
+                      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path></svg>'}
+                    <span style="margin-left: 6px">${script.visibility}</span>
                 </div>
-                <div class="meta-badge">Lua</div>
+                <div class="meta-badge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="16 18 22 12 16 6"></polyline>
+                        <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                    <span style="margin-left: 6px">Lua</span>
+                </div>
+                ${script.expire ? `
+                <div class="meta-badge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span style="margin-left: 6px">Expires: ${new Date(script.expire).toLocaleDateString()}</span>
+                </div>
+                ` : ''}
             </div>
         </div>
-        <div class="code-box">
+        <div class="code-box animate__animated animate__fadeInUp">
             <div class="toolbar">
-                <span class="file-info">${escapeHtml(script.title).toLowerCase().replace(/\s/g, '_')}.lua</span>
+                <span class="file-info">${escapeHtml(script.title).toLowerCase().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_')}.lua</span>
                 <div class="toolbar-right">
-                    <button class="btn btn-emerald" data-action="copy-code" data-param="${script.id}">Copy</button>
-                    <button class="btn btn-secondary" data-action="raw-code" data-param="${script.id}">Raw</button>
-                    <button class="btn btn-secondary" data-action="download-code" data-param="${script.id}">Download</button>
+                    <button class="btn btn-emerald" data-action="copy-code" data-param="${script.id}">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    </button>
+                    <button class="btn btn-secondary" data-action="raw-code" data-param="${script.id}">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        Raw
+                    </button>
+                    <button class="btn btn-secondary" data-action="download-code" data-param="${script.id}">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download
+                    </button>
                 </div>
             </div>
-            <pre><code class="language-lua">${escapeHtml(script.content)}</code></pre>
+            <pre style="margin:0;"><code class="language-lua">${escapeHtml(script.content)}</code></pre>
         </div>
     `;
     hljs.highlightAll();
@@ -353,43 +489,72 @@ function openScript(id) {
 
 function showView(viewName) {
     state.view = viewName;
-    UI.views.forEach(v => v.style.display = 'none');
+    UI.views.forEach(v => {
+        v.style.display = 'none';
+        v.classList.remove('animate__fadeIn');
+    });
     
-    if (viewName === 'admin') {
-        document.getElementById('view-admin').style.display = 'block';
-        renderAdminList();
-        setupResponsiveUI();
-    } else if (viewName === 'script') {
-        document.getElementById('view-script').style.display = 'block';
-    } else {
-        document.getElementById('view-home').style.display = 'block';
-        renderScripts();
-    }
+    setTimeout(() => {
+        if (viewName === 'admin') {
+            const view = document.getElementById('view-admin');
+            view.style.display = 'block';
+            view.classList.add('animate__fadeIn');
+            renderAdminList();
+            setupResponsiveUI();
+        } else if (viewName === 'script') {
+            const view = document.getElementById('view-script');
+            view.style.display = 'block';
+            view.classList.add('animate__fadeIn');
+        } else {
+            const view = document.getElementById('view-home');
+            view.style.display = 'block';
+            view.classList.add('animate__fadeIn');
+            renderScripts();
+        }
+    }, 10);
 }
 
 function renderAdminList() {
     if (state.scripts.length === 0) {
         UI.adminList.innerHTML = `
-            <div style="text-align:center;padding:40px 0;color:var(--text-muted);">
-                No scripts yet. Click "Add New" to create one.
+            <div style="text-align:center;padding:40px 0;color:var(--text-muted);" class="animate__animated animate__fadeIn">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <p style="font-size:16px;margin-bottom:8px;">No scripts yet</p>
+                <p style="font-size:14px;opacity:0.7;">Click "Add New" to create your first script</p>
             </div>
         `;
         return;
     }
     
-    UI.adminList.innerHTML = state.scripts.map(s => `
-        <div class="admin-item" onclick="openEditor('${s.id}')">
+    const validScripts = state.scripts.filter(s => !s.expire || new Date(s.expire) > new Date());
+    
+    UI.adminList.innerHTML = validScripts.map(s => `
+        <div class="admin-item animate__animated animate__fadeIn" onclick="openEditor('${s.id}')">
             <div class="admin-item-left">
                 <strong>${escapeHtml(s.title)}</strong>
-                <span class="text-muted">${s.visibility}</span>
+                <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+                    <span class="badge badge-${s.visibility.toLowerCase()}" style="font-size:10px;padding:4px 8px;">${s.visibility}</span>
+                    <span class="text-muted" style="font-size:12px;">
+                        ${new Date(s.created).toLocaleDateString()}
+                        ${s.expire ? ` • Expires: ${new Date(s.expire).toLocaleDateString()}` : ''}
+                    </span>
+                </div>
             </div>
             <div class="admin-item-right">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                </svg>
             </div>
         </div>
     `).join('');
     
-    document.getElementById('total-stats').innerHTML = `(${state.scripts.length} scripts)`;
+    document.getElementById('total-stats').innerHTML = `${validScripts.length} script${validScripts.length !== 1 ? 's' : ''}`;
 }
 
 function openEditor(id = null) {
@@ -402,6 +567,8 @@ function openEditor(id = null) {
         const s = state.scripts.find(x => x.id === id);
         heading.innerText = 'Edit Script';
         deleteBtn.style.display = 'block';
+        deleteBtn.classList.remove('btn-danger');
+        deleteBtn.classList.add('btn-danger');
         document.getElementById('edit-title').value = s.title;
         document.getElementById('edit-desc').value = s.description;
         document.getElementById('edit-visibility').value = s.visibility;
@@ -423,13 +590,18 @@ function openEditor(id = null) {
 }
 
 function switchAdminTab(tab) {
-    document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.admin-tab').forEach(t => {
+        t.style.display = 'none';
+        t.classList.remove('animate__fadeIn');
+    });
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     
     if (tab === 'create') {
         openEditor(null);
     } else {
-        document.getElementById(`admin-tab-${tab}`).style.display = 'block';
+        const tabElement = document.getElementById(`admin-tab-${tab}`);
+        tabElement.style.display = 'block';
+        setTimeout(() => tabElement.classList.add('animate__fadeIn'), 10);
         document.querySelector(`[data-param="${tab}"]`)?.classList.add('active');
     }
     setupResponsiveUI();
@@ -442,36 +614,41 @@ async function handleSave() {
     const visibility = document.getElementById('edit-visibility').value;
     const expire = document.getElementById('edit-expire').value;
 
-    if (!title || !content) {
-        showToast("Title and Source Code are required", "error");
+    if (!title) {
+        showToast("Script title is required", "error");
+        document.getElementById('edit-title').focus();
+        return;
+    }
+    
+    if (!content) {
+        showToast("Source code is required", "error");
+        document.getElementById('edit-code').focus();
         return;
     }
 
     const newScript = {
         id: state.editingId || Date.now().toString(),
         title: title,
-        description: desc,
+        description: desc || "No description",
         visibility: visibility,
         content: content,
-        created: new Date().toISOString(),
-        expire: expire ? new Date(expire).toISOString() : null
+        created: state.editingId ? state.scripts.find(s => s.id === state.editingId)?.created || new Date().toISOString() : new Date().toISOString(),
+        expire: expire ? new Date(expire + 'T23:59:59').toISOString() : null
     };
 
     if (state.editingId) {
         state.scripts = state.scripts.map(s => s.id === state.editingId ? newScript : s);
+        showToast("Script updated successfully");
     } else {
-        state.scripts.push(newScript);
+        state.scripts.unshift(newScript);
+        showToast("Script created successfully");
     }
     
     if (state.isAdmin) {
         const saved = await saveDatabaseToGitHub();
-        if (saved) {
-            showToast(state.editingId ? "Script updated successfully" : "Script created successfully");
-        } else {
-            showToast("Error saving to database", "error");
+        if (!saved) {
+            showToast("Error: Could not save to GitHub", "error");
         }
-    } else {
-        showToast(state.editingId ? "Script updated locally" : "Script created locally");
     }
     
     showView('admin');
@@ -479,10 +656,7 @@ async function handleSave() {
 }
 
 async function handleDelete() {
-    if (!state.editingId) {
-        showToast("Error: No script selected for deletion", "error");
-        return;
-    }
+    if (!state.editingId) return;
     
     if (confirm('Are you sure you want to delete this script? This action cannot be undone.')) {
         state.scripts = state.scripts.filter(s => s.id !== state.editingId);
@@ -490,12 +664,15 @@ async function handleDelete() {
         if (state.isAdmin) {
             const saved = await saveDatabaseToGitHub();
             if (!saved) {
-                showToast("Warning: Could not delete from database", "error");
+                showToast("Error: Could not update GitHub", "error");
+            } else {
+                showToast("Script deleted successfully");
             }
+        } else {
+            showToast("Script deleted locally");
         }
         
         state.editingId = null;
-        showToast("Script deleted successfully");
         showView('admin');
         switchAdminTab('list');
     }
@@ -544,8 +721,10 @@ function openRaw(id) {
         <html>
         <head>
             <title>${escapeHtml(s.title)} - Raw</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body { margin: 20px; font-family: monospace; background: #111; color: #fff; white-space: pre-wrap; }
+                body { margin: 0; padding: 20px; font-family: 'Courier New', monospace; background: #000; color: #00ff88; white-space: pre-wrap; line-height: 1.6; }
+                @media (max-width: 768px) { body { padding: 16px; font-size: 14px; } }
             </style>
         </head>
         <body>${escapeHtml(s.content)}</body>
@@ -555,12 +734,22 @@ function openRaw(id) {
 
 async function handleLogin() {
     const token = document.getElementById('auth-token').value.trim();
+    const errorEl = document.getElementById('login-error');
+    
+    if (!token) {
+        errorEl.textContent = "Please enter a GitHub token";
+        errorEl.style.display = 'block';
+        return;
+    }
+    
     if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
-        showToast("Invalid GitHub token format", "error");
+        errorEl.textContent = "Invalid GitHub token format";
+        errorEl.style.display = 'block';
         return;
     }
     
     try {
+        errorEl.style.display = 'none';
         const response = await fetch('https://api.github.com/user', {
             headers: {
                 'Authorization': `token ${token}`,
@@ -572,22 +761,29 @@ async function handleLogin() {
             localStorage.setItem('gh_token', token);
             state.authToken = token;
             state.isAdmin = true;
-            await autoDetectRepo();
-            await loadScripts();
-            location.reload();
+            showToast("Login successful!");
+            setTimeout(() => {
+                UI.loginModal.style.display = 'none';
+                location.reload();
+            }, 1000);
         } else {
-            showToast("Invalid GitHub token", "error");
+            errorEl.textContent = "Invalid GitHub token";
+            errorEl.style.display = 'block';
         }
     } catch (error) {
         console.error('Login error:', error);
-        showToast("Login failed. Check token.", "error");
+        errorEl.textContent = "Network error. Please try again.";
+        errorEl.style.display = 'block';
     }
 }
 
 function handleLogout() {
-    localStorage.removeItem('gh_token');
-    localStorage.removeItem('gh_repo');
-    location.reload();
+    if (confirm('Are you sure you want to logout?')) {
+        localStorage.removeItem('gh_token');
+        localStorage.removeItem('gh_config');
+        showToast("Logged out successfully");
+        setTimeout(() => location.reload(), 1000);
+    }
 }
 
 init();
