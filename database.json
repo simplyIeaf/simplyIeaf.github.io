@@ -439,6 +439,16 @@
       "size": 7239,
       "created": "2025-12-27T20:12:12.158Z",
       "updated": "2025-12-27T20:12:12.158Z"
+    },
+    "Global Chat System ServerScript": {
+      "title": "Global Chat System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "global-chat-system-serverscript.lua",
+      "size": 3704,
+      "created": "2025-12-27T20:14:35.368Z",
+      "updated": "2025-12-27T20:14:35.368Z"
     }
   }
 }
