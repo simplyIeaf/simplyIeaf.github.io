@@ -489,6 +489,16 @@
       "size": 4255,
       "created": "2025-12-27T20:16:41.365Z",
       "updated": "2025-12-27T20:16:41.365Z"
+    },
+    "Custom Player Animation ServerScript": {
+      "title": "Custom Player Animation ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "custom-player-animation-serverscript.lua",
+      "size": 4045,
+      "created": "2025-12-27T20:17:24.804Z",
+      "updated": "2025-12-27T20:17:24.804Z"
     }
   }
 }
