@@ -394,7 +394,7 @@ const app = {
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
             
             return `
-            <div class="admin-item" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
+            <div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'")}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</strong>
                     <div class="admin-meta">
@@ -410,6 +410,217 @@ const app = {
                 </div>
             </div>
         `}).join('');
+        
+        this.initSwipeToDelete();
+    },
+
+    initSwipeToDelete() {
+        const adminItems = document.querySelectorAll('.admin-item');
+        
+        adminItems.forEach(item => {
+            let startX = 0;
+            let endX = 0;
+            let isSwiping = false;
+            let swipeAnimation = null;
+            
+            item.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                isSwiping = false;
+                item.style.transition = 'none';
+            }, { passive: true });
+            
+            item.addEventListener('touchmove', (e) => {
+                if (!startX) return;
+                
+                const currentX = e.touches[0].clientX;
+                const diff = currentX - startX;
+                
+                if (Math.abs(diff) > 30) {
+                    isSwiping = true;
+                    e.preventDefault();
+                    
+                    if (diff > 0) {
+                        item.style.transform = `translateX(${Math.min(diff, 100)}px)`;
+                        item.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                    }
+                }
+            }, { passive: false });
+            
+            item.addEventListener('touchend', (e) => {
+                if (!startX || !isSwiping) return;
+                
+                endX = e.changedTouches[0].clientX;
+                const diff = endX - startX;
+                
+                item.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+                
+                if (diff > 100) {
+                    item.style.transform = 'translateX(300px)';
+                    item.style.opacity = '0';
+                    
+                    setTimeout(() => {
+                        const scriptTitle = item.getAttribute('data-script-title');
+                        this.showSwipeDeleteConfirmation(scriptTitle, item);
+                    }, 300);
+                } else {
+                    item.style.transform = 'translateX(0)';
+                    item.style.backgroundColor = '';
+                }
+                
+                startX = 0;
+                isSwiping = false;
+            });
+            
+            item.addEventListener('click', (e) => {
+                if (isSwiping) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+        });
+    },
+
+    showSwipeDeleteConfirmation(scriptTitle, itemElement) {
+        const modalHTML = `
+            <div class="modal-overlay" id="swipe-delete-modal" style="display:flex">
+                <div class="modal animate__animated animate__zoomIn" style="max-width:400px">
+                    <div class="modal-header">
+                        <h3 style="color:var(--color-danger)">Delete Script</h3>
+                        <button class="close-btn" onclick="document.getElementById('swipe-delete-modal').remove()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom:20px;text-align:center;font-size:16px">Are you sure you want to delete<br><strong>"${scriptTitle}"</strong>?</p>
+                        <div style="display:flex;gap:10px;margin-top:24px">
+                            <button class="btn btn-secondary btn-full" onclick="document.getElementById('swipe-delete-modal').remove(); app.restoreSwipeItem()">No, Keep It</button>
+                            <button class="btn btn-delete btn-full" onclick="app.confirmSwipeDelete('${scriptTitle.replace(/'/g, "\\'")}')">Yes, Delete It</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingModal = document.getElementById('swipe-delete-modal');
+        if (existingModal) existingModal.remove();
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        this.pendingSwipeDelete = {
+            scriptTitle: scriptTitle,
+            itemElement: itemElement
+        };
+    },
+
+    restoreSwipeItem() {
+        if (this.pendingSwipeDelete && this.pendingSwipeDelete.itemElement) {
+            const item = this.pendingSwipeDelete.itemElement;
+            item.style.transform = 'translateX(0)';
+            item.style.opacity = '1';
+            item.style.backgroundColor = '';
+            item.style.transition = 'transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease';
+            
+            setTimeout(() => {
+                item.style.transition = '';
+            }, 300);
+        }
+        this.pendingSwipeDelete = null;
+    },
+
+    async confirmSwipeDelete(scriptTitle) {
+        const modal = document.getElementById('swipe-delete-modal');
+        if (modal) modal.remove();
+        
+        if (this.actionInProgress) return;
+        
+        if (!scriptTitle || !this.db.scripts[scriptTitle]) {
+            alert('Script not found or already deleted.');
+            this.restoreSwipeItem();
+            return;
+        }
+
+        this.actionInProgress = true;
+        
+        try {
+            const scriptId = utils.sanitizeTitle(scriptTitle);
+            const scriptData = this.db.scripts[scriptTitle];
+            
+            const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
+            try {
+                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (luaRes.ok) {
+                    const luaData = await luaRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: `Delete ${scriptData.filename}`,
+                            sha: luaData.sha
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Lua file deletion error:', e.message);
+            }
+
+            const indexPath = `scripts/${scriptId}/index.html`;
+            try {
+                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (idxRes.ok) {
+                    const idxData = await idxRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: `Delete index for ${scriptTitle}`,
+                            sha: idxData.sha
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Index file deletion error:', e.message);
+            }
+            
+            delete this.db.scripts[scriptTitle];
+            
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: `Remove ${scriptTitle} from database`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            
+            if (dbRes.ok) {
+                const newDbData = await dbRes.json();
+                this.dbSha = newDbData.content.sha;
+                
+                if (this.pendingSwipeDelete && this.pendingSwipeDelete.itemElement) {
+                    const item = this.pendingSwipeDelete.itemElement;
+                    item.remove();
+                }
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
+                
+            } else {
+                throw new Error('Failed to update database');
+            }
+            
+        } catch(e) {
+            console.error('Delete error:', e);
+            alert('Delete failed: ' + e.message);
+            this.restoreSwipeItem();
+        } finally {
+            this.actionInProgress = false;
+        }
     },
 
     renderStats() {
