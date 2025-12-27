@@ -375,34 +375,32 @@ const app = {
         const isNew = !this.currentEditingId;
         const isRename = !isNew && this.originalTitle && this.originalTitle !== title;
         
-        // FIX: Only check if title exists when it's different from original
-        if (this.db.scripts[title] && title !== this.originalTitle) {
+        // Check if title exists (but allow same title when editing same script)
+        if (this.db.scripts[title] && (!this.originalTitle || title !== this.originalTitle)) {
             msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
             return;
         }
         
         const scriptId = utils.sanitizeTitle(title);
+        const oldScriptId = this.originalTitle ? utils.sanitizeTitle(this.originalTitle) : null;
         const filename = scriptId + '.lua';
         
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            // FIX: Delete old files first if renaming
-            if (isRename) {
+            // If renaming, delete old files first
+            if (isRename && oldScriptId !== scriptId) {
                 await this.deleteScriptFiles(this.originalTitle);
-                delete this.db.scripts[this.originalTitle];
             }
             
             // Get current SHA for the lua file if it exists
             let luaSha = null;
-            if (!isRename) {  // Only get SHA if not renaming (new location won't have file yet)
-                const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                if (luaCheck.ok) {
-                    luaSha = (await luaCheck.json()).sha;
-                }
+            const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (luaCheck.ok) {
+                luaSha = (await luaCheck.json()).sha;
             }
             
             // Upload lua file
@@ -410,57 +408,66 @@ const app = {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `${isNew ? 'Create' : 'Update'} script`,
+                    message: `${isNew ? 'Create' : 'Update'} script: ${title}`,
                     content: utils.safeBtoa(code),
                     sha: luaSha
                 })
             });
 
-            // Update database
+            // Prepare script data
             const scriptData = {
                 title: title,
                 visibility: visibility,
                 description: desc,
                 expiration: expiration,
                 filename: filename,
-                created: isNew ? new Date().toISOString() : this.db.scripts[this.originalTitle || title]?.created || new Date().toISOString(),
+                created: (this.originalTitle && this.db.scripts[this.originalTitle]) 
+                    ? this.db.scripts[this.originalTitle].created 
+                    : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
             
+            // Remove old entry if renaming
+            if (isRename && this.originalTitle !== title) {
+                delete this.db.scripts[this.originalTitle];
+            }
+            
+            // Add/update script in database
             this.db.scripts[title] = scriptData;
             
-            // FIX: Update database and capture new SHA
+            // Update database.json and get new SHA
             const dbResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: 'Update database',
+                    message: `Update database: ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
 
-            // FIX: Update the SHA from response
-            if (dbResponse.ok) {
-                const dbData = await dbResponse.json();
-                this.dbSha = dbData.content.sha;
+            if (!dbResponse.ok) {
+                throw new Error(`Database update failed: ${dbResponse.statusText}`);
             }
+
+            const dbResult = await dbResponse.json();
+            this.dbSha = dbResult.content.sha;
 
             // Update index.html
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
-            if (!isRename) {
-                const indexCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                if (indexCheck.ok) indexSha = (await indexCheck.json()).sha;
+            const indexCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (indexCheck.ok) {
+                indexSha = (await indexCheck.json()).sha;
             }
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: 'Update index page',
+                    message: `Update index page: ${title}`,
                     content: utils.safeBtoa(indexHTML),
                     sha: indexSha
                 })
@@ -475,7 +482,12 @@ const app = {
                 this.actionInProgress = false; 
             }, 1500);
         } catch(e) {
+            console.error('Save error:', e);
             msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+            setTimeout(() => {
+                msg.innerHTML = '';
+                this.actionInProgress = false;
+            }, 3000);
             this.actionInProgress = false;
         }
     },
@@ -492,11 +504,14 @@ const app = {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             if (luaRes.ok) {
-                const sha = (await luaRes.json()).sha;
+                const luaData = await luaRes.json();
                 await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: 'Delete lua file', sha })
+                    body: JSON.stringify({ 
+                        message: `Delete lua file: ${filename}`, 
+                        sha: luaData.sha 
+                    })
                 });
             }
 
@@ -505,15 +520,19 @@ const app = {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             if (idxRes.ok) {
-                const sha = (await idxRes.json()).sha;
+                const idxData = await idxRes.json();
                 await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: 'Delete index file', sha })
+                    body: JSON.stringify({ 
+                        message: `Delete index file: ${scriptId}`, 
+                        sha: idxData.sha 
+                    })
                 });
             }
         } catch(e) {
             console.error('Delete files error:', e);
+            throw e;
         }
     },
 
@@ -530,34 +549,40 @@ const app = {
             // Delete files first
             await this.deleteScriptFiles(title);
             
-            // Remove from database
+            // Remove from database object
             delete this.db.scripts[title];
             
-            // FIX: Update database and capture new SHA
+            // Update database.json and get new SHA
             const dbResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: 'Remove script from database',
+                    message: `Remove script from database: ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
             
-            // FIX: Update the SHA from response
-            if (dbResponse.ok) {
-                const dbData = await dbResponse.json();
-                this.dbSha = dbData.content.sha;
+            if (!dbResponse.ok) {
+                throw new Error(`Database update failed: ${dbResponse.statusText}`);
             }
+
+            const dbResult = await dbResponse.json();
+            this.dbSha = dbResult.content.sha;
             
             await this.loadDatabase();
             this.resetEditor();
             this.switchAdminTab('list');
             msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
-            setTimeout(() => msg.innerHTML = '', 1500);
+            setTimeout(() => {
+                msg.innerHTML = '';
+            }, 1500);
         } catch(e) {
+            console.error('Delete error:', e);
             msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
-            setTimeout(() => msg.innerHTML = '', 3000);
+            setTimeout(() => {
+                msg.innerHTML = '';
+            }, 3000);
         } finally {
             this.actionInProgress = false;
         }
