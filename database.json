@@ -259,6 +259,16 @@
       "size": 23363,
       "created": "2025-12-27T20:00:57.501Z",
       "updated": "2025-12-27T20:00:57.501Z"
+    },
+    "Map Voting System Script": {
+      "title": "Map Voting System Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "map-voting-system-script.lua",
+      "size": 14005,
+      "created": "2025-12-27T20:01:28.537Z",
+      "updated": "2025-12-27T20:01:28.537Z"
     }
   }
 }
