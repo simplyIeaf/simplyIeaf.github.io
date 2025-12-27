@@ -124,7 +124,7 @@ async function loadScripts() {
         renderScripts();
     } catch (error) {
         console.error(error);
-        showToast('Failed to load scripts from GitHub', 'error');
+        if (state.isAdmin) showToast(`Could not load scripts from ${state.repo}`, 'error');
     }
 }
 
@@ -377,19 +377,29 @@ function openRaw(id) {
     win.document.write(`<pre style="word-wrap: break-word; white-space: pre-wrap;">${escapeHtml(s.content)}</pre>`);
 }
 
-function handleLogin() {
+async function handleLogin() {
     const token = document.getElementById('auth-token').value;
-    const repo = document.getElementById('auth-repo').value;
-    
-    if (token.startsWith('ghp_') && repo.includes('/')) {
+    if (!token) return;
+
+    try {
+        const res = await fetch('https://api.github.com/user', {
+            headers: { 'Authorization': `token ${token}` }
+        });
+        
+        if (!res.ok) throw new Error('Invalid Token');
+        const user = await res.json();
+        
+        const repo = `${user.login}/scripts-db`;
+        
         localStorage.setItem('gh_token', token);
         localStorage.setItem('gh_repo', repo);
+        
         state.authToken = token;
         state.repo = repo;
         state.isAdmin = true;
         location.reload();
-    } else {
-        showToast("Invalid token or repo format", "error");
+    } catch (e) {
+        showToast("Invalid GitHub Token", "error");
     }
 }
 
