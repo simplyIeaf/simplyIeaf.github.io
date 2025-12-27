@@ -329,6 +329,16 @@
       "size": 21288,
       "created": "2025-12-27T20:05:59.499Z",
       "updated": "2025-12-27T20:05:59.499Z"
+    },
+    "CMDR Admin Abuse Events Script": {
+      "title": "CMDR Admin Abuse Events Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "cmdr-admin-abuse-events-script.lua",
+      "size": 37053,
+      "created": "2025-12-27T20:06:48.246Z",
+      "updated": "2025-12-27T20:06:48.246Z"
     }
   }
 }
