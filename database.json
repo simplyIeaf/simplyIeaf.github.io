@@ -229,6 +229,16 @@
       "size": 15119,
       "created": "2025-12-27T19:58:45.968Z",
       "updated": "2025-12-27T19:58:45.968Z"
+    },
+    "Advanced Admin Panel LocalScript": {
+      "title": "Advanced Admin Panel LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "advanced-admin-panel-localscript.lua",
+      "size": 21313,
+      "created": "2025-12-27T19:59:19.979Z",
+      "updated": "2025-12-27T19:59:19.979Z"
     }
   }
 }
