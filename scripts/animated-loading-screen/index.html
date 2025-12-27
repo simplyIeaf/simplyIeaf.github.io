@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Loading Screen</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar"><div class="nav-content"><a href="../../index.html" class="brand">Leaf's Scripts</a><a href="../../index.html" class="btn btn-secondary btn-sm">Back</a></div></nav>
+    <div class="container">
+        <h1>Animated Loading Screen</h1>
+        <p class="script-desc"></p>
+        <div class="code-box">
+            <pre><code id="code-display" class="language-lua">Loading script...</code></pre>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script>
+        fetch('raw/animated-loading-screen.lua').then(r => r.text()).then(t => {
+            document.getElementById('code-display').textContent = t;
+            Prism.highlightAll();
+        });
+    </script>
+</body>
+</html>
