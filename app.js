@@ -5,6 +5,15 @@ const CONFIG = {
 };
 
 const utils = {
+    debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+    },
+    
     safeBtoa(str) {
         return window.btoa(unescape(encodeURIComponent(str)));
     },
@@ -15,6 +24,12 @@ const utils = {
 
     sanitizeTitle(title) {
         return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 };
 
@@ -35,7 +50,15 @@ const app = {
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
-        document.getElementById('search').addEventListener('input', () => this.renderList());
+        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
+        this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
+        this.debouncedDelete = utils.debounce(() => {
+            if (this.currentEditingId) {
+                this.deleteScript(this.currentEditingId);
+            }
+        }, 750);
+        this.debouncedLogin = utils.debounce(() => this.login(), 750);
+        this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
     },
 
     generateScriptHTML(title, scriptData) {
@@ -46,7 +69,7 @@ const app = {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${scriptData.title} - Leaf's Scripts</title>
+    <title>${utils.escapeHtml(scriptData.title)} - Leaf's Scripts</title>
     <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="../../style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
@@ -57,7 +80,7 @@ const app = {
         <div class="nav-content">
             <div class="nav-left">
                 <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
-                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Profile">
+                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
                     <span class="nav-title">Leaf's Scripts</span>
                 </a>
             </div>
@@ -70,7 +93,7 @@ const app = {
     <div class="container">
         <div class="script-header-lg">
             <div>
-                <h1>${scriptData.title}</h1>
+                <h1>${utils.escapeHtml(scriptData.title)}</h1>
                 <div class="meta-row">
                     <span class="meta-badge">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -80,7 +103,7 @@ const app = {
             </div>
         </div>
 
-        ${scriptData.description ? `<p class="script-desc">${scriptData.description}</p>` : ''}
+        ${scriptData.description ? `<p class="script-desc">${utils.escapeHtml(scriptData.description)}</p>` : ''}
         
         <div class="code-box">
             <div class="toolbar">
@@ -99,6 +122,7 @@ const app = {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script>
         const filename = '${scriptData.filename}';
+        const scriptId = '${scriptId}';
         
         async function loadScript() {
             try {
@@ -147,7 +171,10 @@ const app = {
         if (this.actionInProgress) return;
         this.actionInProgress = true;
         const token = document.getElementById('auth-token').value.trim();
-        if (!token) { this.actionInProgress = false; return; }
+        if (!token) { 
+            this.actionInProgress = false; 
+            return; 
+        }
         
         this.token = token;
         const success = await this.verifyToken(false);
@@ -157,15 +184,17 @@ const app = {
             await this.loadDatabase();
             this.renderList();
         }
-        this.actionInProgress = false;
+        setTimeout(() => { this.actionInProgress = false; }, 750);
     },
 
     logout() {
-        localStorage.removeItem('gh_token');
-        this.token = null;
-        this.currentUser = null;
-        location.href = '#';
-        location.reload();
+        if (confirm('Are you sure you want to logout?')) {
+            localStorage.removeItem('gh_token');
+            this.token = null;
+            this.currentUser = null;
+            location.href = '#';
+            location.reload();
+        }
     },
 
     async verifyToken(silent) {
@@ -221,7 +250,13 @@ const app = {
         const sorted = this.sortLogic(filtered);
         
         if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-state"><h2>No scripts found</h2></div>`;
+            list.innerHTML = `<div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;margin-bottom:16px;">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <h2>No scripts found</h2>
+                <p>Try adjusting your search or filter</p>
+            </div>`;
             return;
         }
         
@@ -231,7 +266,8 @@ const app = {
             <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
-                        <h3 class="script-title">${s.title}</h3>
+                        <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
+                        ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
                     </div>
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
@@ -285,6 +321,10 @@ const app = {
             document.getElementById('admin-tab-list').style.display = 'block';
             document.querySelectorAll('.tab-btn')[0].classList.add('active');
             this.renderAdminList();
+        } else if (tab === 'stats') {
+            document.getElementById('admin-tab-stats').style.display = 'block';
+            document.querySelectorAll('.tab-btn')[2].classList.add('active');
+            this.renderStats();
         } else {
             document.getElementById('admin-tab-editor').style.display = 'block';
             document.querySelectorAll('.tab-btn')[1].classList.add('active');
@@ -295,22 +335,63 @@ const app = {
     async renderAdminList() {
         const list = document.getElementById('admin-list');
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const sorted = scripts.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
         
         document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
         
-        list.innerHTML = scripts.map(s => {
-            const visibility = (s.visibility || 'PUBLIC').toLowerCase();
+        if (sorted.length === 0) {
+            list.innerHTML = `<div class="empty-admin-state">
+                <p>No scripts yet. Click "Add New" to create your first script.</p>
+            </div>`;
+            return;
+        }
+        
+        list.innerHTML = sorted.map(s => {
+            const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
             return `
             <div class="admin-item" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
-                    <strong>${s.title}</strong>
+                    <strong>${utils.escapeHtml(s.title)}</strong>
                     <div class="admin-meta">
-                        <span class="badge badge-sm badge-${visibility}">${s.visibility || 'PUBLIC'}</span>
-                        <span class="text-muted"> • ${new Date(s.created).toLocaleDateString()}</span>
+                        <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
+                        <span class="text-muted">Updated ${updated}</span>
                     </div>
+                </div>
+                <div class="admin-item-right">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
                 </div>
             </div>
         `}).join('');
+    },
+
+    renderStats() {
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
+        const privateCount = scripts.filter(s => s.visibility === 'PRIVATE').length;
+        const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
+        
+        document.getElementById('stats-content').innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">${scripts.length}</div>
+                    <div class="stat-label">Total Scripts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${publicCount}</div>
+                    <div class="stat-label">Public</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${privateCount}</div>
+                    <div class="stat-label">Private</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${unlistedCount}</div>
+                    <div class="stat-label">Unlisted</div>
+                </div>
+            </div>
+        `;
     },
 
     resetEditor() {
@@ -333,9 +414,9 @@ const app = {
         this.originalTitle = title;
         this.switchAdminTab('create');
         
-        document.getElementById('editor-heading').textContent = `Edit: ${s.title}`;
+        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
         document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility || 'PUBLIC';
+        document.getElementById('edit-visibility').value = s.visibility;
         document.getElementById('edit-desc').value = s.description || '';
         document.getElementById('edit-expire').value = s.expiration || '';
         
@@ -345,11 +426,15 @@ const app = {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
                 headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
-            if (!res.ok) throw new Error();
-            const data = await res.json();
-            document.getElementById('edit-code').value = utils.safeAtob(data.content);
+            
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('edit-code').value = utils.safeAtob(data.content);
+            } else {
+                document.getElementById('edit-code').value = '-- Error loading content';
+            }
         } catch(e) { 
-            document.getElementById('edit-code').value = "-- Error loading content"; 
+            document.getElementById('edit-code').value = '-- Error loading content'; 
         }
         
         document.getElementById('btn-delete').style.display = 'inline-flex';
@@ -360,7 +445,7 @@ const app = {
         this.actionInProgress = true;
         
         const title = document.getElementById('edit-title').value.trim();
-        const visibility = document.getElementById('edit-visibility').value || 'PUBLIC';
+        const visibility = document.getElementById('edit-visibility').value;
         const desc = document.getElementById('edit-desc').value.trim();
         const expiration = document.getElementById('edit-expire').value;
         const code = document.getElementById('edit-code').value; 
@@ -372,312 +457,199 @@ const app = {
             return; 
         }
         
-        const isNew = !this.currentEditingId;
-        const isEditing = !isNew;
+        const isEditing = !!this.currentEditingId;
+        const titleChanged = isEditing && this.originalTitle !== title;
+        const scriptId = utils.sanitizeTitle(title);
+        const filename = scriptId + '.lua';
         
-        // Check for duplicate titles (only when not editing the same script)
-        if (isNew && this.db.scripts[title]) {
+        if (this.db.scripts[title] && title !== this.originalTitle) {
             msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
             return;
         }
         
-        // If editing and title changed, check for duplicates
-        if (isEditing && this.originalTitle !== title && this.db.scripts[title]) {
-            msg.innerHTML = `<span style="color:var(--danger)">A script with this new title already exists</span>`;
-            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
-            return;
-        }
-        
-        const scriptId = utils.sanitizeTitle(title);
-        const oldScriptId = this.originalTitle ? utils.sanitizeTitle(this.originalTitle) : null;
-        const filename = scriptId + '.lua';
-        const titleChanged = isEditing && this.originalTitle !== title;
-        const folderChanged = isEditing && oldScriptId !== scriptId;
-        
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            // Step 1: Handle file operations
-            if (folderChanged) {
-                // If folder changes, we need to delete old files
+            if (titleChanged) {
                 await this.deleteScriptFiles(this.originalTitle);
             }
             
-            // Step 2: Upload/Update lua file
             let luaSha = null;
-            const luaCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (luaCheckRes.ok) {
-                const luaData = await luaCheckRes.json();
-                luaSha = luaData.sha;
+            if (isEditing && !titleChanged) {
+                try {
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (check.ok) {
+                        luaSha = (await check.json()).sha;
+                    }
+                } catch(e) {
+                    console.log('File does not exist yet, creating new');
+                }
             }
             
-            const luaUploadRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `${isNew ? 'Create' : 'Update'} ${title}`,
+                    message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
                     content: utils.safeBtoa(code),
-                    sha: luaSha
+                    sha: luaSha || undefined
                 })
             });
+
+            await this.loadDatabase();
             
-            if (!luaUploadRes.ok) {
-                const errorData = await luaUploadRes.json();
-                throw new Error(`Failed to upload lua file: ${errorData.message || luaUploadRes.statusText}`);
-            }
-            
-            // Step 3: Prepare script data
             const scriptData = {
-                title: title,
-                visibility: visibility,
-                description: desc,
+                title: title, 
+                visibility: visibility, 
+                description: desc, 
                 expiration: expiration,
                 filename: filename,
-                created: isEditing && this.db.scripts[this.originalTitle] 
-                    ? this.db.scripts[this.originalTitle].created 
-                    : new Date().toISOString(),
+                created: (isEditing && !titleChanged && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
             
-            // Step 4: Update database
-            // Remove old entry if title changed
-            if (titleChanged && this.originalTitle in this.db.scripts) {
+            if (titleChanged && this.originalTitle) {
                 delete this.db.scripts[this.originalTitle];
             }
             
-            // Add/update new entry
             this.db.scripts[title] = scriptData;
             
-            // Step 5: Push database changes to GitHub
-            const dbUpdateRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update database for ${title}`,
+                    message: `Update database`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
-            
-            if (!dbUpdateRes.ok) {
-                const errorData = await dbUpdateRes.json();
-                throw new Error(`Failed to update database: ${errorData.message || dbUpdateRes.statusText}`);
-            }
-            
-            const dbUpdateData = await dbUpdateRes.json();
-            this.dbSha = dbUpdateData.content.sha;
-            
-            // Step 6: Create/Update index.html
+
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
             
-            const indexCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (indexCheckRes.ok) {
-                const indexData = await indexCheckRes.json();
-                indexSha = indexData.sha;
+            if (isEditing && !titleChanged) {
+                try {
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (check.ok) {
+                        indexSha = (await check.json()).sha;
+                    }
+                } catch(e) {
+                    console.log('Index does not exist yet, creating new');
+                }
             }
             
-            const indexUploadRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message: `Update index for ${title}`,
                     content: utils.safeBtoa(indexHTML),
-                    sha: indexSha
+                    sha: indexSha || undefined
                 })
             });
             
-            if (!indexUploadRes.ok) {
-                const errorData = await indexUploadRes.json();
-                throw new Error(`Failed to update index: ${errorData.message || indexUploadRes.statusText}`);
-            }
-            
-            // Step 7: Reload and show success
-            await this.loadDatabase();
-            this.resetEditor();
-            msg.innerHTML = `<span style="color:var(--accent)">✓ Published successfully!</span>`;
+            msg.innerHTML = `<span style="color:var(--accent)">Published successfully!</span>`;
             setTimeout(() => { 
                 msg.innerHTML = ''; 
                 this.switchAdminTab('list'); 
+                this.actionInProgress = false; 
             }, 1500);
-            
         } catch(e) {
-            console.error('Save error:', e);
             msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            setTimeout(() => msg.innerHTML = '', 4000);
-        } finally {
-            this.actionInProgress = false;
+            setTimeout(() => { this.actionInProgress = false; }, 2000);
         }
     },
 
     async deleteScriptFiles(title) {
-        if (!title || !this.db.scripts[title]) {
-            console.log('Cannot delete: title or script not found');
-            return;
-        }
+        if (!title) return;
         
         const scriptId = utils.sanitizeTitle(title);
         const s = this.db.scripts[title];
-        const filename = s.filename;
+        if (!s) return;
         
-        console.log(`Deleting files for: ${title} (ID: ${scriptId})`);
-        
-        const errors = [];
-        
-        // Delete lua file
         try {
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+            const luaPath = `scripts/${scriptId}/raw/${s.filename}`;
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
             if (luaRes.ok) {
                 const luaData = await luaRes.json();
-                const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        message: `Delete ${filename}`, 
+                        message: `Delete ${s.filename}`, 
                         sha: luaData.sha 
                     })
                 });
-                
-                if (!deleteRes.ok) {
-                    const errData = await deleteRes.json();
-                    errors.push(`Lua file: ${errData.message}`);
-                } else {
-                    console.log('Lua file deleted successfully');
-                }
-            } else {
-                console.log('Lua file not found, skipping');
             }
-        } catch(e) {
-            console.error('Error deleting lua file:', e);
-            errors.push(`Lua file: ${e.message}`);
-        }
-        
-        // Delete index.html
-        try {
-            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+
+            const indexPath = `scripts/${scriptId}/index.html`;
+            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
-            if (indexRes.ok) {
-                const indexData = await indexRes.json();
-                const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+            if (idxRes.ok) {
+                const idxData = await idxRes.json();
+                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         message: `Delete index for ${title}`, 
-                        sha: indexData.sha 
+                        sha: idxData.sha 
                     })
                 });
-                
-                if (!deleteRes.ok) {
-                    const errData = await deleteRes.json();
-                    errors.push(`Index file: ${errData.message}`);
-                } else {
-                    console.log('Index file deleted successfully');
-                }
-            } else {
-                console.log('Index file not found, skipping');
             }
         } catch(e) {
-            console.error('Error deleting index file:', e);
-            errors.push(`Index file: ${e.message}`);
-        }
-        
-        if (errors.length > 0) {
-            throw new Error(`File deletion errors: ${errors.join(', ')}`);
+            console.error('Error deleting files:', e);
         }
     },
 
-    async deleteScript() {
-        if (this.actionInProgress) {
-            console.log('Action already in progress, ignoring delete request');
-            return;
-        }
-        
-        const title = this.currentEditingId;
-        
-        if (!title) {
-            alert('No script selected for deletion');
-            return;
-        }
-        
-        if (!this.db.scripts[title]) {
-            alert('Script not found in database');
-            return;
-        }
-        
-        if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) {
-            return;
-        }
+    async deleteScript(title) {
+        if (this.actionInProgress) return;
+        if (!title) return;
+        if (!confirm(`Delete "${title}" permanently? This cannot be undone.`)) return;
         
         this.actionInProgress = true;
         const msg = document.getElementById('admin-msg');
-        msg.innerHTML = `<span class="loading">Deleting script...</span>`;
-        
-        console.log(`Starting deletion of: ${title}`);
+        msg.innerHTML = `<span class="loading">Deleting...</span>`;
         
         try {
-            // Step 1: Delete the files from GitHub
-            console.log('Step 1: Deleting files...');
             await this.deleteScriptFiles(title);
-            console.log('Files deleted successfully');
+            await this.loadDatabase();
             
-            // Step 2: Remove from local database object
-            console.log('Step 2: Removing from database...');
-            delete this.db.scripts[title];
+            if (this.db.scripts[title]) {
+                delete this.db.scripts[title];
+            }
             
-            // Step 3: Update database.json on GitHub
-            console.log('Step 3: Updating database.json...');
-            const dbUpdateRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Delete script: ${title}`,
+                    message: `Remove ${title} from database`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
             
-            if (!dbUpdateRes.ok) {
-                const errorData = await dbUpdateRes.json();
-                throw new Error(`Database update failed: ${errorData.message || dbUpdateRes.statusText}`);
-            }
-            
-            const dbUpdateData = await dbUpdateRes.json();
-            this.dbSha = dbUpdateData.content.sha;
-            console.log('Database updated, new SHA:', this.dbSha);
-            
-            // Step 4: Reload database and UI
-            console.log('Step 4: Reloading interface...');
-            await this.loadDatabase();
-            this.resetEditor();
-            this.switchAdminTab('list');
-            
-            msg.innerHTML = `<span style="color:var(--accent)">✓ Script deleted successfully!</span>`;
-            console.log('Deletion complete!');
-            
-            setTimeout(() => {
+            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully!</span>`;
+            setTimeout(() => { 
                 msg.innerHTML = '';
-            }, 2000);
-            
+                this.switchAdminTab('list'); 
+                this.actionInProgress = false; 
+            }, 1500);
         } catch(e) {
-            console.error('Delete error:', e);
-            msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            setTimeout(() => {
+            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
+            setTimeout(() => { 
                 msg.innerHTML = '';
-            }, 4000);
-        } finally {
-            this.actionInProgress = false;
+                this.actionInProgress = false; 
+            }, 3000);
         }
     },
 
@@ -687,7 +659,10 @@ const app = {
         window.scrollTo(0, 0);
         
         if (hash === 'admin') {
-            if (!this.currentUser) { location.hash = ''; return; }
+            if (!this.currentUser) { 
+                location.hash = ''; 
+                return; 
+            }
             document.getElementById('view-admin').style.display = 'block';
             this.switchAdminTab('list');
         } else {
@@ -696,5 +671,8 @@ const app = {
     }
 };
 
-function navigate(path) { location.hash = path; }
+function navigate(path) { 
+    location.hash = path; 
+}
+
 app.init();
