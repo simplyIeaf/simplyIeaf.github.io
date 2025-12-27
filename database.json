@@ -59,6 +59,16 @@
       "size": 2361,
       "created": "2025-12-27T19:45:31.318Z",
       "updated": "2025-12-27T19:45:31.318Z"
+    },
+    "Soft-Shutdown System Script": {
+      "title": "Soft-Shutdown System Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "soft-shutdown-system-script.lua",
+      "size": 2290,
+      "created": "2025-12-27T19:46:24.602Z",
+      "updated": "2025-12-27T19:46:24.602Z"
     }
   }
 }
