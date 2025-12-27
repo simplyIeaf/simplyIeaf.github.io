@@ -129,6 +129,16 @@
       "size": 6084,
       "created": "2025-12-27T19:50:06.994Z",
       "updated": "2025-12-27T19:50:06.994Z"
+    },
+    "Freecam System": {
+      "title": "Freecam System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "freecam-system.lua",
+      "size": 14704,
+      "created": "2025-12-27T19:53:09.735Z",
+      "updated": "2025-12-27T19:53:09.735Z"
     }
   }
 }
