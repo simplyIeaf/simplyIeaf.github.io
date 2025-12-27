@@ -39,6 +39,16 @@
       "size": 10783,
       "created": "2025-12-27T19:43:42.711Z",
       "updated": "2025-12-27T19:43:42.711Z"
+    },
+    "Music System": {
+      "title": "Music System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "music-system.lua",
+      "size": 4084,
+      "created": "2025-12-27T19:44:42.071Z",
+      "updated": "2025-12-27T19:44:42.071Z"
     }
   }
 }
