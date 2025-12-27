@@ -219,6 +219,16 @@
       "size": 3791,
       "created": "2025-12-27T19:58:18.409Z",
       "updated": "2025-12-27T19:58:18.409Z"
+    },
+    "Admin Abuse Events": {
+      "title": "Admin Abuse Events",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "admin-abuse-events.lua",
+      "size": 15119,
+      "created": "2025-12-27T19:58:45.968Z",
+      "updated": "2025-12-27T19:58:45.968Z"
     }
   }
 }
