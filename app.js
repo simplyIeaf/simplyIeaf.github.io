@@ -4,63 +4,89 @@ document.addEventListener('DOMContentLoaded', () => {
         scripts: [],
         filter: 'all',
         sort: 'newest',
-        editingId: null
+        editingId: null,
+        currentUser: null
     };
 
     const ui = {
-        views: document.querySelectorAll('.view-section'),
-        scriptList: document.getElementById('script-list'),
-        adminList: document.getElementById('admin-list'),
-        detailCode: document.getElementById('detail-code'),
+        views: {
+            home: document.getElementById('view-home'),
+            detail: document.getElementById('view-detail'),
+            admin: document.getElementById('view-admin')
+        },
+        lists: {
+            public: document.getElementById('script-list'),
+            admin: document.getElementById('admin-list')
+        },
         inputs: {
+            search: document.getElementById('search'),
             title: document.getElementById('edit-title'),
             desc: document.getElementById('edit-desc'),
             code: document.getElementById('edit-code'),
             public: document.getElementById('edit-visibility'),
-            search: document.getElementById('search')
+            token: document.getElementById('auth-token')
+        },
+        detail: {
+            title: document.getElementById('detail-title'),
+            desc: document.getElementById('detail-desc'),
+            code: document.getElementById('detail-code'),
+            badges: document.getElementById('detail-badges'),
+            btnCopy: document.getElementById('btn-copy'),
+            btnRaw: document.getElementById('btn-raw'),
+            btnDownload: document.getElementById('btn-download')
         }
     };
 
     const api = {
-        headers: () => state.token ? { 'Authorization': `token ${state.token}` } : {},
+        headers() {
+            return state.token ? { 
+                'Authorization': `token ${state.token}`,
+                'Accept': 'application/vnd.github.v3+json'
+            } : {
+                'Accept': 'application/vnd.github.v3+json'
+            };
+        },
         
-        async fetchScripts() {
-            const endpoint = state.token ? 'https://api.github.com/gists' : 'https://api.github.com/gists/public';
-            try {
-                const res = await fetch(endpoint, { headers: this.headers() });
-                const data = await res.json();
-                state.scripts = data.filter(g => g.files && Object.keys(g.files).some(k => k.endsWith('.lua')));
-                renderScripts();
-                renderAdminList();
-            } catch (e) {
-                notify("Failed to load scripts", "error");
-            }
+        async getScripts() {
+            const url = state.token ? 'https://api.github.com/gists' : 'https://api.github.com/gists/public';
+            const res = await fetch(url, { headers: this.headers() });
+            if (!res.ok) throw new Error('Failed to fetch scripts');
+            const data = await res.json();
+            return data.filter(g => g.files && Object.keys(g.files).some(k => k.endsWith('.lua')));
         },
 
-        async saveScript(data) {
-            const method = state.editingId ? 'PATCH' : 'POST';
-            const url = state.editingId 
-                ? `https://api.github.com/gists/${state.editingId}` 
-                : 'https://api.github.com/gists';
-            
+        async getRaw(url) {
+            const res = await fetch(url);
+            return await res.text();
+        },
+
+        async createScript(data) {
             const body = {
                 description: `${data.title} | ${data.desc}`,
                 public: data.public === 'true',
-                files: {
-                    'script.lua': { content: data.code }
-                }
+                files: { 'script.lua': { content: data.code } }
             };
-
-            const res = await fetch(url, {
-                method: method,
+            const res = await fetch('https://api.github.com/gists', {
+                method: 'POST',
                 headers: { ...this.headers(), 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
+            if (!res.ok) throw new Error('Create failed');
+            return await res.json();
+        },
 
-            if (!res.ok) throw new Error();
-            const json = await res.json();
-            state.editingId = json.id; 
-            return json;
+        async updateScript(id, data) {
+            const body = {
+                description: `${data.title} | ${data.desc}`,
+                files: { 'script.lua': { content: data.code } }
+            };
+            const res = await fetch(`https://api.github.com/gists/${id}`, {
+                method: 'PATCH',
+                headers: { ...this.headers(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('Update failed');
+            return await res.json();
         },
 
         async deleteScript(id) {
@@ -68,7 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'DELETE',
                 headers: this.headers()
             });
-            if (!res.ok) throw new Error();
+            if (!res.ok) throw new Error('Delete failed');
+            return true;
         }
     };
 
@@ -78,122 +105,26 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('user-section').style.display = 'block';
             document.getElementById('private-filter').style.display = 'flex';
         }
-        api.fetchScripts();
+        loadScripts();
     }
 
-    document.addEventListener('click', async (e) => {
-        const target = e.target.closest('[data-action]');
-        if (!target) return;
-        const action = target.dataset.action;
-        const param = target.dataset.param;
-
-        if (action === 'navigate') {
-            switchView(param === 'admin' ? 'view-admin' : 'view-home');
-            if (!param) api.fetchScripts();
+    async function loadScripts() {
+        try {
+            state.scripts = await api.getScripts();
+            renderHome();
+            if (state.token) renderAdminList();
+        } catch (err) {
+            notify("Error loading scripts", "error");
         }
-        else if (action === 'login-modal') {
-            document.getElementById('login-modal').style.display = 'flex';
-        }
-        else if (action === 'login') {
-            const token = document.getElementById('auth-token').value;
-            if (token.startsWith('ghp_')) {
-                localStorage.setItem('gh_token', token);
-                location.reload();
-            } else {
-                notify("Invalid Token Format", "error");
-            }
-        }
-        else if (action === 'logout') {
-            localStorage.removeItem('gh_token');
-            location.reload();
-        }
-        else if (action === 'open-script') {
-            openDetail(param);
-        }
-        else if (action === 'filter') {
-            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            target.classList.add('active');
-            state.filter = param;
-            renderScripts();
-        }
-        else if (action === 'admin-tab') {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            target.classList.add('active');
-            document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
-            document.getElementById(`admin-tab-${param}`).style.display = 'block';
-            if (param === 'create') clearEditor();
-        }
-        else if (action === 'edit-script') {
-            loadEditor(param);
-        }
-        else if (action === 'save-script') {
-            try {
-                if(!ui.inputs.title.value || !ui.inputs.code.value) return notify("Title and Code required", "error");
-                
-                await api.saveScript({
-                    title: ui.inputs.title.value,
-                    desc: ui.inputs.desc.value,
-                    code: ui.inputs.code.value,
-                    public: ui.inputs.public.value
-                });
-                notify("Script saved successfully", "success");
-                document.getElementById('btn-delete').style.display = 'inline-flex'; 
-                api.fetchScripts();
-            } catch (err) {
-                notify("Error saving script", "error");
-            }
-        }
-        else if (target.id === 'btn-delete') {
-            if (!state.editingId) return notify("No script to delete", "error");
-            if (confirm('Delete this script?')) {
-                try {
-                    await api.deleteScript(state.editingId);
-                    notify("Script deleted", "success");
-                    document.querySelector('[data-param="list"]').click();
-                    api.fetchScripts();
-                } catch(e) {
-                    notify("Error deleting script", "error");
-                }
-            }
-        }
-    });
-
-    document.querySelector('.close-btn').onclick = () => {
-        document.getElementById('login-modal').style.display = 'none';
-    };
-
-    ui.inputs.search.addEventListener('input', (e) => {
-        renderScripts(e.target.value.toLowerCase());
-    });
-
-    document.getElementById('sort-select').addEventListener('change', (e) => {
-        state.sort = e.target.value;
-        renderScripts();
-    });
-
-    document.getElementById('btn-copy').onclick = () => {
-        navigator.clipboard.writeText(ui.detailCode.textContent);
-        notify("Copied to clipboard", "success");
-    };
-
-    function switchView(id) {
-        ui.views.forEach(v => {
-            v.style.display = 'none';
-            v.classList.remove('active');
-        });
-        const active = document.getElementById(id);
-        active.style.display = 'block';
-        active.classList.add('active');
-        window.scrollTo(0,0);
     }
 
-    function renderScripts(search = '') {
-        ui.scriptList.innerHTML = '';
+    function renderHome() {
+        const list = ui.lists.public;
+        list.innerHTML = '';
+        
         let filtered = state.scripts.filter(s => {
-            const rawDesc = s.description || "Untitled";
-            const parts = rawDesc.split('|');
-            const title = parts[0].trim().toLowerCase();
-            return title.includes(search);
+            const desc = s.description || "Untitled";
+            return desc.toLowerCase().includes(ui.inputs.search.value.toLowerCase());
         });
 
         if (state.filter === 'public') filtered = filtered.filter(s => s.public);
@@ -203,46 +134,34 @@ document.addEventListener('DOMContentLoaded', () => {
             filtered.sort((a,b) => (a.description||'').localeCompare(b.description||''));
         }
 
-        if(filtered.length === 0) {
-            ui.scriptList.innerHTML = '<div style="text-align:center;color:#888;grid-column:1/-1;padding:40px;">No scripts found.</div>';
+        if (filtered.length === 0) {
+            list.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#666;">No scripts found.</div>`;
             return;
         }
 
         filtered.forEach(script => {
-            const descParts = (script.description || "Untitled").split('|');
-            const title = descParts[0].trim();
-            const badge = script.public 
-                ? `<span class="badge badge-public"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"></circle></svg> Public</span>` 
-                : `<span class="badge badge-private"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Private</span>`;
+            const parts = (script.description || "Untitled").split('|');
+            const title = parts[0].trim();
+            const badgeType = script.public ? 'badge-public' : 'badge-private';
+            const badgeText = script.public ? 'Public' : 'Private';
+            const icon = script.public 
+                ? '<circle cx="12" cy="12" r="10"></circle>' 
+                : '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
 
             const card = document.createElement('div');
             card.className = 'script-card animate__animated animate__fadeIn';
-            card.setAttribute('data-action', 'open-script');
-            card.setAttribute('data-param', script.id);
+            card.onclick = () => openDetail(script.id);
             card.innerHTML = `
                 <div class="script-title">${title}</div>
                 <div class="card-meta">
-                    ${badge}
+                    <span class="badge ${badgeType}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg>
+                        ${badgeText}
+                    </span>
                     <span>${new Date(script.updated_at).toLocaleDateString()}</span>
                 </div>
             `;
-            ui.scriptList.appendChild(card);
-        });
-    }
-
-    function renderAdminList() {
-        ui.adminList.innerHTML = '';
-        state.scripts.forEach(script => {
-            const title = (script.description || "Untitled").split('|')[0].trim();
-            const div = document.createElement('div');
-            div.className = 'admin-item';
-            div.setAttribute('data-action', 'edit-script');
-            div.setAttribute('data-param', script.id);
-            div.innerHTML = `
-                <strong>${title}</strong>
-                <span class="text-muted">${script.public ? 'Public' : 'Private'}</span>
-            `;
-            ui.adminList.appendChild(div);
+            list.appendChild(card);
         });
     }
 
@@ -250,74 +169,216 @@ document.addEventListener('DOMContentLoaded', () => {
         const script = state.scripts.find(s => s.id === id);
         if (!script) return;
 
-        const fileKey = Object.keys(script.files).find(k => k.endsWith('.lua')) || Object.keys(script.files)[0];
-        const file = script.files[fileKey];
-        const descParts = (script.description || "Untitled").split('|');
-
-        document.getElementById('detail-title').innerText = descParts[0].trim();
-        document.getElementById('detail-desc').innerText = descParts[1] ? descParts[1].trim() : "No description provided.";
+        const file = Object.values(script.files)[0];
+        const parts = (script.description || "Untitled").split('|');
         
-        const badgeContainer = document.getElementById('detail-badges');
-        badgeContainer.innerHTML = script.public 
-            ? `<span class="badge badge-public"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"></circle></svg> Public</span>`
-            : `<span class="badge badge-private"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Private</span>`;
+        ui.detail.title.textContent = parts[0].trim();
+        ui.detail.desc.textContent = parts[1] ? parts[1].trim() : "No description available.";
+        ui.detail.code.textContent = "Loading source code...";
+        
+        const badgeClass = script.public ? 'badge-public' : 'badge-private';
+        const badgeLabel = script.public ? 'Public' : 'Private';
+        const badgeIcon = script.public 
+            ? '<circle cx="12" cy="12" r="10"></circle>' 
+            : '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+            
+        ui.detail.badges.innerHTML = `
+            <span class="badge ${badgeClass}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${badgeIcon}</svg>
+                ${badgeLabel}
+            </span>
+        `;
 
-        ui.detailCode.textContent = "Loading...";
-        switchView('view-detail');
+        switchView('detail');
 
         try {
-            const res = await fetch(file.raw_url);
-            const code = await res.text();
-            ui.detailCode.textContent = code;
-            Prism.highlightElement(ui.detailCode);
+            const code = await api.getRaw(file.raw_url);
+            ui.detail.code.textContent = code;
+            Prism.highlightElement(ui.detail.code);
 
             const blob = new Blob([code], { type: 'text/plain' });
             const url = window.URL.createObjectURL(blob);
-            
-            document.getElementById('btn-download').href = url;
-            document.getElementById('btn-raw').onclick = () => window.open(url, '_blank');
+            ui.detail.btnDownload.href = url;
+            ui.detail.btnRaw.onclick = () => window.open(url, '_blank');
+            ui.detail.btnCopy.onclick = () => {
+                navigator.clipboard.writeText(code);
+                notify("Copied to clipboard!", "success");
+            };
         } catch (e) {
-            ui.detailCode.textContent = "-- Error loading code";
+            ui.detail.code.textContent = "Error loading source code.";
         }
     }
 
-    function clearEditor() {
-        state.editingId = null;
-        ui.inputs.title.value = '';
-        ui.inputs.desc.value = '';
-        ui.inputs.code.value = '';
-        document.getElementById('editor-heading').innerText = "Create New Script";
-        document.getElementById('btn-delete').style.display = 'none';
-        document.querySelector('[data-action="admin-tab"][data-param="create"]').click();
+    function renderAdminList() {
+        const list = ui.lists.admin;
+        list.innerHTML = '';
+        state.scripts.forEach(script => {
+            const title = (script.description || "Untitled").split('|')[0].trim();
+            const item = document.createElement('div');
+            item.className = 'admin-item';
+            item.onclick = () => loadEditor(script.id);
+            item.innerHTML = `
+                <div style="font-weight:600">${title}</div>
+                <div style="font-size:12px;color:#666">${script.public ? 'Public' : 'Private'}</div>
+            `;
+            list.appendChild(item);
+        });
     }
 
     async function loadEditor(id) {
-        state.editingId = id;
+        state.editingId = id; 
         const script = state.scripts.find(s => s.id === id);
         const file = Object.values(script.files)[0];
         const parts = (script.description || "").split('|');
-        
+
         ui.inputs.title.value = parts[0].trim();
         ui.inputs.desc.value = parts[1] ? parts[1].trim() : "";
         ui.inputs.public.value = script.public.toString();
+        ui.inputs.code.value = "Loading...";
+
+        document.getElementById('editor-heading').textContent = "Edit Script";
+        document.getElementById('btn-delete').style.display = 'flex';
         
-        const res = await fetch(file.raw_url);
-        ui.inputs.code.value = await res.text();
-        
-        document.getElementById('editor-heading').innerText = "Edit Script";
-        document.getElementById('btn-delete').style.display = 'inline-flex';
-        document.querySelector('[data-action="admin-tab"][data-param="create"]').click();
+        switchAdminTab('editor');
+
+        const code = await api.getRaw(file.raw_url);
+        ui.inputs.code.value = code;
     }
 
-    function notify(msg, type) {
+    function resetEditor() {
+        state.editingId = null;
+        ui.inputs.title.value = "";
+        ui.inputs.desc.value = "";
+        ui.inputs.code.value = "";
+        ui.inputs.public.value = "true";
+        document.getElementById('editor-heading').textContent = "Create New Script";
+        document.getElementById('btn-delete').style.display = 'none';
+    }
+
+    function switchView(viewName) {
+        Object.values(ui.views).forEach(el => el.style.display = 'none');
+        ui.views[viewName].style.display = 'block';
+        window.scrollTo(0,0);
+    }
+
+    function switchAdminTab(tabName) {
+        const list = document.getElementById('admin-view-list');
+        const editor = document.getElementById('admin-view-editor');
+        
+        if (tabName === 'list') {
+            list.style.display = 'block';
+            editor.style.display = 'none';
+        } else {
+            list.style.display = 'none';
+            editor.style.display = 'block';
+        }
+    }
+
+    function notify(msg, type = 'success') {
         Toastify({
             text: msg,
             duration: 3000,
             gravity: "bottom",
             position: "right",
-            backgroundColor: type === "error" ? "#ef4444" : "#10b981",
+            style: {
+                background: type === 'error' ? '#ef4444' : '#10b981',
+                color: '#fff',
+                borderRadius: '8px',
+                fontWeight: '600'
+            }
         }).showToast();
     }
+
+    document.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        
+        const action = target.dataset.action;
+        const param = target.dataset.param;
+
+        if (action === 'navigate') {
+            if (param === 'admin') {
+                if (!state.token) return notify("Please login first", "error");
+                switchView('admin');
+                renderAdminList();
+            } else {
+                switchView('home');
+                loadScripts();
+            }
+        }
+        else if (action === 'login-modal') {
+            document.getElementById('login-modal').style.display = 'flex';
+        }
+        else if (action === 'close-modal') {
+            document.getElementById('login-modal').style.display = 'none';
+        }
+        else if (action === 'login') {
+            const token = ui.inputs.token.value.trim();
+            if (!token.startsWith('ghp_')) return notify("Invalid Token Format", "error");
+            localStorage.setItem('gh_token', token);
+            location.reload();
+        }
+        else if (action === 'logout') {
+            localStorage.removeItem('gh_token');
+            location.reload();
+        }
+        else if (action === 'filter') {
+            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+            target.classList.add('active');
+            state.filter = param;
+            renderHome();
+        }
+        else if (action === 'admin-switch') {
+            if (param === 'create') resetEditor();
+            switchAdminTab(param === 'create' ? 'editor' : 'list');
+        }
+        else if (action === 'save-script') {
+            const data = {
+                title: ui.inputs.title.value,
+                desc: ui.inputs.desc.value,
+                code: ui.inputs.code.value,
+                public: ui.inputs.public.value
+            };
+            
+            if (!data.title || !data.code) return notify("Title and Code required", "error");
+
+            try {
+                if (state.editingId) {
+                    await api.updateScript(state.editingId, data);
+                    notify("Script updated!");
+                } else {
+                    await api.createScript(data);
+                    notify("Script created!");
+                }
+                loadScripts();
+                switchAdminTab('list');
+            } catch (err) {
+                notify("Failed to save script", "error");
+            }
+        }
+    });
+
+    document.getElementById('btn-delete').onclick = async () => {
+        if (!state.editingId) return notify("Error: No script is currently being edited.", "error");
+        
+        if (confirm("Are you sure you want to delete this script?")) {
+            try {
+                await api.deleteScript(state.editingId);
+                notify("Script deleted successfully");
+                state.editingId = null;
+                await loadScripts();
+                switchAdminTab('list');
+            } catch (err) {
+                notify("Failed to delete script", "error");
+            }
+        }
+    };
+
+    ui.inputs.search.addEventListener('input', renderHome);
+    document.getElementById('sort-select').addEventListener('change', (e) => {
+        state.sort = e.target.value;
+        renderHome();
+    });
 
     init();
 });
