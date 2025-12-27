@@ -375,6 +375,7 @@ const app = {
         const isNew = !this.currentEditingId;
         const isRename = !isNew && this.originalTitle && this.originalTitle !== title;
         
+        // FIX: Only check if title exists when it's different from original
         if (this.db.scripts[title] && title !== this.originalTitle) {
             msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
@@ -387,19 +388,24 @@ const app = {
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
+            // FIX: Delete old files first if renaming
             if (isRename) {
                 await this.deleteScriptFiles(this.originalTitle);
                 delete this.db.scripts[this.originalTitle];
             }
             
+            // Get current SHA for the lua file if it exists
             let luaSha = null;
-            const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            if (luaCheck.ok) {
-                luaSha = (await luaCheck.json()).sha;
+            if (!isRename) {  // Only get SHA if not renaming (new location won't have file yet)
+                const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                if (luaCheck.ok) {
+                    luaSha = (await luaCheck.json()).sha;
+                }
             }
             
+            // Upload lua file
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
@@ -410,6 +416,7 @@ const app = {
                 })
             });
 
+            // Update database
             const scriptData = {
                 title: title,
                 visibility: visibility,
@@ -422,7 +429,8 @@ const app = {
             
             this.db.scripts[title] = scriptData;
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            // FIX: Update database and capture new SHA
+            const dbResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -432,12 +440,21 @@ const app = {
                 })
             });
 
+            // FIX: Update the SHA from response
+            if (dbResponse.ok) {
+                const dbData = await dbResponse.json();
+                this.dbSha = dbData.content.sha;
+            }
+
+            // Update index.html
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
-            const indexCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            if (indexCheck.ok) indexSha = (await indexCheck.json()).sha;
+            if (!isRename) {
+                const indexCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                if (indexCheck.ok) indexSha = (await indexCheck.json()).sha;
+            }
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 method: 'PUT',
@@ -470,6 +487,7 @@ const app = {
         const filename = s.filename;
         
         try {
+            // Delete lua file
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
@@ -482,6 +500,7 @@ const app = {
                 });
             }
 
+            // Delete index file
             const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
@@ -508,10 +527,14 @@ const app = {
         msg.innerHTML = `<span class="loading">Deleting...</span>`;
         
         try {
+            // Delete files first
             await this.deleteScriptFiles(title);
+            
+            // Remove from database
             delete this.db.scripts[title];
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            // FIX: Update database and capture new SHA
+            const dbResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -521,14 +544,20 @@ const app = {
                 })
             });
             
+            // FIX: Update the SHA from response
+            if (dbResponse.ok) {
+                const dbData = await dbResponse.json();
+                this.dbSha = dbData.content.sha;
+            }
+            
             await this.loadDatabase();
             this.resetEditor();
             this.switchAdminTab('list');
             msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
             setTimeout(() => msg.innerHTML = '', 1500);
         } catch(e) {
-            alert('Delete failed: ' + e.message);
-            msg.innerHTML = '';
+            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
+            setTimeout(() => msg.innerHTML = '', 3000);
         } finally {
             this.actionInProgress = false;
         }
