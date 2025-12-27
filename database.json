@@ -549,6 +549,16 @@
       "size": 5817,
       "created": "2025-12-27T20:20:02.681Z",
       "updated": "2025-12-27T20:20:02.681Z"
+    },
+    "Daily Rewards System ServerScript": {
+      "title": "Daily Rewards System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "daily-rewards-system-serverscript.lua",
+      "size": 3874,
+      "created": "2025-12-27T20:20:38.759Z",
+      "updated": "2025-12-27T20:20:38.759Z"
     }
   }
 }
