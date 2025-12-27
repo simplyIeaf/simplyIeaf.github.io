@@ -764,7 +764,7 @@ const app = {
         }
     },
 
-    deleteScript() {
+    async deleteScript() {
         if (this.actionInProgress) return;
         
         if (!this.currentEditingId) {
@@ -780,7 +780,7 @@ const app = {
             return;
         }
 
-        if (!confirm(`Are you sure you want to delete "${scriptTitle}"? This action cannot be undone.`)) {
+        if (!confirm(`Are you sure you want to delete "${scriptTitle}"? This will permanently delete the script, Lua file, and HTML page.`)) {
             return;
         }
 
@@ -788,10 +788,6 @@ const app = {
         const msg = document.getElementById('admin-msg');
         msg.innerHTML = `<span class="loading">Deleting script...</span>`;
         
-        this._performDelete(scriptTitle);
-    },
-
-    async _performDelete(scriptTitle) {
         try {
             const scriptId = utils.sanitizeTitle(scriptTitle);
             const scriptData = this.db.scripts[scriptTitle];
@@ -854,7 +850,6 @@ const app = {
                 const newDbData = await dbRes.json();
                 this.dbSha = newDbData.content.sha;
                 
-                const msg = document.getElementById('admin-msg');
                 msg.innerHTML = `<span style="color:var(--color-primary)">Script deleted successfully!</span>`;
                 
                 setTimeout(() => {
@@ -869,7 +864,6 @@ const app = {
             }
             
         } catch(e) {
-            const msg = document.getElementById('admin-msg');
             msg.innerHTML = `<span style="color:var(--color-danger)">Delete failed: ${e.message}</span>`;
             console.error('Delete error:', e);
         } finally {
