@@ -1,7 +1,6 @@
 const state = {
     view: 'home',
     scripts: [],
-    filteredScripts: [],
     searchQuery: '',
     currentFilter: 'all',
     currentSort: 'newest',
@@ -44,7 +43,7 @@ function showToast(msg, type = 'success') {
             background: 'transparent',
             border: `1px solid ${type === 'error' ? 'var(--danger)' : 'var(--accent)'}`,
             backdropFilter: 'blur(10px)',
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)'
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
         }
     }).showToast();
 }
@@ -54,24 +53,12 @@ async function init() {
     setupResponsiveUI();
     
     if (state.authToken) {
-        try {
-            const valid = await validateGitHubToken(state.authToken);
-            if (valid) {
-                state.isAdmin = true;
-                UI.userSection.style.display = 'block';
-                UI.authSection.style.display = 'none';
-                document.getElementById('private-filter').style.display = 'flex';
-                await autoDetectRepo();
-                await loadScripts();
-            } else {
-                localStorage.removeItem('gh_token');
-                state.authToken = null;
-                await loadScripts();
-            }
-        } catch (error) {
-            console.error('Token validation error:', error);
-            await loadScripts();
-        }
+        state.isAdmin = true;
+        UI.userSection.style.display = 'block';
+        UI.authSection.style.display = 'none';
+        document.getElementById('private-filter').style.display = 'flex';
+        await autoDetectRepo();
+        await loadScripts();
     } else {
         await loadScripts();
     }
@@ -167,20 +154,6 @@ function setupResponsiveUI() {
     }
 }
 
-async function validateGitHubToken(token) {
-    try {
-        const response = await fetch('https://api.github.com/user', {
-            headers: {
-                'Authorization': `token ${token}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        return response.ok;
-    } catch (error) {
-        return false;
-    }
-}
-
 async function autoDetectRepo() {
     try {
         const repoPath = window.location.pathname.split('/')[1] || '';
@@ -205,7 +178,6 @@ async function autoDetectRepo() {
             }
         }
     } catch (error) {
-        console.error('Auto-detect error:', error);
     }
     
     const saved = localStorage.getItem('gh_config');
@@ -231,7 +203,6 @@ async function loadScripts() {
             state.scripts = publicScripts;
         }
     } catch (error) {
-        console.error('Load error:', error);
         state.scripts = [];
     }
     renderScripts();
@@ -261,7 +232,6 @@ async function fetchDatabaseFromGitHub() {
         }
         return null;
     } catch (error) {
-        console.error('GitHub fetch error:', error);
         return null;
     }
 }
@@ -289,7 +259,6 @@ async function createDatabaseFile() {
         
         return response.ok;
     } catch (error) {
-        console.error('Create database error:', error);
         return false;
     }
 }
@@ -359,7 +328,6 @@ async function saveDatabaseToGitHub() {
         
         return response.ok;
     } catch (error) {
-        console.error('GitHub save error:', error);
         return false;
     }
 }
@@ -457,28 +425,9 @@ function openScript(id) {
             <div class="toolbar">
                 <span class="file-info">${escapeHtml(script.title).toLowerCase().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_')}.lua</span>
                 <div class="toolbar-right">
-                    <button class="btn btn-emerald" data-action="copy-code" data-param="${script.id}">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                        Copy
-                    </button>
-                    <button class="btn btn-secondary" data-action="raw-code" data-param="${script.id}">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="16 18 22 12 16 6"></polyline>
-                            <polyline points="8 6 2 12 8 18"></polyline>
-                        </svg>
-                        Raw
-                    </button>
-                    <button class="btn btn-secondary" data-action="download-code" data-param="${script.id}">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        Download
-                    </button>
+                    <button class="btn btn-emerald" data-action="copy-code" data-param="${script.id}">Copy</button>
+                    <button class="btn btn-secondary" data-action="raw-code" data-param="${script.id}">Raw</button>
+                    <button class="btn btn-secondary" data-action="download-code" data-param="${script.id}">Download</button>
                 </div>
             </div>
             <pre style="margin:0;"><code class="language-lua">${escapeHtml(script.content)}</code></pre>
@@ -737,42 +686,28 @@ async function handleLogin() {
     const errorEl = document.getElementById('login-error');
     
     if (!token) {
-        errorEl.textContent = "Please enter a GitHub token";
-        errorEl.style.display = 'block';
-        return;
-    }
-    
-    if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
-        errorEl.textContent = "Invalid GitHub token format";
+        errorEl.textContent = "Please enter a token";
         errorEl.style.display = 'block';
         return;
     }
     
     try {
         errorEl.style.display = 'none';
-        const response = await fetch('https://api.github.com/user', {
-            headers: {
-                'Authorization': `token ${token}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
         
-        if (response.ok) {
-            localStorage.setItem('gh_token', token);
-            state.authToken = token;
-            state.isAdmin = true;
-            showToast("Login successful!");
-            setTimeout(() => {
-                UI.loginModal.style.display = 'none';
-                location.reload();
-            }, 1000);
-        } else {
-            errorEl.textContent = "Invalid GitHub token";
-            errorEl.style.display = 'block';
-        }
+        localStorage.setItem('gh_token', token);
+        state.authToken = token;
+        state.isAdmin = true;
+        
+        showToast("Login successful!");
+        
+        setTimeout(() => {
+            UI.loginModal.style.display = 'none';
+            document.getElementById('auth-token').value = '';
+            location.reload();
+        }, 1000);
+        
     } catch (error) {
-        console.error('Login error:', error);
-        errorEl.textContent = "Network error. Please try again.";
+        errorEl.textContent = "Login failed";
         errorEl.style.display = 'block';
     }
 }
