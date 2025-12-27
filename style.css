@@ -1002,6 +1002,17 @@ textarea.input-field {
         margin-left: 0;
         width: 100%;
     }
+
+    .btn-delete {
+        background: var(--color-danger) !important;
+        color: white !important;
+        border-color: var(--color-danger) !important;
+    }
+
+    .btn-delete:hover {
+        background: #dc2626 !important;
+        border-color: #dc2626 !important;
+    }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
