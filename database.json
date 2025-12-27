@@ -529,6 +529,16 @@
       "size": 12089,
       "created": "2025-12-27T20:18:54.335Z",
       "updated": "2025-12-27T20:18:54.335Z"
+    },
+    "Character Moveset System LocalScript": {
+      "title": "Character Moveset System LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "character-moveset-system-localscript.lua",
+      "size": 9228,
+      "created": "2025-12-27T20:19:27.629Z",
+      "updated": "2025-12-27T20:19:27.629Z"
     }
   }
 }
