@@ -13,7 +13,7 @@
     <nav class="navbar animate__animated animate__fadeInDown">
         <div class="nav-content">
             <div class="nav-left">
-                <button class="brand" onclick="location.hash=''" style="background:none;border:none;padding:0;cursor:pointer;">
+                <button class="brand" onclick="location.hash=''" style="background:none;border:none;padding:0;cursor:pointer">
                     <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
                     <span class="nav-title">Leaf's Scripts</span>
                 </button>
@@ -33,14 +33,14 @@
                 <div id="auth-section">
                     <button class="btn btn-secondary btn-sm" onclick="app.debouncedToggleLogin()" aria-label="Login to manage scripts">Login</button>
                 </div>
-                <div id="user-section" style="display: none;">
+                <div id="user-section" style="display:none">
                     <button class="btn btn-primary btn-sm" onclick="navigate('admin')">Manage</button>
                 </div>
             </div>
         </div>
     </nav>
     
-    <div id="login-modal" class="modal-overlay animate__animated animate__fadeIn" style="display: none;" onclick="if(event.target === this) app.toggleLoginModal()">
+    <div id="login-modal" class="modal-overlay animate__animated animate__fadeIn" style="display:none" onclick="if(event.target === this) app.toggleLoginModal()">
         <div class="modal animate__animated animate__zoomIn">
             <div class="modal-header">
                 <h3>Login</h3>
@@ -48,18 +48,18 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>GitHub Token</label>
+                    <label>Token</label>
                     <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
-                    <small style="color: var(--color-text-muted); margin-top: 6px; display: block;">Need a token? Generate one in GitHub Settings</small>
+                    <small style="color:var(--color-text-muted);margin-top:6px;display:block">ik your NOT a admin buddy</small>
                 </div>
-                <div id="login-error" role="alert" aria-live="polite" style="color:var(--color-danger);font-size:13px;margin:16px 0;text-align:center;display:none;"></div>
+                <div id="login-error" role="alert" aria-live="polite" style="color:var(--color-danger);font-size:13px;margin:16px 0;text-align:center;display:none"></div>
                 <button class="btn btn-full" onclick="app.debouncedLogin()">Login</button>
             </div>
         </div>
     </div>
 
     <div class="container">
-        <div id="view-home" class="view-section animate__animated animate__fadeIn" style="display: block;">
+        <div id="view-home" class="view-section animate__animated animate__fadeIn" style="display:block">
             
             <div class="content-wrapper">
                 <aside class="sidebar">
@@ -79,12 +79,22 @@
                                 </svg>
                                 Public
                             </a>
-                            <a href="#" class="sidebar-link" id="private-filter" onclick="app.filterCategory('private', event)">
+                            <a href="#" class="sidebar-link" id="private-filter" style="display:none" onclick="app.filterCategory('private', event)">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                 </svg>
                                 Private
+                            </a>
+                            <a href="#" class="sidebar-link" id="unlisted-filter" style="display:none" onclick="app.filterCategory('unlisted', event)">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                                    <polyline points="13 2 13 9 20 9"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
+                                </svg>
+                                Unlisted
                             </a>
                         </div>
                     </div>
@@ -94,13 +104,14 @@
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
                             <option value="alpha">A-Z</option>
+                            <option value="updated">Recently Updated</option>
                         </select>
                     </div>
                 </aside>
                 
                 <main class="main-content">
                     <div class="script-grid" id="script-list">
-                        <div style="text-align:center;padding:60px 0;grid-column:1/-1;">
+                        <div style="text-align:center;padding:60px 0;grid-column:1/-1">
                             <div class="spinner"></div>
                             <p>Loading library...</p>
                         </div>
@@ -109,7 +120,7 @@
             </div>
         </div>
 
-        <div id="view-admin" class="view-section animate__animated animate__fadeIn">
+        <div id="view-admin" class="view-section animate__animated animate__fadeIn" style="display:none">
             <div class="admin-top-controls">
                 <button class="btn-back" onclick="navigate('')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -154,7 +165,7 @@
                     </div>
                 </div>
 
-                <div id="admin-tab-editor" class="admin-tab">
+                <div id="admin-tab-editor" class="admin-tab" style="display:none">
                     <div class="editor-container">
                         <h3 id="editor-heading">Create New Script</h3>
                         <div class="form-row">
@@ -192,14 +203,14 @@
                             <div id="admin-msg"></div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
-                                <button class="btn btn-delete" onclick="app.handleDelete()" id="btn-delete">Delete</button>
+                                <button class="btn btn-delete" onclick="app.handleDelete()" id="btn-delete" style="display:none">Delete</button>
                                 <button class="btn" onclick="app.debouncedSave()">Save & Publish</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="admin-tab-list" class="admin-tab" style="display: block;">
+                <div id="admin-tab-list" class="admin-tab" style="display:block">
                     <div class="admin-list-header">
                         <h3>Existing Scripts</h3>
                         <span id="total-stats">Loading stats...</span>
@@ -207,7 +218,7 @@
                     <div id="admin-list"></div>
                 </div>
 
-                <div id="admin-tab-stats" class="admin-tab">
+                <div id="admin-tab-stats" class="admin-tab" style="display:none">
                     <div class="stats-container">
                         <h3>Statistics Overview</h3>
                         <div id="stats-content"></div>
