@@ -169,6 +169,16 @@
       "size": 6402,
       "created": "2025-12-27T19:55:36.055Z",
       "updated": "2025-12-27T19:55:36.055Z"
+    },
+    "Gifting System Script": {
+      "title": "Gifting System Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "gifting-system-script.lua",
+      "size": 1645,
+      "created": "2025-12-27T19:56:06.437Z",
+      "updated": "2025-12-27T19:56:06.437Z"
     }
   }
 }
