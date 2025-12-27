@@ -309,6 +309,16 @@
       "size": 8284,
       "created": "2025-12-27T20:04:58.537Z",
       "updated": "2025-12-27T20:04:58.537Z"
+    },
+    "Team Clothing System": {
+      "title": "Team Clothing System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "team-clothing-system.lua",
+      "size": 3457,
+      "created": "2025-12-27T20:05:31.096Z",
+      "updated": "2025-12-27T20:05:31.096Z"
     }
   }
 }
