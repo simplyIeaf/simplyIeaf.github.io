@@ -60,7 +60,7 @@ const app = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${scriptData.title} - Leaf's Scripts</title>
-    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/220599690?v=4">
+    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="../../style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -70,12 +70,12 @@ const app = {
         <div class="nav-content">
             <div class="nav-left">
                 <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
-                    <img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon" alt="Profile">
+                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Profile">
                     <span class="nav-title">Leaf's Scripts</span>
                 </a>
             </div>
             <div class="nav-right">
-                <a href="../../index.html" class="btn btn-secondary btn-sm">← Home</a>
+                <a href="../../index.html" class="btn btn-secondary btn-sm">Back</a>
             </div>
         </div>
     </nav>
@@ -90,9 +90,6 @@ const app = {
                         <span>${new Date(scriptData.created).toLocaleDateString()}</span>
                     </span>
                 </div>
-            </div>
-            <div class="badges">
-                <span class="badge badge-${scriptData.visibility.toLowerCase()}">${scriptData.visibility}</span>
             </div>
         </div>
 
@@ -199,7 +196,6 @@ const app = {
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('user-section').style.display = 'flex';
             document.getElementById('private-filter').style.display = 'block';
-            document.getElementById('mob-private').style.display = 'block';
             return true;
         } catch (e) {
             if (!silent) {
@@ -285,9 +281,7 @@ const app = {
         if (e) {
             e.preventDefault();
             document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            document.querySelectorAll('.mobile-pill').forEach(l => l.classList.remove('active'));
-            if(e.target.classList.contains('mobile-pill')) e.target.classList.add('active');
-            else e.target.classList.add('active');
+            if(e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
         }
         this.currentFilter = cat;
         this.renderList();
