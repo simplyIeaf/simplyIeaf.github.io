@@ -46,10 +46,11 @@ const app = {
     currentSort: 'newest', 
     actionInProgress: false, 
     currentEditingId: null,
-    originalTitle: null,
     
     async init() {
-        if (this.token) await this.verifyToken(true);
+        if (this.token) {
+            await this.verifyToken(true);
+        }
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
@@ -62,7 +63,7 @@ const app = {
             'Content-Type': 'application/json'
         };
         if (this.token) {
-            headers['Authorization'] = `Bearer ${this.token}`;
+            headers['Authorization'] = `token ${this.token}`;
         }
         return headers;
     },
@@ -97,11 +98,10 @@ const app = {
     async login() {
         if (this.actionInProgress) return;
         this.actionInProgress = true;
-        
         try {
-            const token = document.getElementById('auth-token').value.trim();
+            const tokenInput = document.getElementById('auth-token');
+            const token = tokenInput.value.trim();
             if (!token) return;
-            
             this.token = token;
             const success = await this.verifyToken(false);
             if (success) {
@@ -118,6 +118,7 @@ const app = {
     logout() {
         if (confirm('Are you sure you want to logout?')) {
             localStorage.removeItem('gh_token');
+            window.location.hash = '';
             location.reload();
         }
     },
@@ -138,39 +139,8 @@ const app = {
             this.renderList();
             this.renderAdminList();
         } catch (e) { 
-            console.error("DB Error", e); 
+            console.error("Database Load Error", e); 
         }
-    },
-
-    generateScriptHTML(title, scriptData) {
-        const scriptId = utils.sanitizeTitle(title);
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${utils.escapeHtml(scriptData.title)} - Leaf's Scripts</title>
-    <link rel="stylesheet" href="../../style.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
-</head>
-<body>
-    <nav class="navbar"><div class="nav-content"><a href="../../index.html" class="brand">Leaf's Scripts</a></div></nav>
-    <div class="container">
-        <h1>${utils.escapeHtml(scriptData.title)}</h1>
-        <div class="code-box">
-            <pre><code id="code-display" class="language-lua">Loading...</code></pre>
-        </div>
-    </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
-    <script>
-        fetch('raw/${scriptData.filename}').then(r => r.text()).then(t => {
-            document.getElementById('code-display').textContent = t;
-            Prism.highlightAll();
-        });
-    </script>
-</body>
-</html>`;
     },
 
     async saveScript() {
@@ -185,12 +155,12 @@ const app = {
         const msg = document.getElementById('admin-msg');
         
         if (!title || !code) { 
-            msg.innerHTML = `<span style="color:var(--danger)">Required fields missing</span>`;
+            msg.innerHTML = `<span style="color:var(--danger)">Title and Code are required</span>`;
             this.actionInProgress = false;
             return; 
         }
 
-        msg.innerHTML = `<span class="loading">Processing...</span>`;
+        msg.innerHTML = `<span class="loading">Saving to GitHub...</span>`;
         
         try {
             const scriptId = utils.sanitizeTitle(title);
@@ -212,7 +182,7 @@ const app = {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Save ${filename}`,
+                    message: `Upload ${filename}`,
                     content: utils.safeBtoa(code),
                     sha: existingSha || undefined
                 })
@@ -237,66 +207,39 @@ const app = {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Update Index`,
+                    message: `Update Index HTML`,
                     content: utils.safeBtoa(indexHTML),
                     sha: indexSha || undefined
                 })
             });
 
-            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            const dbUpdate = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Sync Database`,
+                    message: `Update Database Registry`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
-            const dbData = await dbRes.json();
+            const dbData = await dbUpdate.json();
             this.dbSha = dbData.content.sha;
 
-            msg.innerHTML = `<span style="color:var(--accent)">Success!</span>`;
-            setTimeout(() => { this.switchAdminTab('list'); this.actionInProgress = false; }, 1000);
+            msg.innerHTML = `<span style="color:var(--accent)">Successfully Published!</span>`;
+            setTimeout(() => { this.switchAdminTab('list'); this.actionInProgress = false; }, 1500);
         } catch(e) {
             msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
             this.actionInProgress = false;
         }
     },
 
-    async deleteScriptFiles(title) {
-        const scriptId = utils.sanitizeTitle(title);
-        const script = this.db.scripts[title];
-        if (!script) return;
-
-        const files = [
-            `scripts/${scriptId}/raw/${script.filename}`,
-            `scripts/${scriptId}/index.html`
-        ];
-
-        for (const path of files) {
-            try {
-                const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                    headers: this.getHeaders()
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                        method: 'DELETE',
-                        headers: this.getHeaders(),
-                        body: JSON.stringify({ message: `Delete ${path}`, sha: data.sha })
-                    });
-                }
-            } catch(e) { console.error("File deletion error", e); }
-        }
-    },
-
     async deleteScript() {
         if (this.actionInProgress || !this.currentEditingId) return;
-        if (!confirm(`Permanently delete "${this.currentEditingId}"?`)) return;
+        if (!confirm(`Are you sure you want to delete "${this.currentEditingId}"?`)) return;
 
         this.actionInProgress = true;
         const msg = document.getElementById('admin-msg');
-        msg.innerHTML = `<span class="loading">Deleting...</span>`;
+        msg.innerHTML = `<span class="loading">Deleting files...</span>`;
 
         try {
             await this.deleteScriptFiles(this.currentEditingId);
@@ -306,23 +249,56 @@ const app = {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Remove script from DB`,
+                    message: `Delete ${this.currentEditingId}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
+            
+            if (!res.ok) throw new Error("Failed to update database after deletion");
+            
             const data = await res.json();
             this.dbSha = data.content.sha;
 
-            msg.innerHTML = `<span style="color:var(--accent)">Deleted!</span>`;
+            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
             setTimeout(() => { 
                 this.switchAdminTab('list'); 
                 this.actionInProgress = false; 
                 this.renderList();
-            }, 1000);
+            }, 1500);
         } catch(e) {
-            msg.innerHTML = `<span style="color:red">Failed: ${e.message}</span>`;
+            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
             this.actionInProgress = false;
+        }
+    },
+
+    async deleteScriptFiles(title) {
+        const scriptId = utils.sanitizeTitle(title);
+        const script = this.db.scripts[title];
+        if (!script) return;
+
+        const filesToDelete = [
+            `scripts/${scriptId}/raw/${script.filename}`,
+            `scripts/${scriptId}/index.html`
+        ];
+
+        for (const path of filesToDelete) {
+            try {
+                const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                    headers: this.getHeaders()
+                });
+                if (getFile.ok) {
+                    const fileData = await getFile.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                        method: 'DELETE',
+                        headers: this.getHeaders(),
+                        body: JSON.stringify({
+                            message: `Clean up ${path}`,
+                            sha: fileData.sha
+                        })
+                    });
+                }
+            } catch(e) { console.error("File deletion error:", e); }
         }
     },
 
@@ -330,9 +306,63 @@ const app = {
         this.deleteScript();
     },
 
+    generateScriptHTML(title, scriptData) {
+        const scriptId = utils.sanitizeTitle(title);
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${utils.escapeHtml(scriptData.title)}</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar"><div class="nav-content"><a href="../../index.html" class="brand">Leaf's Scripts</a><a href="../../index.html" class="btn btn-secondary btn-sm">Back</a></div></nav>
+    <div class="container">
+        <h1>${utils.escapeHtml(scriptData.title)}</h1>
+        <p class="script-desc">${utils.escapeHtml(scriptData.description || '')}</p>
+        <div class="code-box">
+            <pre><code id="code-display" class="language-lua">Loading script...</code></pre>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script>
+        fetch('raw/${scriptData.filename}').then(r => r.text()).then(t => {
+            document.getElementById('code-display').textContent = t;
+            Prism.highlightAll();
+        });
+    </script>
+</body>
+</html>`;
+    },
+
+    handleRouting() {
+        const hash = window.location.hash.slice(1);
+        const homeView = document.getElementById('view-home');
+        const adminView = document.getElementById('view-admin');
+        
+        homeView.style.display = 'none';
+        adminView.style.display = 'none';
+        
+        if (hash === 'admin') {
+            if (this.currentUser) {
+                adminView.style.display = 'block';
+                this.switchAdminTab('list');
+            } else {
+                window.location.hash = '';
+                homeView.style.display = 'block';
+            }
+        } else {
+            homeView.style.display = 'block';
+            this.renderList();
+        }
+    },
+
     toggleLoginModal() {
         const modal = document.getElementById('login-modal');
-        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
     },
 
     renderList() {
@@ -341,7 +371,12 @@ const app = {
         const filtered = this.filterLogic(scripts);
         const sorted = this.sortLogic(filtered);
         
-        list.innerHTML = sorted.length ? sorted.map(s => `
+        if (!sorted.length) {
+            list.innerHTML = '<div class="empty-state"><h2>No scripts found</h2></div>';
+            return;
+        }
+
+        list.innerHTML = sorted.map(s => `
             <div class="script-card" onclick="window.location.href='scripts/${utils.sanitizeTitle(s.title)}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
@@ -351,7 +386,7 @@ const app = {
                     <div class="card-meta"><span>${new Date(s.created).toLocaleDateString()}</span></div>
                 </div>
             </div>
-        `).join('') : '<p class="empty-state">No scripts found.</p>';
+        `).join('');
     },
 
     filterLogic(scripts) {
@@ -377,7 +412,7 @@ const app = {
         if (e) e.preventDefault();
         this.currentFilter = cat;
         document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-        if (e) e.target.classList.add('active');
+        if (e && e.currentTarget) e.currentTarget.classList.add('active');
         this.renderList();
     },
 
@@ -386,14 +421,18 @@ const app = {
     switchAdminTab(tab) {
         document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
         if (tab === 'list') {
             document.getElementById('admin-tab-list').style.display = 'block';
+            document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
             this.renderAdminList();
         } else if (tab === 'stats') {
             document.getElementById('admin-tab-stats').style.display = 'block';
+            document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
             this.renderStats();
         } else {
             document.getElementById('admin-tab-editor').style.display = 'block';
+            document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
             this.resetEditor();
         }
     },
@@ -401,6 +440,9 @@ const app = {
     async renderAdminList() {
         const list = document.getElementById('admin-list');
         const scripts = Object.entries(this.db.scripts || {});
+        
+        document.getElementById('total-stats').textContent = `${scripts.length} Scripts`;
+        
         list.innerHTML = scripts.map(([title, s]) => `
             <div class="admin-item" onclick="app.populateEditor('${title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
@@ -416,23 +458,27 @@ const app = {
         if (!s) return;
         this.currentEditingId = title;
         this.switchAdminTab('create');
+        
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
         document.getElementById('edit-title').value = s.title;
         document.getElementById('edit-visibility').value = s.visibility;
         document.getElementById('edit-desc').value = s.description || '';
-        document.getElementById('edit-code').value = 'Loading source...';
+        document.getElementById('edit-expire').value = s.expiration || '';
+        document.getElementById('edit-code').value = 'Loading...';
         document.getElementById('btn-delete').style.display = 'inline-flex';
 
         try {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}`, { headers: this.getHeaders() });
             const data = await res.json();
             document.getElementById('edit-code').value = utils.safeAtob(data.content);
-        } catch(e) { document.getElementById('edit-code').value = '-- Error loading code'; }
+        } catch(e) { document.getElementById('edit-code').value = '-- Error loading source code'; }
     },
 
     resetEditor() {
         this.currentEditingId = null;
         document.getElementById('edit-title').value = '';
+        document.getElementById('edit-desc').value = '';
+        document.getElementById('edit-expire').value = '';
         document.getElementById('edit-code').value = '';
         document.getElementById('btn-delete').style.display = 'none';
         document.getElementById('editor-heading').textContent = 'Create New Script';
@@ -440,18 +486,17 @@ const app = {
 
     renderStats() {
         const total = Object.keys(this.db.scripts).length;
-        document.getElementById('stats-content').innerHTML = `<div class="stat-card"><div class="stat-number">${total}</div><div class="stat-label">Scripts</div></div>`;
-    },
-
-    handleRouting() {
-        const hash = location.hash.slice(1);
-        document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-        if (hash === 'admin' && this.currentUser) {
-            document.getElementById('view-admin').style.display = 'block';
-        } else {
-            document.getElementById('view-home').style.display = 'block';
-        }
+        document.getElementById('stats-content').innerHTML = `
+            <div class="stat-card">
+                <div class="stat-number">${total}</div>
+                <div class="stat-label">Total Scripts</div>
+            </div>
+        `;
     }
 };
+
+function navigate(path) { 
+    window.location.hash = path; 
+}
 
 app.init();
