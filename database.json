@@ -559,6 +559,16 @@
       "size": 3874,
       "created": "2025-12-27T20:20:38.759Z",
       "updated": "2025-12-27T20:20:38.759Z"
+    },
+    "Daily Rewards System LocalScript": {
+      "title": "Daily Rewards System LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "daily-rewards-system-localscript.lua",
+      "size": 13046,
+      "created": "2025-12-27T20:21:06.152Z",
+      "updated": "2025-12-27T20:21:06.152Z"
     }
   }
 }
