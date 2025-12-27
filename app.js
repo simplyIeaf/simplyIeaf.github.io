@@ -373,11 +373,18 @@ const app = {
         }
         
         const isNew = !this.currentEditingId;
-        const isRename = !isNew && this.originalTitle && this.originalTitle !== title;
+        const isEditing = !isNew;
         
-        // Check if title exists (but allow same title when editing same script)
-        if (this.db.scripts[title] && (!this.originalTitle || title !== this.originalTitle)) {
+        // Check for duplicate titles (only when not editing the same script)
+        if (isNew && this.db.scripts[title]) {
             msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
+            return;
+        }
+        
+        // If editing and title changed, check for duplicates
+        if (isEditing && this.originalTitle !== title && this.db.scripts[title]) {
+            msg.innerHTML = `<span style="color:var(--danger)">A script with this new title already exists</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
             return;
         }
@@ -385,204 +392,290 @@ const app = {
         const scriptId = utils.sanitizeTitle(title);
         const oldScriptId = this.originalTitle ? utils.sanitizeTitle(this.originalTitle) : null;
         const filename = scriptId + '.lua';
+        const titleChanged = isEditing && this.originalTitle !== title;
+        const folderChanged = isEditing && oldScriptId !== scriptId;
         
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            // If renaming, delete old files first
-            if (isRename && oldScriptId !== scriptId) {
+            // Step 1: Handle file operations
+            if (folderChanged) {
+                // If folder changes, we need to delete old files
                 await this.deleteScriptFiles(this.originalTitle);
             }
             
-            // Get current SHA for the lua file if it exists
+            // Step 2: Upload/Update lua file
             let luaSha = null;
-            const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+            const luaCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
-            if (luaCheck.ok) {
-                luaSha = (await luaCheck.json()).sha;
+            
+            if (luaCheckRes.ok) {
+                const luaData = await luaCheckRes.json();
+                luaSha = luaData.sha;
             }
             
-            // Upload lua file
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+            const luaUploadRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `${isNew ? 'Create' : 'Update'} script: ${title}`,
+                    message: `${isNew ? 'Create' : 'Update'} ${title}`,
                     content: utils.safeBtoa(code),
                     sha: luaSha
                 })
             });
-
-            // Prepare script data
+            
+            if (!luaUploadRes.ok) {
+                const errorData = await luaUploadRes.json();
+                throw new Error(`Failed to upload lua file: ${errorData.message || luaUploadRes.statusText}`);
+            }
+            
+            // Step 3: Prepare script data
             const scriptData = {
                 title: title,
                 visibility: visibility,
                 description: desc,
                 expiration: expiration,
                 filename: filename,
-                created: (this.originalTitle && this.db.scripts[this.originalTitle]) 
+                created: isEditing && this.db.scripts[this.originalTitle] 
                     ? this.db.scripts[this.originalTitle].created 
                     : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
             
-            // Remove old entry if renaming
-            if (isRename && this.originalTitle !== title) {
+            // Step 4: Update database
+            // Remove old entry if title changed
+            if (titleChanged && this.originalTitle in this.db.scripts) {
                 delete this.db.scripts[this.originalTitle];
             }
             
-            // Add/update script in database
+            // Add/update new entry
             this.db.scripts[title] = scriptData;
             
-            // Update database.json and get new SHA
-            const dbResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            // Step 5: Push database changes to GitHub
+            const dbUpdateRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update database: ${title}`,
+                    message: `Update database for ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
-
-            if (!dbResponse.ok) {
-                throw new Error(`Database update failed: ${dbResponse.statusText}`);
-            }
-
-            const dbResult = await dbResponse.json();
-            this.dbSha = dbResult.content.sha;
-
-            // Update index.html
-            const indexHTML = this.generateScriptHTML(title, scriptData);
-            let indexSha = null;
-            const indexCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            if (indexCheck.ok) {
-                indexSha = (await indexCheck.json()).sha;
+            
+            if (!dbUpdateRes.ok) {
+                const errorData = await dbUpdateRes.json();
+                throw new Error(`Failed to update database: ${errorData.message || dbUpdateRes.statusText}`);
             }
             
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+            const dbUpdateData = await dbUpdateRes.json();
+            this.dbSha = dbUpdateData.content.sha;
+            
+            // Step 6: Create/Update index.html
+            const indexHTML = this.generateScriptHTML(title, scriptData);
+            let indexSha = null;
+            
+            const indexCheckRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            
+            if (indexCheckRes.ok) {
+                const indexData = await indexCheckRes.json();
+                indexSha = indexData.sha;
+            }
+            
+            const indexUploadRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update index page: ${title}`,
+                    message: `Update index for ${title}`,
                     content: utils.safeBtoa(indexHTML),
                     sha: indexSha
                 })
             });
             
+            if (!indexUploadRes.ok) {
+                const errorData = await indexUploadRes.json();
+                throw new Error(`Failed to update index: ${errorData.message || indexUploadRes.statusText}`);
+            }
+            
+            // Step 7: Reload and show success
             await this.loadDatabase();
             this.resetEditor();
-            msg.innerHTML = `<span style="color:var(--accent)">Published successfully!</span>`;
+            msg.innerHTML = `<span style="color:var(--accent)">✓ Published successfully!</span>`;
             setTimeout(() => { 
                 msg.innerHTML = ''; 
                 this.switchAdminTab('list'); 
-                this.actionInProgress = false; 
             }, 1500);
+            
         } catch(e) {
             console.error('Save error:', e);
             msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            setTimeout(() => {
-                msg.innerHTML = '';
-                this.actionInProgress = false;
-            }, 3000);
+            setTimeout(() => msg.innerHTML = '', 4000);
+        } finally {
             this.actionInProgress = false;
         }
     },
 
     async deleteScriptFiles(title) {
-        if (!title || !this.db.scripts[title]) return;
+        if (!title || !this.db.scripts[title]) {
+            console.log('Cannot delete: title or script not found');
+            return;
+        }
+        
         const scriptId = utils.sanitizeTitle(title);
         const s = this.db.scripts[title];
         const filename = s.filename;
         
+        console.log(`Deleting files for: ${title} (ID: ${scriptId})`);
+        
+        const errors = [];
+        
+        // Delete lua file
         try {
-            // Delete lua file
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
+            
             if (luaRes.ok) {
                 const luaData = await luaRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        message: `Delete lua file: ${filename}`, 
+                        message: `Delete ${filename}`, 
                         sha: luaData.sha 
                     })
                 });
+                
+                if (!deleteRes.ok) {
+                    const errData = await deleteRes.json();
+                    errors.push(`Lua file: ${errData.message}`);
+                } else {
+                    console.log('Lua file deleted successfully');
+                }
+            } else {
+                console.log('Lua file not found, skipping');
             }
-
-            // Delete index file
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+        } catch(e) {
+            console.error('Error deleting lua file:', e);
+            errors.push(`Lua file: ${e.message}`);
+        }
+        
+        // Delete index.html
+        try {
+            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
-            if (idxRes.ok) {
-                const idxData = await idxRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+            
+            if (indexRes.ok) {
+                const indexData = await indexRes.json();
+                const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        message: `Delete index file: ${scriptId}`, 
-                        sha: idxData.sha 
+                        message: `Delete index for ${title}`, 
+                        sha: indexData.sha 
                     })
                 });
+                
+                if (!deleteRes.ok) {
+                    const errData = await deleteRes.json();
+                    errors.push(`Index file: ${errData.message}`);
+                } else {
+                    console.log('Index file deleted successfully');
+                }
+            } else {
+                console.log('Index file not found, skipping');
             }
         } catch(e) {
-            console.error('Delete files error:', e);
-            throw e;
+            console.error('Error deleting index file:', e);
+            errors.push(`Index file: ${e.message}`);
+        }
+        
+        if (errors.length > 0) {
+            throw new Error(`File deletion errors: ${errors.join(', ')}`);
         }
     },
 
     async deleteScript() {
+        if (this.actionInProgress) {
+            console.log('Action already in progress, ignoring delete request');
+            return;
+        }
+        
         const title = this.currentEditingId;
-        if (this.actionInProgress || !title) return;
-        if (!confirm('Delete this script permanently?')) return;
+        
+        if (!title) {
+            alert('No script selected for deletion');
+            return;
+        }
+        
+        if (!this.db.scripts[title]) {
+            alert('Script not found in database');
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to permanently delete "${title}"?`)) {
+            return;
+        }
         
         this.actionInProgress = true;
         const msg = document.getElementById('admin-msg');
-        msg.innerHTML = `<span class="loading">Deleting...</span>`;
+        msg.innerHTML = `<span class="loading">Deleting script...</span>`;
+        
+        console.log(`Starting deletion of: ${title}`);
         
         try {
-            // Delete files first
+            // Step 1: Delete the files from GitHub
+            console.log('Step 1: Deleting files...');
             await this.deleteScriptFiles(title);
+            console.log('Files deleted successfully');
             
-            // Remove from database object
+            // Step 2: Remove from local database object
+            console.log('Step 2: Removing from database...');
             delete this.db.scripts[title];
             
-            // Update database.json and get new SHA
-            const dbResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            // Step 3: Update database.json on GitHub
+            console.log('Step 3: Updating database.json...');
+            const dbUpdateRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Remove script from database: ${title}`,
+                    message: `Delete script: ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
             
-            if (!dbResponse.ok) {
-                throw new Error(`Database update failed: ${dbResponse.statusText}`);
+            if (!dbUpdateRes.ok) {
+                const errorData = await dbUpdateRes.json();
+                throw new Error(`Database update failed: ${errorData.message || dbUpdateRes.statusText}`);
             }
-
-            const dbResult = await dbResponse.json();
-            this.dbSha = dbResult.content.sha;
             
+            const dbUpdateData = await dbUpdateRes.json();
+            this.dbSha = dbUpdateData.content.sha;
+            console.log('Database updated, new SHA:', this.dbSha);
+            
+            // Step 4: Reload database and UI
+            console.log('Step 4: Reloading interface...');
             await this.loadDatabase();
             this.resetEditor();
             this.switchAdminTab('list');
-            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
+            
+            msg.innerHTML = `<span style="color:var(--accent)">✓ Script deleted successfully!</span>`;
+            console.log('Deletion complete!');
+            
             setTimeout(() => {
                 msg.innerHTML = '';
-            }, 1500);
+            }, 2000);
+            
         } catch(e) {
             console.error('Delete error:', e);
-            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
+            msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
             setTimeout(() => {
                 msg.innerHTML = '';
-            }, 3000);
+            }, 4000);
         } finally {
             this.actionInProgress = false;
         }
