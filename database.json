@@ -459,6 +459,16 @@
       "size": 1831,
       "created": "2025-12-27T20:15:14.030Z",
       "updated": "2025-12-27T20:15:14.030Z"
+    },
+    "Stamina and Healthbar": {
+      "title": "Stamina and Healthbar",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "stamina-and-healthbar.lua",
+      "size": 7664,
+      "created": "2025-12-27T20:15:47.448Z",
+      "updated": "2025-12-27T20:15:47.448Z"
     }
   }
 }
