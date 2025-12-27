@@ -289,6 +289,16 @@
       "size": 1354,
       "created": "2025-12-27T20:03:45.194Z",
       "updated": "2025-12-27T20:03:45.194Z"
+    },
+    "Better Announcements System Script": {
+      "title": "Better Announcements System Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "better-announcements-system-script.lua",
+      "size": 1417,
+      "created": "2025-12-27T20:04:31.518Z",
+      "updated": "2025-12-27T20:04:31.518Z"
     }
   }
 }
