@@ -246,7 +246,6 @@ const app = {
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${s.title}</h3>
-                        ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
                     </div>
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
@@ -356,7 +355,9 @@ const app = {
         const scriptId = utils.sanitizeTitle(title);
         
         try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`);
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+                headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
+            });
             const data = await res.json();
             document.getElementById('edit-code').value = utils.safeAtob(data.content);
         } catch(e) { 
@@ -402,7 +403,9 @@ const app = {
             
             let luaSha = null;
             if (!isNew && title === this.originalTitle) {
-                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`);
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
                 if (check.ok) luaSha = (await check.json()).sha;
             }
             
@@ -447,7 +450,9 @@ const app = {
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
             if (!isNew && title === this.originalTitle) {
-                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`);
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
                 if (check.ok) indexSha = (await check.json()).sha;
             }
             
@@ -479,7 +484,9 @@ const app = {
         if (!s) return;
         
         try {
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`);
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
             if (luaRes.ok) {
                 const sha = (await luaRes.json()).sha;
                 await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
@@ -489,7 +496,9 @@ const app = {
                 });
             }
 
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`);
+            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
             if (idxRes.ok) {
                 const sha = (await idxRes.json()).sha;
                 await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
