@@ -70,8 +70,6 @@ const app = {
             e.preventDefault();
             e.stopPropagation();
             
-            console.log('Action triggered:', action, 'Param:', param);
-            
             switch(action) {
                 case 'navigate':
                     window.location.hash = param || '';
@@ -94,10 +92,6 @@ const app = {
                 case 'save-script':
                     this.saveScript();
                     break;
-                case 'delete-script':
-                    console.log('Delete script triggered for:', this.currentEditingId);
-                    this.deleteScript();
-                    break;
                 case 'edit-script':
                     this.populateEditor(param);
                     break;
@@ -112,7 +106,7 @@ const app = {
             searchInput.addEventListener('input', () => this.debouncedRender());
         }
 
-        const sortSelect = document.querySelector('.sidebar-sort select');
+        const sortSelect = document.getElementById('sort-select');
         if (sortSelect) {
             sortSelect.addEventListener('change', (e) => this.setSort(e.target.value));
         }
@@ -123,6 +117,20 @@ const app = {
                 if (e.target === modalOverlay) {
                     this.toggleLoginModal();
                 }
+            });
+        }
+    },
+    
+    attachDeleteListener() {
+        const deleteBtn = document.getElementById('btn-delete');
+        if (deleteBtn) {
+            const newBtn = deleteBtn.cloneNode(true);
+            deleteBtn.parentNode.replaceChild(newBtn, deleteBtn);
+            
+            newBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.deleteScript();
             });
         }
     },
@@ -149,9 +157,7 @@ const app = {
                 throw new Error(`Unauthorized user.`);
             }
             this.currentUser = user;
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('user-section').style.display = 'flex';
-            document.getElementById('private-filter').style.display = 'block';
+            this.updateAuthUI();
             return true;
         } catch (e) {
             if (!silent) {
@@ -159,10 +165,41 @@ const app = {
                 err.textContent = e.message;
                 err.style.display = 'block';
             }
+            this.currentUser = null;
             this.token = null;
             localStorage.removeItem('gh_token');
+            this.updateAuthUI();
             return false;
         }
+    },
+
+    updateAuthUI() {
+        if (this.currentUser) {
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('user-section').style.display = 'flex';
+            document.getElementById('private-filter').style.display = 'block';
+        } else {
+            document.getElementById('auth-section').style.display = 'flex';
+            document.getElementById('user-section').style.display = 'none';
+            document.getElementById('private-filter').style.display = 'none';
+        }
+    },
+
+    async requireAuth(operationName) {
+        if (!this.token) {
+            alert('You must be logged in to perform this action');
+            window.location.hash = '';
+            return false;
+        }
+
+        const isValid = await this.verifyToken(true);
+        if (!isValid) {
+            alert(`Authentication failed. ${operationName} requires valid credentials.`);
+            window.location.hash = '';
+            return false;
+        }
+
+        return true;
     },
 
     async login() {
@@ -187,7 +224,10 @@ const app = {
 
     logout() {
         if (confirm('Are you sure you want to logout?')) {
+            this.currentUser = null;
+            this.token = null;
             localStorage.removeItem('gh_token');
+            this.updateAuthUI();
             window.location.hash = '';
             location.reload();
         }
@@ -207,13 +247,16 @@ const app = {
                 this.db = JSON.parse(utils.safeAtob(file.content));
             }
             this.renderList();
-            this.renderAdminList();
+            if (this.currentUser) {
+                this.renderAdminList();
+            }
         } catch (e) { 
             console.error("Database Load Error", e); 
         }
     },
 
     async saveScript() {
+        if (!(await this.requireAuth('Save script'))) return;
         if (this.actionInProgress) return;
         this.actionInProgress = true;
         
@@ -248,7 +291,7 @@ const app = {
                 if (check.ok) existingSha = (await check.json()).sha;
             } catch(e) {}
 
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+            const uploadRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({
@@ -257,6 +300,10 @@ const app = {
                     sha: existingSha || undefined
                 })
             });
+
+            if (!uploadRes.ok) {
+                throw new Error('Failed to upload script - authentication may have expired');
+            }
 
             const scriptData = {
                 title, visibility, description: desc, expiration, filename,
@@ -292,6 +339,11 @@ const app = {
                     sha: this.dbSha
                 })
             });
+            
+            if (!dbUpdate.ok) {
+                throw new Error('Failed to update database - authentication may have expired');
+            }
+            
             const dbData = await dbUpdate.json();
             this.dbSha = dbData.content.sha;
 
@@ -307,13 +359,10 @@ const app = {
     },
 
     async deleteScript() {
-        if (this.actionInProgress) {
-            console.log('Action already in progress, skipping delete');
-            return;
-        }
+        if (!(await this.requireAuth('Delete script'))) return;
+        if (this.actionInProgress) return;
         
         if (!this.currentEditingId) {
-            console.log('No script selected for deletion');
             alert('No script selected for deletion');
             return;
         }
@@ -321,7 +370,6 @@ const app = {
         const titleToDelete = this.currentEditingId;
         
         if (!confirm(`Are you sure you want to delete "${titleToDelete}"? This cannot be undone.`)) {
-            console.log('Delete cancelled by user');
             return;
         }
 
@@ -333,8 +381,6 @@ const app = {
             const scriptId = utils.sanitizeTitle(titleToDelete);
             const script = this.db.scripts[titleToDelete];
             
-            console.log('Deleting script:', titleToDelete, 'ID:', scriptId, 'Script data:', script);
-            
             if (!script) {
                 throw new Error('Script not found in database');
             }
@@ -344,12 +390,8 @@ const app = {
                 { path: `scripts/${scriptId}/index.html`, name: 'Index file' }
             ];
 
-            console.log('Files to delete:', filesToDelete);
-
             for (const file of filesToDelete) {
                 try {
-                    console.log(`Fetching SHA for ${file.name}: ${file.path}`);
-                    
                     const getFile = await fetch(
                         `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${file.path}?t=${CONFIG.cacheBuster()}`, 
                         { headers: this.getHeaders() }
@@ -357,7 +399,6 @@ const app = {
                     
                     if (getFile.ok) {
                         const fileData = await getFile.json();
-                        console.log(`Got SHA for ${file.name}:`, fileData.sha);
                         
                         const deleteRes = await fetch(
                             `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${file.path}`, 
@@ -371,24 +412,18 @@ const app = {
                             }
                         );
                         
-                        if (deleteRes.ok) {
-                            console.log(`Successfully deleted ${file.name}`);
-                        } else {
-                            const errorText = await deleteRes.text();
-                            console.error(`Failed to delete ${file.name}:`, errorText);
+                        if (!deleteRes.ok) {
+                            throw new Error(`Failed to delete ${file.name} - authentication may have expired`);
                         }
-                    } else {
-                        console.log(`File not found: ${file.name} (${file.path})`);
                     }
                 } catch(e) { 
                     console.error(`Error deleting ${file.name}:`, e); 
+                    throw e;
                 }
             }
 
-            console.log('Removing from database...');
             delete this.db.scripts[titleToDelete];
 
-            console.log('Updating database.json on GitHub...');
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
@@ -400,14 +435,11 @@ const app = {
             });
             
             if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(`Failed to update database: ${errorText}`);
+                throw new Error('Failed to update database - authentication may have expired');
             }
             
             const data = await res.json();
             this.dbSha = data.content.sha;
-            
-            console.log('Database updated successfully');
 
             msg.innerHTML = `<span style="color:var(--accent)">Successfully deleted "${titleToDelete}"</span>`;
             
@@ -489,7 +521,7 @@ const app = {
 </html>`;
     },
 
-    handleRouting() {
+    async handleRouting() {
         const hash = window.location.hash.slice(1);
         const homeView = document.getElementById('view-home');
         const adminView = document.getElementById('view-admin');
@@ -498,11 +530,11 @@ const app = {
         adminView.style.display = 'none';
         
         if (hash === 'admin') {
-            if (this.currentUser) {
+            const hasAuth = await this.requireAuth('Access admin panel');
+            if (hasAuth) {
                 adminView.style.display = 'block';
                 this.switchAdminTab('list');
             } else {
-                window.location.hash = '';
                 homeView.style.display = 'block';
             }
         } else {
@@ -608,12 +640,12 @@ const app = {
     },
 
     async populateEditor(title) {
+        if (!(await this.requireAuth('Edit script'))) return;
+        
         const s = this.db.scripts[title];
         if (!s) return;
         this.currentEditingId = title;
         this.switchAdminTab('create');
-        
-        console.log('Editing script:', title);
         
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
         document.getElementById('edit-title').value = s.title;
@@ -623,15 +655,23 @@ const app = {
         document.getElementById('edit-code').value = 'Loading...';
         document.getElementById('btn-delete').style.display = 'inline-flex';
         document.getElementById('admin-msg').innerHTML = '';
+        
+        this.attachDeleteListener();
 
         try {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, { 
                 headers: this.getHeaders() 
             });
+            
+            if (!res.ok) {
+                throw new Error('Failed to load script - authentication may have expired');
+            }
+            
             const data = await res.json();
             document.getElementById('edit-code').value = utils.safeAtob(data.content);
         } catch(e) { 
-            document.getElementById('edit-code').value = '-- Error loading source code'; 
+            document.getElementById('edit-code').value = '-- Error loading source code';
+            alert('Failed to load script content. Please try logging in again.');
         }
     },
 
