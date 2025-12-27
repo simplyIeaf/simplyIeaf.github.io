@@ -44,7 +44,7 @@
         <div class="modal animate__animated animate__zoomIn">
             <div class="modal-header">
                 <h3>Login</h3>
-                <button class="close-btn" onclick="app.toggleLoginModal()">&times;</button>
+                <button class="close-btn" onclick="app.toggleLoginModal()">×</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
@@ -192,7 +192,7 @@
                             <div id="admin-msg"></div>
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
-                                <button class="btn btn-delete" onclick="app.debouncedDelete()" id="btn-delete" style="display: none;">Delete</button>
+                                <button class="btn btn-delete" onclick="app.handleDelete()" id="btn-delete" style="display: none;">Delete</button>
                                 <button class="btn" onclick="app.debouncedSave()">Save & Publish</button>
                             </div>
                         </div>
