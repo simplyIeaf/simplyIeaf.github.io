@@ -5,15 +5,6 @@ const CONFIG = {
 };
 
 const utils = {
-    debounce(func, wait) {
-        let timeout;
-        return function(...args) {
-            const context = this;
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(context, args), wait);
-        };
-    },
-    
     safeBtoa(str) {
         return window.btoa(unescape(encodeURIComponent(str)));
     },
@@ -44,10 +35,7 @@ const app = {
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
-        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
-        this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
-        this.debouncedLogin = utils.debounce(() => this.login(), 750);
-        this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
+        document.getElementById('search').addEventListener('input', () => this.renderList());
     },
 
     generateScriptHTML(title, scriptData) {
@@ -111,7 +99,6 @@ const app = {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script>
         const filename = '${scriptData.filename}';
-        const scriptId = '${scriptId}';
         
         async function loadScript() {
             try {
@@ -170,7 +157,7 @@ const app = {
             await this.loadDatabase();
             this.renderList();
         }
-        setTimeout(() => { this.actionInProgress = false; }, 750);
+        this.actionInProgress = false;
     },
 
     logout() {
@@ -358,7 +345,7 @@ const app = {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
                 headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
-            if (!res.ok) throw new Error('Not found');
+            if (!res.ok) throw new Error();
             const data = await res.json();
             document.getElementById('edit-code').value = utils.safeAtob(data.content);
         } catch(e) { 
@@ -386,16 +373,9 @@ const app = {
         }
         
         const isNew = !this.currentEditingId;
+        const isRename = !isNew && this.originalTitle && this.originalTitle !== title;
         
-        // Allow same title only if it's the same script being edited (not rename)
-        if (!isNew && this.db.scripts[title] && title !== this.currentEditingId) {
-            msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
-            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
-            return;
-        }
-        
-        // For new scripts or renames, check for conflicts excluding current script
-        if (isNew && this.db.scripts[title]) {
+        if (this.db.scripts[title] && title !== this.originalTitle) {
             msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
             return;
@@ -407,7 +387,7 @@ const app = {
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            if (!isNew && this.originalTitle && this.originalTitle !== title) {
+            if (isRename) {
                 await this.deleteScriptFiles(this.originalTitle);
                 delete this.db.scripts[this.originalTitle];
             }
@@ -416,22 +396,24 @@ const app = {
             const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
-            if (luaCheck.ok) luaSha = (await luaCheck.json()).sha;
+            if (luaCheck.ok) {
+                luaSha = (await luaCheck.json()).sha;
+            }
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `${isNew ? 'Create' : 'Update'} ${filename}`,
+                    message: `${isNew ? 'Create' : 'Update'} script`,
                     content: utils.safeBtoa(code),
                     sha: luaSha
                 })
             });
 
             const scriptData = {
-                title: title, 
-                visibility: visibility, 
-                description: desc, 
+                title: title,
+                visibility: visibility,
+                description: desc,
                 expiration: expiration,
                 filename: filename,
                 created: isNew ? new Date().toISOString() : this.db.scripts[this.originalTitle || title]?.created || new Date().toISOString(),
@@ -444,7 +426,7 @@ const app = {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update db`,
+                    message: 'Update database',
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
@@ -461,7 +443,7 @@ const app = {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Update index`,
+                    message: 'Update index page',
                     content: utils.safeBtoa(indexHTML),
                     sha: indexSha
                 })
@@ -469,7 +451,7 @@ const app = {
             
             await this.loadDatabase();
             this.resetEditor();
-            msg.innerHTML = `<span style="color:var(--accent)">Published!</span>`;
+            msg.innerHTML = `<span style="color:var(--accent)">Published successfully!</span>`;
             setTimeout(() => { 
                 msg.innerHTML = ''; 
                 this.switchAdminTab('list'); 
@@ -477,7 +459,7 @@ const app = {
             }, 1500);
         } catch(e) {
             msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            setTimeout(() => { this.actionInProgress = false; }, 2000);
+            this.actionInProgress = false;
         }
     },
 
@@ -485,17 +467,18 @@ const app = {
         if (!title || !this.db.scripts[title]) return;
         const scriptId = utils.sanitizeTitle(title);
         const s = this.db.scripts[title];
+        const filename = s.filename;
         
         try {
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             if (luaRes.ok) {
                 const sha = (await luaRes.json()).sha;
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: 'Del lua', sha: sha })
+                    body: JSON.stringify({ message: 'Delete lua file', sha })
                 });
             }
 
@@ -507,18 +490,22 @@ const app = {
                 await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: 'Del index', sha: sha })
+                    body: JSON.stringify({ message: 'Delete index file', sha })
                 });
             }
         } catch(e) {
-            console.error('Error deleting files:', e);
+            console.error('Delete files error:', e);
         }
     },
 
-    async deleteScript(title) {
+    async deleteScript() {
+        const title = this.currentEditingId;
         if (this.actionInProgress || !title) return;
-        if (!confirm('Delete permanently?')) return;
+        if (!confirm('Delete this script permanently?')) return;
+        
         this.actionInProgress = true;
+        const msg = document.getElementById('admin-msg');
+        msg.innerHTML = `<span class="loading">Deleting...</span>`;
         
         try {
             await this.deleteScriptFiles(title);
@@ -528,7 +515,7 @@ const app = {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `Remove from db`,
+                    message: 'Remove script from database',
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
@@ -537,9 +524,12 @@ const app = {
             await this.loadDatabase();
             this.resetEditor();
             this.switchAdminTab('list');
-            this.actionInProgress = false;
+            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
+            setTimeout(() => msg.innerHTML = '', 1500);
         } catch(e) {
             alert('Delete failed: ' + e.message);
+            msg.innerHTML = '';
+        } finally {
             this.actionInProgress = false;
         }
     },
