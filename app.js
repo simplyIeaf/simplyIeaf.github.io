@@ -1,7 +1,7 @@
 const CONFIG = { 
     user: 'simplyIeaf', 
     repo: 'simplyIeaf.github.io',
-    cacheBuster: () => `?v=${Date.now()}`
+    cacheBuster: () => Date.now()
 };
 
 const utils = {
@@ -30,6 +30,19 @@ const utils = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    },
+
+    validateTitle(title) {
+        if (!title || title.trim().length === 0) return 'Title is required';
+        if (title.length > 100) return 'Title must be less than 100 characters';
+        if (!/^[a-zA-Z0-9\s\-_]+$/.test(title)) return 'Title can only contain letters, numbers, spaces, hyphens, and underscores';
+        return null;
+    },
+
+    validateCode(code) {
+        if (!code || code.trim().length === 0) return 'Code is required';
+        if (code.length > 100000) return 'Code is too large (max 100KB)';
+        return null;
     }
 };
 
@@ -54,6 +67,9 @@ const app = {
         this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
         this.debouncedLogin = utils.debounce(() => this.login(), 750);
         this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
+        
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('edit-expire').min = today;
     },
 
     generateScriptHTML(title, scriptData) {
@@ -188,6 +204,10 @@ const app = {
             localStorage.removeItem('gh_token');
             this.token = null;
             this.currentUser = null;
+            document.getElementById('auth-section').style.display = 'block';
+            document.getElementById('user-section').style.display = 'none';
+            document.getElementById('private-filter').style.display = 'none';
+            document.getElementById('unlisted-filter').style.display = 'none';
             location.href = '#';
             location.reload();
         }
@@ -207,6 +227,7 @@ const app = {
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('user-section').style.display = 'flex';
             document.getElementById('private-filter').style.display = 'block';
+            document.getElementById('unlisted-filter').style.display = 'block';
             return true;
         } catch (e) {
             if (!silent) {
@@ -215,15 +236,22 @@ const app = {
                 err.style.display = 'block';
             }
             this.token = null;
+            localStorage.removeItem('gh_token');
             return false;
         }
     },
 
     async loadDatabase() {
         try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json${CONFIG.cacheBuster()}`, {
+            const list = document.getElementById('admin-list');
+            if (list) {
+                list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading scripts...</p></div>`;
+            }
+            
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
                 headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
+            
             if (res.status === 404) {
                 this.db = { scripts: {} };
                 this.dbSha = null;
@@ -231,11 +259,20 @@ const app = {
                 const file = await res.json();
                 this.dbSha = file.sha;
                 this.db = JSON.parse(utils.safeAtob(file.content));
+            } else {
+                throw new Error(`Failed to load database: ${res.status}`);
             }
             this.renderList();
             this.renderAdminList();
         } catch (e) { 
-            console.error("DB Error", e); 
+            console.error("DB Error", e);
+            const list = document.getElementById('admin-list');
+            if (list) {
+                list.innerHTML = `<div class="empty-admin-state">
+                    <p style="color:var(--color-danger)">Error loading scripts: ${e.message}</p>
+                    <button class="btn btn-sm" onclick="app.loadDatabase()" style="margin-top:10px">Retry</button>
+                </div>`;
+            }
         }
     },
 
@@ -258,15 +295,20 @@ const app = {
         
         list.innerHTML = sorted.map(s => {
             const scriptId = utils.sanitizeTitle(s.title);
+            const isExpired = s.expiration && new Date(s.expiration) < new Date();
+            
             return `
             <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
-                        <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
+                        <h3 class="script-title">${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</h3>
                         ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
+                        ${isExpired ? `<span class="badge" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
                     </div>
+                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description)}</p>` : ''}
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
+                        ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
                     </div>
                 </div>
             </div>
@@ -275,12 +317,16 @@ const app = {
 
     filterLogic(scripts) {
         const query = document.getElementById('search').value.toLowerCase();
+        const now = new Date();
+        
         return scripts.filter(s => {
             if (!s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
             if (s.visibility === 'UNLISTED' && !this.currentUser) return false; 
             if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
             if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
+            if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
+            if (s.expiration && new Date(s.expiration) < now) return false;
             return true;
         });
     },
@@ -290,6 +336,7 @@ const app = {
             if (this.currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
             if (this.currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
             if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
+            if (this.currentSort === 'updated') return new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0);
             return 0;
         });
     },
@@ -344,12 +391,15 @@ const app = {
         
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
+            const isExpired = s.expiration && new Date(s.expiration) < new Date();
+            
             return `
             <div class="admin-item" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
-                    <strong>${utils.escapeHtml(s.title)}</strong>
+                    <strong>${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</strong>
                     <div class="admin-meta">
                         <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
+                        ${isExpired ? `<span class="badge badge-sm" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
                         <span class="text-muted">Updated ${updated}</span>
                     </div>
                 </div>
@@ -367,6 +417,17 @@ const app = {
         const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
         const privateCount = scripts.filter(s => s.visibility === 'PRIVATE').length;
         const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
+        const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
+        const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
+        
+        if (scripts.length === 0) {
+            document.getElementById('stats-content').innerHTML = `
+                <div class="empty-admin-state">
+                    <p>No scripts yet. Create your first script to see statistics.</p>
+                </div>
+            `;
+            return;
+        }
         
         document.getElementById('stats-content').innerHTML = `
             <div class="stats-grid">
@@ -386,6 +447,14 @@ const app = {
                     <div class="stat-number">${unlistedCount}</div>
                     <div class="stat-label">Unlisted</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number">${expiredCount}</div>
+                    <div class="stat-label">Expired</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
+                    <div class="stat-label">Total Size</div>
+                </div>
             </div>
         `;
     },
@@ -398,6 +467,7 @@ const app = {
         document.getElementById('edit-expire').value = '';
         document.getElementById('edit-code').value = '';
         document.getElementById('btn-delete').style.display = 'none';
+        document.getElementById('admin-msg').innerHTML = '';
         
         const viewBtn = document.querySelector('.btn-view-script');
         if (viewBtn) viewBtn.remove();
@@ -471,10 +541,19 @@ const app = {
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         const originalBtnText = saveBtn.textContent;
         
-        if (!title || !code) { 
-            msg.innerHTML = `<span style="color:var(--color-danger)">Title and Code required</span>`;
-            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2000);
+        const titleError = utils.validateTitle(title);
+        const codeError = utils.validateCode(code);
+        
+        if (titleError || codeError) { 
+            msg.innerHTML = `<span style="color:var(--color-danger)">${titleError || codeError}</span>`;
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 3000);
             return; 
+        }
+        
+        if (expiration && new Date(expiration) < new Date()) {
+            msg.innerHTML = `<span style="color:var(--color-danger)">Expiration date cannot be in the past</span>`;
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 3000);
+            return;
         }
         
         const isEditing = !!this.currentEditingId;
@@ -489,7 +568,7 @@ const app = {
             msg.innerHTML = `<span style="color:var(--color-danger)">Script with this title already exists</span>`;
             saveBtn.disabled = false;
             saveBtn.textContent = originalBtnText;
-            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 3000);
             return;
         }
         
@@ -536,6 +615,7 @@ const app = {
                 description: desc, 
                 expiration: expiration,
                 filename: filename,
+                size: code.length,
                 created: (isEditing && !titleChanged && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
@@ -657,19 +737,6 @@ const app = {
                 console.warn(`Failed to delete ${path}:`, e.message);
             }
         }
-        
-        try {
-            const rawRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (rawRes.ok) {
-                const rawData = await rawRes.json();
-                if (rawData.length === 0) {
-                }
-            }
-        } catch(e) {
-        }
     },
 
     async deleteScript(title) {
@@ -681,7 +748,11 @@ const app = {
             return;
         }
 
-        if (!confirm(`Delete "${title}" permanently? This cannot be undone.`)) {
+        const scriptName = document.getElementById('edit-title').value || title;
+        const confirmText = prompt(`Type "${scriptName}" to confirm deletion:\n\nThis will permanently delete the script, Lua file, and HTML page.`, '');
+        
+        if (confirmText !== scriptName) {
+            alert('Deletion cancelled. Script names did not match.');
             return;
         }
         
@@ -733,19 +804,6 @@ const app = {
                 }
             } catch(e) {
                 console.warn('Index file deletion error:', e.message);
-            }
-            
-            try {
-                const folderRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                
-                if (folderRes.ok) {
-                    const folderData = await folderRes.json();
-                    if (folderData.length <= 1) {
-                    }
-                }
-            } catch(e) {
             }
             
             delete this.db.scripts[title];
