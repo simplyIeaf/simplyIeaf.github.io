@@ -130,8 +130,15 @@ const app = {
             newBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('Delete clicked, currentEditingId:', this.currentEditingId);
+                if (!this.currentEditingId) {
+                    alert('Error: No script is currently being edited. Please try reopening the script.');
+                    return;
+                }
                 this.deleteScript();
             });
+            
+            console.log('Delete listener attached for script:', this.currentEditingId);
         }
     },
 
@@ -359,12 +366,22 @@ const app = {
     },
 
     async deleteScript() {
+        console.log('deleteScript called, currentEditingId:', this.currentEditingId);
+        
         if (!(await this.requireAuth('Delete script'))) return;
         if (this.actionInProgress) return;
         
         if (!this.currentEditingId) {
-            alert('No script selected for deletion');
-            return;
+            const deleteBtn = document.getElementById('btn-delete');
+            const fallbackTitle = deleteBtn?.dataset?.scriptTitle;
+            
+            if (fallbackTitle) {
+                console.log('Using fallback title from button:', fallbackTitle);
+                this.currentEditingId = fallbackTitle;
+            } else {
+                alert('No script selected for deletion. Please close and reopen the script editor.');
+                return;
+            }
         }
 
         const titleToDelete = this.currentEditingId;
@@ -644,7 +661,10 @@ const app = {
         
         const s = this.db.scripts[title];
         if (!s) return;
+        
         this.currentEditingId = title;
+        console.log('Setting currentEditingId to:', title);
+        
         this.switchAdminTab('create');
         
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
@@ -653,10 +673,16 @@ const app = {
         document.getElementById('edit-desc').value = s.description || '';
         document.getElementById('edit-expire').value = s.expiration || '';
         document.getElementById('edit-code').value = 'Loading...';
-        document.getElementById('btn-delete').style.display = 'inline-flex';
+        
+        const deleteBtn = document.getElementById('btn-delete');
+        deleteBtn.style.display = 'inline-flex';
+        deleteBtn.dataset.scriptTitle = title;
+        
         document.getElementById('admin-msg').innerHTML = '';
         
-        this.attachDeleteListener();
+        setTimeout(() => {
+            this.attachDeleteListener();
+        }, 100);
 
         try {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, { 
