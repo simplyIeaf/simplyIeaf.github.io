@@ -29,6 +29,16 @@
       "size": 7788,
       "created": "2025-12-27T19:43:10.593Z",
       "updated": "2025-12-27T19:43:10.593Z"
+    },
+    "Spectating System": {
+      "title": "Spectating System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "spectating-system.lua",
+      "size": 10783,
+      "created": "2025-12-27T19:43:42.711Z",
+      "updated": "2025-12-27T19:43:42.711Z"
     }
   }
 }
