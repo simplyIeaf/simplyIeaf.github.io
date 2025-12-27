@@ -8,13 +8,16 @@ const utils = {
     debounce(func, wait) {
         let timeout;
         return function(...args) {
+            const context = this;
             clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(this, args), wait);
+            timeout = setTimeout(() => func.apply(context, args), wait);
         };
     },
+    
     safeBtoa(str) {
         return window.btoa(unescape(encodeURIComponent(str)));
     },
+    
     safeAtob(str) {
         try {
             return decodeURIComponent(escape(window.atob(str)));
@@ -22,9 +25,11 @@ const utils = {
             return window.atob(str);
         }
     },
+
     sanitizeTitle(title) {
         return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     },
+
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -41,47 +46,72 @@ const app = {
     currentSort: 'newest', 
     actionInProgress: false, 
     currentEditingId: null,
-
+    
     async init() {
         this.setupListeners();
+        
         if (this.token) {
-            const isValid = await this.verifyToken(true);
-            if (isValid) await this.loadDatabase();
-        } else {
-            await this.loadDatabase();
+            await this.verifyToken(true);
         }
+        await this.loadDatabase();
         this.handleRouting();
+        window.addEventListener('hashchange', () => this.handleRouting());
+        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
     },
 
     setupListeners() {
-        window.addEventListener('hashchange', () => this.handleRouting());
-        document.addEventListener('click', async (e) => {
+        document.addEventListener('click', (e) => {
             const target = e.target.closest('[data-action]');
             if (!target) return;
-            const action = target.getAttribute('data-action');
-            const value = target.getAttribute('data-value');
-            if (action === 'navigate') {
-                window.location.hash = value;
-            } else if (action === 'login') {
-                this.login();
-            } else if (action === 'logout') {
-                this.logout();
-            } else if (action === 'toggle-modal') {
-                this.toggleLoginModal();
-            } else if (action === 'save') {
-                this.saveScript();
-            } else if (action === 'delete') {
-                this.executeDeleteProcedure();
-            } else if (action === 'admin-tab') {
-                this.switchAdminTab(value);
-            } else if (action === 'edit-script') {
-                this.populateEditor(value);
-            } else if (action === 'filter') {
-                e.preventDefault();
-                this.filterCategory(value, target);
+            
+            const action = target.dataset.action;
+            const param = target.dataset.param;
+            
+            e.preventDefault();
+            
+            switch(action) {
+                case 'navigate':
+                    window.location.hash = param || '';
+                    break;
+                case 'login-modal':
+                    this.toggleLoginModal();
+                    break;
+                case 'login':
+                    this.login();
+                    break;
+                case 'logout':
+                    this.logout();
+                    break;
+                case 'filter':
+                    this.filterCategory(param, e);
+                    break;
+                case 'admin-tab':
+                    this.switchAdminTab(param);
+                    break;
+                case 'save-script':
+                    this.saveScript();
+                    break;
+                case 'delete-script':
+                    this.deleteScript();
+                    break;
+                case 'edit-script':
+                    this.populateEditor(param);
+                    break;
+                case 'view-script':
+                    window.location.href = `scripts/${utils.sanitizeTitle(param)}/index.html`;
+                    break;
             }
         });
-        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
+
+        const searchInput = document.getElementById('search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => this.debouncedRender());
+        }
+
+        const sortSelect = document.querySelector('.sidebar-sort select');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', (e) => this.setSort(e.target.value));
+        }
     },
 
     getHeaders() {
@@ -97,14 +127,25 @@ const app = {
 
     async verifyToken(silent) {
         try {
-            const res = await fetch('https://api.github.com/user', { headers: this.getHeaders() });
-            if (!res.ok) throw new Error();
-            this.currentUser = await res.json();
+            const res = await fetch('https://api.github.com/user', {
+                headers: this.getHeaders()
+            });
+            if (!res.ok) throw new Error('Invalid token');
+            const user = await res.json();
+            if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
+                throw new Error(`Unauthorized user.`);
+            }
+            this.currentUser = user;
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('user-section').style.display = 'flex';
             document.getElementById('private-filter').style.display = 'block';
             return true;
         } catch (e) {
+            if (!silent) {
+                const err = document.getElementById('login-error');
+                err.textContent = e.message;
+                err.style.display = 'block';
+            }
             this.token = null;
             localStorage.removeItem('gh_token');
             return false;
@@ -112,226 +153,467 @@ const app = {
     },
 
     async login() {
-        const token = document.getElementById('auth-token').value.trim();
-        if (!token) return;
-        this.token = token;
-        if (await this.verifyToken(false)) {
-            localStorage.setItem('gh_token', token);
-            this.toggleLoginModal();
-            await this.loadDatabase();
-            this.handleRouting();
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        try {
+            const tokenInput = document.getElementById('auth-token');
+            const token = tokenInput.value.trim();
+            if (!token) return;
+            this.token = token;
+            const success = await this.verifyToken(false);
+            if (success) {
+                localStorage.setItem('gh_token', token);
+                this.toggleLoginModal();
+                await this.loadDatabase();
+                this.renderList();
+            }
+        } finally {
+            this.actionInProgress = false;
         }
     },
 
     logout() {
-        localStorage.removeItem('gh_token');
-        window.location.href = window.location.pathname; 
-    },
-
-    async loadDatabase() {
-        const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${Date.now()}`, { headers: this.getHeaders() });
-        if (res.ok) {
-            const data = await res.json();
-            this.dbSha = data.sha;
-            this.db = JSON.parse(utils.safeAtob(data.content));
-            this.renderList();
+        if (confirm('Are you sure you want to logout?')) {
+            localStorage.removeItem('gh_token');
+            window.location.hash = '';
+            location.reload();
         }
     },
 
-    async executeDeleteProcedure() {
-        if (!this.currentEditingId || this.actionInProgress) return;
-        if (!confirm(`Permanently remove "${this.currentEditingId}" and all its files?`)) return;
-
-        this.actionInProgress = true;
-        const msg = document.getElementById('admin-msg');
-        msg.innerHTML = '<span style="color:orange">Deleting Files...</span>';
-
-        const id = utils.sanitizeTitle(this.currentEditingId);
-        const script = this.db.scripts[this.currentEditingId];
-        const files = [
-            `scripts/${id}/raw/${script.filename}`,
-            `scripts/${id}/index.html`
-        ];
-
+    async loadDatabase() {
         try {
-            for (const path of files) {
-                const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, { headers: this.getHeaders() });
-                if (getFile.ok) {
-                    const fileData = await getFile.json();
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                        method: 'DELETE',
-                        headers: this.getHeaders(),
-                        body: JSON.stringify({ message: `Purge ${path}`, sha: fileData.sha })
-                    });
-                }
-            }
-
-            delete this.db.scripts[this.currentEditingId];
-            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: this.getHeaders(),
-                body: JSON.stringify({
-                    message: `Remove ${this.currentEditingId} from registry`,
-                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha
-                })
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
+                headers: this.getHeaders()
             });
-
-            if (dbRes.ok) {
-                const dbData = await dbRes.json();
-                this.dbSha = dbData.content.sha;
-                msg.innerHTML = '<span style="color:var(--accent)">Successfully Deleted</span>';
-                setTimeout(() => {
-                    this.switchAdminTab('list');
-                    this.actionInProgress = false;
-                }, 1000);
+            if (res.status === 404) {
+                this.db = { scripts: {} };
+                this.dbSha = null;
+            } else if (res.ok) {
+                const file = await res.json();
+                this.dbSha = file.sha;
+                this.db = JSON.parse(utils.safeAtob(file.content));
             }
-        } catch (e) {
-            msg.innerHTML = '<span style="color:red">Error during deletion</span>';
-            this.actionInProgress = false;
+            this.renderList();
+            this.renderAdminList();
+        } catch (e) { 
+            console.error("Database Load Error", e); 
         }
     },
 
     async saveScript() {
         if (this.actionInProgress) return;
-        const title = document.getElementById('edit-title').value.trim();
-        const code = document.getElementById('edit-code').value;
-        if (!title || !code) return;
-
         this.actionInProgress = true;
+        
+        const title = document.getElementById('edit-title').value.trim();
+        const visibility = document.getElementById('edit-visibility').value;
+        const desc = document.getElementById('edit-desc').value.trim();
+        const expiration = document.getElementById('edit-expire').value;
+        const code = document.getElementById('edit-code').value; 
         const msg = document.getElementById('admin-msg');
-        msg.innerHTML = "Processing...";
+        
+        if (!title || !code) { 
+            msg.innerHTML = `<span style="color:var(--danger)">Title and Code are required</span>`;
+            this.actionInProgress = false;
+            return; 
+        }
 
+        msg.innerHTML = `<span class="loading">Saving to GitHub...</span>`;
+        
         try {
-            const id = utils.sanitizeTitle(title);
-            const filename = `${id}.lua`;
+            const scriptId = utils.sanitizeTitle(title);
+            const filename = scriptId + '.lua';
 
             if (this.currentEditingId && this.currentEditingId !== title) {
-                const oldId = utils.sanitizeTitle(this.currentEditingId);
-                const oldScript = this.db.scripts[this.currentEditingId];
-                const oldFiles = [`scripts/${oldId}/raw/${oldScript.filename}`, `scripts/${oldId}/index.html`];
-                for (const path of oldFiles) {
-                    const g = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, { headers: this.getHeaders() });
-                    if (g.ok) {
-                        const d = await g.json();
-                        await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, { method: 'DELETE', headers: this.getHeaders(), body: JSON.stringify({ message: "Rename cleanup", sha: d.sha }) });
-                    }
-                }
+                await this.deleteScriptFiles(this.currentEditingId);
                 delete this.db.scripts[this.currentEditingId];
             }
 
-            const luaPath = `scripts/${id}/raw/${filename}`;
-            let luaSha = null;
-            const cL = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, { headers: this.getHeaders() });
-            if (cL.ok) luaSha = (await cL.json()).sha;
+            const luaPath = `scripts/${scriptId}/raw/${filename}`;
+            let existingSha = null;
+            try {
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, { headers: this.getHeaders() });
+                if (check.ok) existingSha = (await check.json()).sha;
+            } catch(e) {}
 
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ message: `Upload ${filename}`, content: utils.safeBtoa(code), sha: luaSha || undefined })
+                body: JSON.stringify({
+                    message: `Upload ${filename}`,
+                    content: utils.safeBtoa(code),
+                    sha: existingSha || undefined
+                })
             });
 
-            this.db.scripts[title] = {
-                title,
-                visibility: document.getElementById('edit-visibility').value,
-                description: document.getElementById('edit-desc').value,
-                expiration: document.getElementById('edit-expire').value,
-                filename,
-                created: this.db.scripts[title]?.created || new Date().toISOString(),
+            const scriptData = {
+                title, visibility, description: desc, expiration, filename,
+                created: (this.db.scripts[title]) ? this.db.scripts[title].created : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
+            this.db.scripts[title] = scriptData;
 
-            const htmlContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><link rel="stylesheet" href="../../style.css"></head><body><div class="container"><h1>${title}</h1><pre><code id="c">${utils.escapeHtml(code)}</code></pre></div></body></html>`;
-            const indexPath = `scripts/${id}/index.html`;
+            const indexHTML = this.generateScriptHTML(title, scriptData);
+            const indexPath = `scripts/${scriptId}/index.html`;
             let indexSha = null;
-            const cI = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, { headers: this.getHeaders() });
-            if (cI.ok) indexSha = (await cI.json()).sha;
+            try {
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, { headers: this.getHeaders() });
+                if (check.ok) indexSha = (await check.json()).sha;
+            } catch(e) {}
 
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ message: "Update UI", content: utils.safeBtoa(htmlContent), sha: indexSha || undefined })
+                body: JSON.stringify({
+                    message: `Update Index HTML`,
+                    content: utils.safeBtoa(indexHTML),
+                    sha: indexSha || undefined
+                })
             });
 
             const dbUpdate = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ message: "Sync Registry", content: utils.safeBtoa(JSON.stringify(this.db, null, 2)), sha: this.dbSha })
+                body: JSON.stringify({
+                    message: `Update Database Registry`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
             });
-            const dbFinal = await dbUpdate.json();
-            this.dbSha = dbFinal.content.sha;
+            const dbData = await dbUpdate.json();
+            this.dbSha = dbData.content.sha;
 
-            this.switchAdminTab('list');
-        } catch (e) { msg.innerHTML = "Save Error"; }
-        this.actionInProgress = false;
+            msg.innerHTML = `<span style="color:var(--accent)">Successfully Published!</span>`;
+            setTimeout(() => { 
+                this.switchAdminTab('list'); 
+                this.actionInProgress = false; 
+            }, 1500);
+        } catch(e) {
+            msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+            this.actionInProgress = false;
+        }
+    },
+
+    async deleteScript() {
+        if (this.actionInProgress || !this.currentEditingId) return;
+        if (!confirm(`Are you sure you want to delete "${this.currentEditingId}"?`)) return;
+
+        this.actionInProgress = true;
+        const msg = document.getElementById('admin-msg');
+        msg.innerHTML = `<span class="loading">Deleting files...</span>`;
+
+        try {
+            const scriptId = utils.sanitizeTitle(this.currentEditingId);
+            const script = this.db.scripts[this.currentEditingId];
+            
+            if (!script) {
+                throw new Error('Script not found in database');
+            }
+
+            const filesToDelete = [
+                `scripts/${scriptId}/raw/${script.filename}`,
+                `scripts/${scriptId}/index.html`
+            ];
+
+            for (const path of filesToDelete) {
+                try {
+                    const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                        headers: this.getHeaders()
+                    });
+                    
+                    if (getFile.ok) {
+                        const fileData = await getFile.json();
+                        const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                            method: 'DELETE',
+                            headers: this.getHeaders(),
+                            body: JSON.stringify({
+                                message: `Delete ${path}`,
+                                sha: fileData.sha
+                            })
+                        });
+                        
+                        if (!deleteRes.ok) {
+                            console.error(`Failed to delete ${path}`);
+                        }
+                    }
+                } catch(e) { 
+                    console.error(`Error deleting ${path}:`, e); 
+                }
+            }
+
+            delete this.db.scripts[this.currentEditingId];
+
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    message: `Delete ${this.currentEditingId}`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            
+            if (!res.ok) throw new Error("Failed to update database after deletion");
+            
+            const data = await res.json();
+            this.dbSha = data.content.sha;
+
+            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
+            setTimeout(() => { 
+                this.switchAdminTab('list'); 
+                this.actionInProgress = false; 
+                this.renderList();
+                this.renderAdminList();
+            }, 1500);
+        } catch(e) {
+            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
+            this.actionInProgress = false;
+        }
+    },
+
+    async deleteScriptFiles(title) {
+        const scriptId = utils.sanitizeTitle(title);
+        const script = this.db.scripts[title];
+        if (!script) return;
+
+        const filesToDelete = [
+            `scripts/${scriptId}/raw/${script.filename}`,
+            `scripts/${scriptId}/index.html`
+        ];
+
+        for (const path of filesToDelete) {
+            try {
+                const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                    headers: this.getHeaders()
+                });
+                if (getFile.ok) {
+                    const fileData = await getFile.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                        method: 'DELETE',
+                        headers: this.getHeaders(),
+                        body: JSON.stringify({
+                            message: `Clean up ${path}`,
+                            sha: fileData.sha
+                        })
+                    });
+                }
+            } catch(e) { 
+                console.error("File deletion error:", e); 
+            }
+        }
+    },
+
+    generateScriptHTML(title, scriptData) {
+        const scriptId = utils.sanitizeTitle(title);
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${utils.escapeHtml(scriptData.title)}</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar"><div class="nav-content"><a href="../../index.html" class="brand">Leaf's Scripts</a><a href="../../index.html" class="btn btn-secondary btn-sm">Back</a></div></nav>
+    <div class="container">
+        <h1>${utils.escapeHtml(scriptData.title)}</h1>
+        <p class="script-desc">${utils.escapeHtml(scriptData.description || '')}</p>
+        <div class="code-box">
+            <pre><code id="code-display" class="language-lua">Loading script...</code></pre>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script>
+        fetch('raw/${scriptData.filename}').then(r => r.text()).then(t => {
+            document.getElementById('code-display').textContent = t;
+            Prism.highlightAll();
+        });
+    </script>
+</body>
+</html>`;
     },
 
     handleRouting() {
         const hash = window.location.hash.slice(1);
-        document.getElementById('view-home').style.display = 'none';
-        document.getElementById('view-admin').style.display = 'none';
-        if (hash === 'admin' && this.currentUser) {
-            document.getElementById('view-admin').style.display = 'block';
-            this.switchAdminTab('list');
+        const homeView = document.getElementById('view-home');
+        const adminView = document.getElementById('view-admin');
+        
+        homeView.style.display = 'none';
+        adminView.style.display = 'none';
+        
+        if (hash === 'admin') {
+            if (this.currentUser) {
+                adminView.style.display = 'block';
+                this.switchAdminTab('list');
+            } else {
+                window.location.hash = '';
+                homeView.style.display = 'block';
+            }
         } else {
-            document.getElementById('view-home').style.display = 'block';
+            homeView.style.display = 'block';
             this.renderList();
         }
     },
 
     toggleLoginModal() {
-        const m = document.getElementById('login-modal');
-        m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+        const modal = document.getElementById('login-modal');
+        modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
     },
 
     renderList() {
         const list = document.getElementById('script-list');
-        const q = document.getElementById('search').value.toLowerCase();
-        const items = Object.entries(this.db.scripts).filter(([t, s]) => {
-            if (!t.toLowerCase().includes(q)) return false;
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const filtered = this.filterLogic(scripts);
+        const sorted = this.sortLogic(filtered);
+        
+        if (!sorted.length) {
+            list.innerHTML = '<div class="empty-state"><h2>No scripts found</h2></div>';
+            return;
+        }
+
+        list.innerHTML = sorted.map(s => `
+            <div class="script-card" data-action="view-script" data-param="${utils.escapeHtml(s.title)}">
+                <div class="card-content">
+                    <div class="card-header-section">
+                        <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
+                        ${(this.currentUser && s.visibility !== 'PUBLIC') ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
+                    </div>
+                    <div class="card-meta"><span>${new Date(s.created).toLocaleDateString()}</span></div>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    filterLogic(scripts) {
+        const query = document.getElementById('search').value.toLowerCase();
+        return scripts.filter(s => {
+            if (!s.title.toLowerCase().includes(query)) return false;
             if (!this.currentUser && s.visibility !== 'PUBLIC') return false;
+            if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
+            if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
             return true;
         });
-        list.innerHTML = items.map(([t, s]) => `<div class="script-card" onclick="window.location.href='scripts/${utils.sanitizeTitle(t)}/index.html'"><h3 class="script-title">${t}</h3><div class="card-meta">${s.visibility}</div></div>`).join('');
     },
 
-    renderAdminList() {
-        const list = document.getElementById('admin-list');
-        list.innerHTML = Object.keys(this.db.scripts).map(t => `<div class="admin-item" data-action="edit-script" data-value="${t}"><strong>${t}</strong><span class="badge badge-sm">${this.db.scripts[t].visibility}</span></div>`).join('');
+    sortLogic(scripts) {
+        return scripts.sort((a, b) => {
+            if (this.currentSort === 'newest') return new Date(b.created) - new Date(a.created);
+            if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
+            return 0;
+        });
     },
 
-    async populateEditor(title) {
-        const s = this.db.scripts[title];
-        this.currentEditingId = title;
-        this.switchAdminTab('create');
-        document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility;
-        document.getElementById('edit-desc').value = s.description || '';
-        document.getElementById('edit-expire').value = s.expiration || '';
-        document.getElementById('edit-code').value = "Fetching Source...";
-        document.getElementById('btn-delete').style.display = 'block';
-        const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}`, { headers: this.getHeaders() });
-        const data = await res.json();
-        document.getElementById('edit-code').value = utils.safeAtob(data.content);
+    filterCategory(cat, e) {
+        if (e) e.preventDefault();
+        this.currentFilter = cat;
+        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+        if (e && e.currentTarget) e.currentTarget.classList.add('active');
+        this.renderList();
+    },
+
+    setSort(val) { 
+        this.currentSort = val; 
+        this.renderList(); 
     },
 
     switchAdminTab(tab) {
         document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
-        document.getElementById(`admin-tab-${tab}`).style.display = 'block';
-        if (tab === 'list') this.renderAdminList();
-        if (tab === 'create' && !this.currentEditingId) this.resetEditor();
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        
+        if (tab === 'list') {
+            document.getElementById('admin-tab-list').style.display = 'block';
+            document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+            this.renderAdminList();
+        } else if (tab === 'stats') {
+            document.getElementById('admin-tab-stats').style.display = 'block';
+            document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
+            this.renderStats();
+        } else {
+            document.getElementById('admin-tab-editor').style.display = 'block';
+            document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+            this.resetEditor();
+        }
+    },
+
+    async renderAdminList() {
+        const list = document.getElementById('admin-list');
+        const scripts = Object.entries(this.db.scripts || {});
+        
+        document.getElementById('total-stats').textContent = `${scripts.length} Scripts`;
+        
+        list.innerHTML = scripts.map(([title, s]) => `
+            <div class="admin-item" data-action="edit-script" data-param="${utils.escapeHtml(title)}">
+                <div class="admin-item-left">
+                    <strong>${utils.escapeHtml(title)}</strong>
+                    <div class="admin-meta"><span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span></div>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    async populateEditor(title) {
+        const s = this.db.scripts[title];
+        if (!s) return;
+        this.currentEditingId = title;
+        this.switchAdminTab('create');
+        
+        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+        document.getElementById('edit-title').value = s.title;
+        document.getElementById('edit-visibility').value = s.visibility;
+        document.getElementById('edit-desc').value = s.description || '';
+        document.getElementById('edit-expire').value = s.expiration || '';
+        document.getElementById('edit-code').value = 'Loading...';
+        document.getElementById('btn-delete').style.display = 'inline-flex';
+
+        try {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, { 
+                headers: this.getHeaders() 
+            });
+            const data = await res.json();
+            document.getElementById('edit-code').value = utils.safeAtob(data.content);
+        } catch(e) { 
+            document.getElementById('edit-code').value = '-- Error loading source code'; 
+        }
     },
 
     resetEditor() {
         this.currentEditingId = null;
         document.getElementById('edit-title').value = '';
+        document.getElementById('edit-desc').value = '';
+        document.getElementById('edit-expire').value = '';
         document.getElementById('edit-code').value = '';
         document.getElementById('btn-delete').style.display = 'none';
+        document.getElementById('editor-heading').textContent = 'Create New Script';
+        document.getElementById('admin-msg').innerHTML = '';
     },
 
-    filterCategory(cat) {
-        this.currentFilter = cat;
-        this.renderList();
+    renderStats() {
+        const total = Object.keys(this.db.scripts).length;
+        const publicCount = Object.values(this.db.scripts).filter(s => s.visibility === 'PUBLIC').length;
+        const privateCount = Object.values(this.db.scripts).filter(s => s.visibility === 'PRIVATE').length;
+        const unlistedCount = Object.values(this.db.scripts).filter(s => s.visibility === 'UNLISTED').length;
+        
+        document.getElementById('stats-content').innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">${total}</div>
+                    <div class="stat-label">Total Scripts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${publicCount}</div>
+                    <div class="stat-label">Public</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${privateCount}</div>
+                    <div class="stat-label">Private</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${unlistedCount}</div>
+                    <div class="stat-label">Unlisted</div>
+                </div>
+            </div>
+        `;
     }
 };
 
