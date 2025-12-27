@@ -1,5 +1,5 @@
-const CONFIG = { 
-    user: 'simplyIeaf', 
+const CONFIG = {
+    user: 'simplyIeaf',
     repo: 'simplyIeaf.github.io',
     cacheBuster: () => Date.now()
 };
@@ -47,13 +47,13 @@ const utils = {
 };
 
 const app = {
-    db: { scripts: {} }, 
-    dbSha: null, 
-    token: localStorage.getItem('gh_token'), 
+    db: { scripts: {} },
+    dbSha: null,
+    token: localStorage.getItem('gh_token'),
     currentUser: null,
-    currentFilter: 'all', 
-    currentSort: 'newest', 
-    actionInProgress: false, 
+    currentFilter: 'all',
+    currentSort: 'newest',
+    actionInProgress: false,
     currentEditingId: null,
     originalTitle: null,
     
@@ -70,6 +70,14 @@ const app = {
         
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('edit-expire').min = today;
+        
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'btn-delete' || e.target.closest('#btn-delete')) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleDelete();
+            }
+        });
     },
 
     generateScriptHTML(title, scriptData) {
@@ -536,7 +544,7 @@ const app = {
         const visibility = document.getElementById('edit-visibility').value;
         const desc = document.getElementById('edit-desc').value.trim();
         const expiration = document.getElementById('edit-expire').value;
-        const code = document.getElementById('edit-code').value; 
+        const code = document.getElementById('edit-code').value;
         const msg = document.getElementById('admin-msg');
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         const originalBtnText = saveBtn.textContent;
@@ -544,10 +552,10 @@ const app = {
         const titleError = utils.validateTitle(title);
         const codeError = utils.validateCode(code);
         
-        if (titleError || codeError) { 
+        if (titleError || codeError) {
             msg.innerHTML = `<span style="color:var(--color-danger)">${titleError || codeError}</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 3000);
-            return; 
+            return;
         }
         
         if (expiration && new Date(expiration) < new Date()) {
@@ -561,26 +569,83 @@ const app = {
         const scriptId = utils.sanitizeTitle(title);
         const filename = scriptId + '.lua';
         
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Publishing...';
-        
-        if (this.db.scripts[title] && title !== this.originalTitle) {
+        if (!isEditing && this.db.scripts[title]) {
             msg.innerHTML = `<span style="color:var(--color-danger)">Script with this title already exists</span>`;
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalBtnText;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 3000);
             return;
         }
         
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Publishing...';
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
         try {
-            if (titleChanged && this.originalTitle) {
-                await this.deleteScriptFiles(this.originalTitle);
+            const scriptData = {
+                title: title,
+                visibility: visibility,
+                description: desc,
+                expiration: expiration,
+                filename: filename,
+                size: code.length,
+                created: isEditing && !titleChanged && this.db.scripts[this.originalTitle] ? 
+                    this.db.scripts[this.originalTitle].created : new Date().toISOString(),
+                updated: new Date().toISOString()
+            };
+            
+            if (titleChanged) {
+                const oldScriptId = utils.sanitizeTitle(this.originalTitle);
+                const oldScriptData = this.db.scripts[this.originalTitle];
+                
+                if (oldScriptData) {
+                    const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
+                    const oldIndexPath = `scripts/${oldScriptId}/index.html`;
+                    
+                    try {
+                        const checkLua = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
+                        
+                        if (checkLua.ok) {
+                            const luaData = await checkLua.json();
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    message: `Delete old Lua file for ${this.originalTitle}`,
+                                    sha: luaData.sha
+                                })
+                            });
+                        }
+                    } catch(e) {
+                        console.warn('Could not delete old Lua file:', e.message);
+                    }
+                    
+                    try {
+                        const checkIndex = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
+                        
+                        if (checkIndex.ok) {
+                            const indexData = await checkIndex.json();
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    message: `Delete old index for ${this.originalTitle}`,
+                                    sha: indexData.sha
+                                })
+                            });
+                        }
+                    } catch(e) {
+                        console.warn('Could not delete old index file:', e.message);
+                    }
+                    
+                    delete this.db.scripts[this.originalTitle];
+                }
             }
             
-            let luaSha = null;
             const luaPath = `scripts/${scriptId}/raw/${filename}`;
+            let luaSha = null;
             
             if (isEditing && !titleChanged) {
                 try {
@@ -588,7 +653,8 @@ const app = {
                         headers: { 'Authorization': `token ${this.token}` }
                     });
                     if (check.ok) {
-                        luaSha = (await check.json()).sha;
+                        const data = await check.json();
+                        luaSha = data.sha;
                     }
                 } catch(e) {
                     console.log('Creating new Lua file');
@@ -608,21 +674,6 @@ const app = {
             if (!luaRes.ok) {
                 throw new Error('Failed to save Lua file');
             }
-
-            const scriptData = {
-                title: title, 
-                visibility: visibility, 
-                description: desc, 
-                expiration: expiration,
-                filename: filename,
-                size: code.length,
-                created: (isEditing && !titleChanged && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
-                updated: new Date().toISOString()
-            };
-            
-            if (titleChanged && this.originalTitle) {
-                delete this.db.scripts[this.originalTitle];
-            }
             
             this.db.scripts[title] = scriptData;
             
@@ -630,7 +681,7 @@ const app = {
                 method: 'PUT',
                 headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Add'} ${title}`,
+                    message: `${isEditing ? (titleChanged ? 'Rename' : 'Update') : 'Add'} ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
@@ -642,7 +693,7 @@ const app = {
             
             const newDbData = await dbRes.json();
             this.dbSha = newDbData.content.sha;
-
+            
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
             const indexPath = `scripts/${scriptId}/index.html`;
@@ -653,7 +704,8 @@ const app = {
                         headers: { 'Authorization': `token ${this.token}` }
                     });
                     if (check.ok) {
-                        indexSha = (await check.json()).sha;
+                        const data = await check.json();
+                        indexSha = data.sha;
                     }
                 } catch(e) {
                     console.log('Creating new index file');
@@ -674,7 +726,7 @@ const app = {
                 throw new Error('Failed to save index.html');
             }
             
-            msg.innerHTML = `<span style="color:var(--color-primary)">Published successfully!</span>`;
+            msg.innerHTML = `<span style="color:var(--color-primary)">${isEditing ? 'Updated' : 'Published'} successfully!</span>`;
             
             const actionButtons = document.querySelector('.action-buttons');
             const viewBtn = actionButtons.querySelector('.btn-view-script');
@@ -694,6 +746,13 @@ const app = {
                 actionButtons.appendChild(newViewBtn);
             }
             
+            this.currentEditingId = title;
+            this.originalTitle = title;
+            
+            setTimeout(() => {
+                msg.innerHTML = '';
+            }, 2000);
+            
         } catch(e) {
             msg.innerHTML = `<span style="color:var(--color-danger)">Error: ${e.message}</span>`;
             console.error('Save error:', e);
@@ -704,61 +763,95 @@ const app = {
         }
     },
 
-    async deleteScriptFiles(title) {
-        if (!title) return;
+    handleDelete() {
+        if (!this.currentEditingId) return;
         
-        const scriptId = utils.sanitizeTitle(title);
-        const s = this.db.scripts[title];
-        if (!s) return;
-        
-        const filesToDelete = [
-            `scripts/${scriptId}/raw/${s.filename}`,
-            `scripts/${scriptId}/index.html`
-        ];
-        
-        for (const path of filesToDelete) {
-            try {
-                const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                
-                if (res.ok) {
-                    const data = await res.json();
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                        method: 'DELETE',
-                        headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            message: `Delete ${path.split('/').pop()}`, 
-                            sha: data.sha 
-                        })
-                    });
-                }
-            } catch(e) {
-                console.warn(`Failed to delete ${path}:`, e.message);
-            }
+        if (this.actionInProgress) {
+            alert('Another action is in progress. Please wait.');
+            return;
         }
+        
+        const titleInput = document.getElementById('edit-title').value.trim();
+        const scriptTitle = titleInput || this.currentEditingId;
+        
+        if (!scriptTitle) {
+            alert('Cannot delete: No script selected.');
+            return;
+        }
+        
+        const confirmationHTML = `
+            <div class="modal-overlay" id="delete-confirm-modal" style="display:flex">
+                <div class="modal animate__animated animate__zoomIn" style="max-width:400px">
+                    <div class="modal-header">
+                        <h3 style="color:var(--color-danger)">Delete Script</h3>
+                        <button class="close-btn" onclick="document.getElementById('delete-confirm-modal').remove()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom:16px">This will permanently delete:</p>
+                        <ul style="margin-left:20px;margin-bottom:20px;color:var(--color-text-muted)">
+                            <li>The script from the database</li>
+                            <li>The Lua source file</li>
+                            <li>The HTML page</li>
+                        </ul>
+                        <p style="margin-bottom:16px;color:var(--color-danger);font-weight:500">This action cannot be undone.</p>
+                        <div class="form-group" style="margin-bottom:20px">
+                            <label>Type <code>${scriptTitle}</code> to confirm:</label>
+                            <input type="text" id="confirm-delete-input" class="input-field" placeholder="Enter script name...">
+                        </div>
+                        <div id="delete-error" style="color:var(--color-danger);margin:10px 0;display:none"></div>
+                        <div style="display:flex;gap:10px">
+                            <button class="btn btn-secondary btn-full" onclick="document.getElementById('delete-confirm-modal').remove()">Cancel</button>
+                            <button class="btn btn-delete btn-full" id="confirm-delete-btn">Delete Permanently</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingModal = document.getElementById('delete-confirm-modal');
+        if (existingModal) existingModal.remove();
+        
+        document.body.insertAdjacentHTML('beforeend', confirmationHTML);
+        
+        document.getElementById('confirm-delete-btn').onclick = () => {
+            const input = document.getElementById('confirm-delete-input').value.trim();
+            const errorEl = document.getElementById('delete-error');
+            
+            if (input !== scriptTitle) {
+                errorEl.textContent = 'Script name does not match.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('delete-confirm-modal').remove();
+            this.deleteScript(this.currentEditingId);
+        };
+        
+        document.getElementById('confirm-delete-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('confirm-delete-btn').click();
+            }
+        });
+        
+        setTimeout(() => {
+            document.getElementById('confirm-delete-input').focus();
+        }, 100);
     },
 
     async deleteScript(title) {
         if (this.actionInProgress) return;
         
         if (!title || !this.db.scripts[title]) {
-            alert('Script not found or already deleted');
+            const msg = document.getElementById('admin-msg');
+            msg.innerHTML = `<span style="color:var(--color-danger)">Script not found or already deleted</span>`;
+            setTimeout(() => { msg.innerHTML = ''; }, 3000);
             this.switchAdminTab('list');
             return;
         }
 
-        const scriptName = document.getElementById('edit-title').value || title;
-        const confirmText = prompt(`Type "${scriptName}" to confirm deletion:\n\nThis will permanently delete the script, Lua file, and HTML page.`, '');
-        
-        if (confirmText !== scriptName) {
-            alert('Deletion cancelled. Script names did not match.');
-            return;
-        }
-        
         this.actionInProgress = true;
         const msg = document.getElementById('admin-msg');
-        msg.innerHTML = `<span class="loading">Deleting...</span>`;
+        msg.innerHTML = `<span class="loading">Deleting script and all associated files...</span>`;
         
         try {
             const scriptId = utils.sanitizeTitle(title);
@@ -775,9 +868,9 @@ const app = {
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                         method: 'DELETE',
                         headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            message: `Delete ${scriptData.filename}`, 
-                            sha: luaData.sha 
+                        body: JSON.stringify({
+                            message: `Delete ${scriptData.filename}`,
+                            sha: luaData.sha
                         })
                     });
                 }
@@ -796,9 +889,9 @@ const app = {
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                         method: 'DELETE',
                         headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            message: `Delete index for ${title}`, 
-                            sha: idxData.sha 
+                        body: JSON.stringify({
+                            message: `Delete index for ${title}`,
+                            sha: idxData.sha
                         })
                     });
                 }
@@ -822,10 +915,12 @@ const app = {
                 const newDbData = await dbRes.json();
                 this.dbSha = newDbData.content.sha;
                 
-                msg.innerHTML = `<span style="color:var(--color-primary)">Deleted successfully!</span>`;
-                setTimeout(() => { 
+                msg.innerHTML = `<span style="color:var(--color-primary)">✓ Script deleted successfully</span>`;
+                
+                setTimeout(() => {
+                    this.resetEditor();
+                    this.switchAdminTab('list');
                     msg.innerHTML = '';
-                    this.switchAdminTab('list'); 
                 }, 1500);
                 
                 await this.loadDatabase();
@@ -834,16 +929,11 @@ const app = {
             }
             
         } catch(e) {
-            msg.innerHTML = `<span style="color:var(--color-danger)">Delete failed: ${e.message}</span>`;
             console.error('Delete error:', e);
+            msg.innerHTML = `<span style="color:var(--color-danger)">Delete failed: ${e.message}</span>`;
+            setTimeout(() => { msg.innerHTML = ''; }, 5000);
         } finally {
             this.actionInProgress = false;
-        }
-    },
-
-    handleDelete() {
-        if (this.currentEditingId) {
-            this.deleteScript(this.currentEditingId);
         }
     },
 
@@ -853,9 +943,9 @@ const app = {
         window.scrollTo(0, 0);
         
         if (hash === 'admin') {
-            if (!this.currentUser) { 
-                location.hash = ''; 
-                return; 
+            if (!this.currentUser) {
+                location.hash = '';
+                return;
             }
             document.getElementById('view-admin').style.display = 'block';
             this.switchAdminTab('list');
@@ -865,8 +955,8 @@ const app = {
     }
 };
 
-function navigate(path) { 
-    location.hash = path; 
+function navigate(path) {
+    location.hash = path;
 }
 
 app.init();
