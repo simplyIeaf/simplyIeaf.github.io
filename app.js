@@ -68,6 +68,9 @@ const app = {
             const param = target.dataset.param;
             
             e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Action triggered:', action, 'Param:', param);
             
             switch(action) {
                 case 'navigate':
@@ -92,6 +95,7 @@ const app = {
                     this.saveScript();
                     break;
                 case 'delete-script':
+                    console.log('Delete script triggered for:', this.currentEditingId);
                     this.deleteScript();
                     break;
                 case 'edit-script':
@@ -111,6 +115,15 @@ const app = {
         const sortSelect = document.querySelector('.sidebar-sort select');
         if (sortSelect) {
             sortSelect.addEventListener('change', (e) => this.setSort(e.target.value));
+        }
+
+        const modalOverlay = document.getElementById('login-modal');
+        if (modalOverlay) {
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) {
+                    this.toggleLoginModal();
+                }
+            });
         }
     },
 
@@ -294,77 +307,119 @@ const app = {
     },
 
     async deleteScript() {
-        if (this.actionInProgress || !this.currentEditingId) return;
-        if (!confirm(`Are you sure you want to delete "${this.currentEditingId}"?`)) return;
+        if (this.actionInProgress) {
+            console.log('Action already in progress, skipping delete');
+            return;
+        }
+        
+        if (!this.currentEditingId) {
+            console.log('No script selected for deletion');
+            alert('No script selected for deletion');
+            return;
+        }
+
+        const titleToDelete = this.currentEditingId;
+        
+        if (!confirm(`Are you sure you want to delete "${titleToDelete}"? This cannot be undone.`)) {
+            console.log('Delete cancelled by user');
+            return;
+        }
 
         this.actionInProgress = true;
         const msg = document.getElementById('admin-msg');
-        msg.innerHTML = `<span class="loading">Deleting files...</span>`;
+        msg.innerHTML = `<span class="loading">Deleting "${titleToDelete}"...</span>`;
 
         try {
-            const scriptId = utils.sanitizeTitle(this.currentEditingId);
-            const script = this.db.scripts[this.currentEditingId];
+            const scriptId = utils.sanitizeTitle(titleToDelete);
+            const script = this.db.scripts[titleToDelete];
+            
+            console.log('Deleting script:', titleToDelete, 'ID:', scriptId, 'Script data:', script);
             
             if (!script) {
                 throw new Error('Script not found in database');
             }
 
             const filesToDelete = [
-                `scripts/${scriptId}/raw/${script.filename}`,
-                `scripts/${scriptId}/index.html`
+                { path: `scripts/${scriptId}/raw/${script.filename}`, name: 'Lua file' },
+                { path: `scripts/${scriptId}/index.html`, name: 'Index file' }
             ];
 
-            for (const path of filesToDelete) {
+            console.log('Files to delete:', filesToDelete);
+
+            for (const file of filesToDelete) {
                 try {
-                    const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                        headers: this.getHeaders()
-                    });
+                    console.log(`Fetching SHA for ${file.name}: ${file.path}`);
+                    
+                    const getFile = await fetch(
+                        `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${file.path}?t=${CONFIG.cacheBuster()}`, 
+                        { headers: this.getHeaders() }
+                    );
                     
                     if (getFile.ok) {
                         const fileData = await getFile.json();
-                        const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                            method: 'DELETE',
-                            headers: this.getHeaders(),
-                            body: JSON.stringify({
-                                message: `Delete ${path}`,
-                                sha: fileData.sha
-                            })
-                        });
+                        console.log(`Got SHA for ${file.name}:`, fileData.sha);
                         
-                        if (!deleteRes.ok) {
-                            console.error(`Failed to delete ${path}`);
+                        const deleteRes = await fetch(
+                            `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${file.path}`, 
+                            {
+                                method: 'DELETE',
+                                headers: this.getHeaders(),
+                                body: JSON.stringify({
+                                    message: `Delete ${file.path}`,
+                                    sha: fileData.sha
+                                })
+                            }
+                        );
+                        
+                        if (deleteRes.ok) {
+                            console.log(`Successfully deleted ${file.name}`);
+                        } else {
+                            const errorText = await deleteRes.text();
+                            console.error(`Failed to delete ${file.name}:`, errorText);
                         }
+                    } else {
+                        console.log(`File not found: ${file.name} (${file.path})`);
                     }
                 } catch(e) { 
-                    console.error(`Error deleting ${path}:`, e); 
+                    console.error(`Error deleting ${file.name}:`, e); 
                 }
             }
 
-            delete this.db.scripts[this.currentEditingId];
+            console.log('Removing from database...');
+            delete this.db.scripts[titleToDelete];
 
+            console.log('Updating database.json on GitHub...');
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Delete ${this.currentEditingId}`,
+                    message: `Delete script: ${titleToDelete}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
             
-            if (!res.ok) throw new Error("Failed to update database after deletion");
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Failed to update database: ${errorText}`);
+            }
             
             const data = await res.json();
             this.dbSha = data.content.sha;
+            
+            console.log('Database updated successfully');
 
-            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully</span>`;
+            msg.innerHTML = `<span style="color:var(--accent)">Successfully deleted "${titleToDelete}"</span>`;
+            
             setTimeout(() => { 
+                this.currentEditingId = null;
                 this.switchAdminTab('list'); 
                 this.actionInProgress = false; 
                 this.renderList();
                 this.renderAdminList();
             }, 1500);
         } catch(e) {
+            console.error('Delete failed:', e);
             msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
             this.actionInProgress = false;
         }
@@ -382,7 +437,7 @@ const app = {
 
         for (const path of filesToDelete) {
             try {
-                const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                const getFile = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}?t=${CONFIG.cacheBuster()}`, {
                     headers: this.getHeaders()
                 });
                 if (getFile.ok) {
@@ -558,6 +613,8 @@ const app = {
         this.currentEditingId = title;
         this.switchAdminTab('create');
         
+        console.log('Editing script:', title);
+        
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
         document.getElementById('edit-title').value = s.title;
         document.getElementById('edit-visibility').value = s.visibility;
@@ -565,6 +622,7 @@ const app = {
         document.getElementById('edit-expire').value = s.expiration || '';
         document.getElementById('edit-code').value = 'Loading...';
         document.getElementById('btn-delete').style.display = 'inline-flex';
+        document.getElementById('admin-msg').innerHTML = '';
 
         try {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, { 
