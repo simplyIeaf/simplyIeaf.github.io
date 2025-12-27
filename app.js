@@ -46,7 +46,6 @@ const app = {
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
         this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
-        this.debouncedDelete = utils.debounce(() => this.deleteScript(this.currentEditingId), 750);
         this.debouncedLogin = utils.debounce(() => this.login(), 750);
         this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
     },
@@ -387,14 +386,23 @@ const app = {
         }
         
         const isNew = !this.currentEditingId;
-        const scriptId = utils.sanitizeTitle(title);
-        const filename = scriptId + '.lua';
         
-        if (this.db.scripts[title] && title !== this.originalTitle) {
+        // Allow same title only if it's the same script being edited (not rename)
+        if (!isNew && this.db.scripts[title] && title !== this.currentEditingId) {
             msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
             setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
             return;
         }
+        
+        // For new scripts or renames, check for conflicts excluding current script
+        if (isNew && this.db.scripts[title]) {
+            msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
+            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
+            return;
+        }
+        
+        const scriptId = utils.sanitizeTitle(title);
+        const filename = scriptId + '.lua';
         
         msg.innerHTML = `<span class="loading">Publishing...</span>`;
         
@@ -405,12 +413,10 @@ const app = {
             }
             
             let luaSha = null;
-            if (!isNew) {
-                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                if (check.ok) luaSha = (await check.json()).sha;
-            }
+            const luaCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (luaCheck.ok) luaSha = (await luaCheck.json()).sha;
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                 method: 'PUT',
@@ -428,7 +434,7 @@ const app = {
                 description: desc, 
                 expiration: expiration,
                 filename: filename,
-                created: isNew ? new Date().toISOString() : (this.db.scripts[title]?.created || new Date().toISOString()),
+                created: isNew ? new Date().toISOString() : this.db.scripts[this.originalTitle || title]?.created || new Date().toISOString(),
                 updated: new Date().toISOString()
             };
             
@@ -462,6 +468,7 @@ const app = {
             });
             
             await this.loadDatabase();
+            this.resetEditor();
             msg.innerHTML = `<span style="color:var(--accent)">Published!</span>`;
             setTimeout(() => { 
                 msg.innerHTML = ''; 
@@ -528,10 +535,11 @@ const app = {
             });
             
             await this.loadDatabase();
+            this.resetEditor();
             this.switchAdminTab('list');
+            this.actionInProgress = false;
         } catch(e) {
             alert('Delete failed: ' + e.message);
-        } finally {
             this.actionInProgress = false;
         }
     },
