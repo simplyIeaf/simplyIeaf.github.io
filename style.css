@@ -98,3 +98,32 @@ h1, h2, h3, button { font-weight: 800; }
     justify-content: space-between;
     align-items: center;
 }
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+    .nav-content {
+        flex-direction: column;
+        padding: 15px;
+    }
+    .search-container {
+        width: 100%;
+        margin: 10px 0;
+        order: 2;
+    }
+    #search {
+        max-width: none;
+        text-align: center;
+    }
+    .brand { order: 1; }
+    #auth-section, #user-section { order: 3; }
+    .grid { 
+        grid-template-columns: 1fr; 
+        padding: 10px;
+    }
+}
