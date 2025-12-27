@@ -51,9 +51,6 @@ const app = {
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
-        this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
-        this.debouncedLogin = utils.debounce(() => this.login(), 750);
-        this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
     },
 
     generateScriptHTML(title, scriptData) {
