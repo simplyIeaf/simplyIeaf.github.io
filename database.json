@@ -239,6 +239,16 @@
       "size": 21313,
       "created": "2025-12-27T19:59:19.979Z",
       "updated": "2025-12-27T19:59:19.979Z"
+    },
+    "Advanced Admin Panel Script": {
+      "title": "Advanced Admin Panel Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "advanced-admin-panel-script.lua",
+      "size": 13769,
+      "created": "2025-12-27T20:00:09.645Z",
+      "updated": "2025-12-27T20:00:09.645Z"
     }
   }
 }
