@@ -199,6 +199,16 @@
       "size": 792,
       "created": "2025-12-27T19:57:06.837Z",
       "updated": "2025-12-27T19:57:06.837Z"
+    },
+    "Death Cam Script": {
+      "title": "Death Cam Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "death-cam-script.lua",
+      "size": 629,
+      "created": "2025-12-27T19:57:50.037Z",
+      "updated": "2025-12-27T19:57:50.037Z"
     }
   }
 }
