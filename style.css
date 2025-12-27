@@ -490,15 +490,20 @@ code {
     justify-content: center; 
     z-index: 2000; 
     backdrop-filter: blur(5px); 
+    padding: 20px;
+    overflow-y: auto;
 }
 
 .modal { 
     background: var(--surface); 
     border: 1px solid var(--color-border); 
     border-radius: 16px; 
-    width: 90%; 
+    width: 100%; 
     max-width: 400px; 
     padding: 28px; 
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: auto;
 }
 
 .modal-header { 
@@ -511,6 +516,7 @@ code {
 .modal-header h3 {
     font-size: 20px;
     font-weight: 700;
+    color: var(--color-danger);
 }
 
 .close-btn { 
@@ -905,6 +911,39 @@ textarea.input-field {
     }
 }
 
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.modal-actions .btn {
+    flex: 1;
+    min-width: 120px;
+}
+
+.modal-text {
+    text-align: center;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--color-text);
+}
+
+.modal-text strong {
+    color: var(--color-danger);
+    font-weight: 700;
+    display: block;
+    margin: 10px 0;
+    font-size: 16px;
+    word-break: break-word;
+}
+
 @media print {
     .navbar, .admin-top-controls, .toolbar-right,
     .btn, button, .search-wrapper, .nav-right {
@@ -1049,6 +1088,8 @@ textarea.input-field {
 
     .modal {
         max-width: 90%;
+        padding: 20px;
+        margin: 10px;
     }
 
     .btn, .sidebar-link, .tab-btn {
@@ -1063,15 +1104,86 @@ textarea.input-field {
         margin-left: 0;
         width: 100%;
     }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .modal-actions .btn {
+        width: 100%;
+    }
+
+    .modal-text {
+        font-size: 14px;
+    }
+
+    .modal-text strong {
+        font-size: 15px;
+    }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
     .navbar { 
         position: absolute; 
+        height: 56px;
     }
     
     .container { 
-        margin-top: 80px; 
+        margin-top: 60px; 
+    }
+
+    .modal-overlay {
+        padding: 10px;
+        align-items: flex-start;
+        overflow-y: auto;
+    }
+
+    .modal {
+        max-height: 80vh;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    .modal-body {
+        gap: 15px;
+    }
+
+    .modal-text {
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    .modal-text strong {
+        margin: 8px 0;
+        font-size: 15px;
+    }
+
+    .modal-actions {
+        gap: 8px;
+    }
+
+    .modal-actions .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+}
+
+@media (orientation: portrait) and (max-height: 700px) {
+    .modal {
+        max-height: 85vh;
+        padding: 20px;
+    }
+
+    .modal-body {
+        gap: 15px;
+    }
+
+    .modal-text {
+        font-size: 14px;
+    }
+
+    .modal-actions .btn {
+        padding: 10px 14px;
     }
 }
 
@@ -1091,5 +1203,25 @@ textarea.input-field {
     
     .nav-content {
         padding: 0 24px;
+    }
+
+    .modal {
+        max-width: 350px;
+    }
+}
+
+@media (min-width: 1025px) {
+    .modal-overlay {
+        padding: 40px;
+    }
+
+    .modal {
+        max-width: 400px;
+        padding: 32px;
+    }
+
+    .modal-actions .btn {
+        padding: 12px 20px;
+        font-size: 14px;
     }
 }
