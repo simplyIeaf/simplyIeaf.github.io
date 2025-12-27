@@ -1,1 +1,13 @@
-
+{
+  "scripts": {
+    "Animated Loading Screen": {
+      "title": "Animated Loading Screen",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "animated-loading-screen.lua",
+      "created": "2025-12-27T16:04:14.276Z",
+      "updated": "2025-12-27T16:04:14.277Z"
+    }
+  }
+}
