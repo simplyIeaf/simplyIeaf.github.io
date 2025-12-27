@@ -52,11 +52,6 @@ const app = {
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
         this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
-        this.debouncedDelete = utils.debounce(() => {
-            if (this.currentEditingId) {
-                this.deleteScript(this.currentEditingId);
-            }
-        }, 750);
         this.debouncedLogin = utils.debounce(() => this.login(), 750);
         this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
     },
@@ -170,21 +165,22 @@ const app = {
     async login() {
         if (this.actionInProgress) return;
         this.actionInProgress = true;
-        const token = document.getElementById('auth-token').value.trim();
-        if (!token) { 
-            this.actionInProgress = false; 
-            return; 
-        }
         
-        this.token = token;
-        const success = await this.verifyToken(false);
-        if (success) {
-            localStorage.setItem('gh_token', token);
-            this.toggleLoginModal();
-            await this.loadDatabase();
-            this.renderList();
+        try {
+            const token = document.getElementById('auth-token').value.trim();
+            if (!token) return;
+            
+            this.token = token;
+            const success = await this.verifyToken(false);
+            if (success) {
+                localStorage.setItem('gh_token', token);
+                this.toggleLoginModal();
+                await this.loadDatabase();
+                this.renderList();
+            }
+        } finally {
+            this.actionInProgress = false;
         }
-        setTimeout(() => { this.actionInProgress = false; }, 750);
     },
 
     logout() {
@@ -611,10 +607,24 @@ const app = {
         }
     },
 
+    handleDelete() {
+        if (this.currentEditingId) {
+            this.deleteScript(this.currentEditingId);
+        }
+    },
+
     async deleteScript(title) {
         if (this.actionInProgress) return;
-        if (!title) return;
-        if (!confirm(`Delete "${title}" permanently? This cannot be undone.`)) return;
+        
+        if (!title || !this.db.scripts[title]) {
+            alert('Script not found or already deleted');
+            this.switchAdminTab('list');
+            return;
+        }
+
+        if (!confirm(`Delete "${title}" permanently? This cannot be undone.`)) {
+            return;
+        }
         
         this.actionInProgress = true;
         const msg = document.getElementById('admin-msg');
@@ -622,6 +632,7 @@ const app = {
         
         try {
             await this.deleteScriptFiles(title);
+            
             await this.loadDatabase();
             
             if (this.db.scripts[title]) {
@@ -642,14 +653,12 @@ const app = {
             setTimeout(() => { 
                 msg.innerHTML = '';
                 this.switchAdminTab('list'); 
-                this.actionInProgress = false; 
             }, 1500);
         } catch(e) {
             msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
-            setTimeout(() => { 
-                msg.innerHTML = '';
-                this.actionInProgress = false; 
-            }, 3000);
+            alert(`Delete failed: ${e.message}`);
+        } finally {
+            this.actionInProgress = false;
         }
     },
 
