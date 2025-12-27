@@ -708,6 +708,7 @@ textarea.input-field {
 }
 
 .admin-item {
+    position: relative;
     padding: 20px;
     background: var(--bg-secondary);
     border-radius: 10px;
@@ -717,7 +718,12 @@ textarea.input-field {
     justify-content: space-between;
     align-items: center;
     border: 1px solid transparent;
-    transition: 0.2s;
+    transition: transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 .admin-item:hover { 
@@ -842,6 +848,61 @@ textarea.input-field {
 
 .btn-view-script {
     margin-left: auto;
+}
+
+.admin-item.swipe-delete {
+    transform: translateX(300px);
+    opacity: 0;
+}
+
+.swipe-hint {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-danger);
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.admin-item.swiping .swipe-hint {
+    opacity: 0.7;
+}
+
+@keyframes swipeDelete {
+    0% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    50% {
+        transform: translateX(100px);
+        opacity: 0.7;
+    }
+    100% {
+        transform: translateX(300px);
+        opacity: 0;
+    }
+}
+
+.swipe-delete-animation {
+    animation: swipeDelete 0.5s ease forwards;
+}
+
+#swipe-delete-modal .modal {
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 @media print {
