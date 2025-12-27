@@ -35,6 +35,15 @@
       "filename": "egg.lua",
       "created": "2025-12-27T00:43:55.753Z",
       "updated": "2025-12-27T00:43:55.761Z"
+    },
+    "Eggs": {
+      "title": "Eggs",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "eggs.lua",
+      "created": "2025-12-27T01:02:50.292Z",
+      "updated": "2025-12-27T01:02:50.302Z"
     }
   }
 }
