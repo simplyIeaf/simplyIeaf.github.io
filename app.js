@@ -313,12 +313,13 @@ const app = {
         document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
         
         list.innerHTML = scripts.map(s => {
+            const visibility = (s.visibility || 'PUBLIC').toLowerCase();
             return `
             <div class="admin-item" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
                     <strong>${s.title}</strong>
                     <div class="admin-meta">
-                        <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
+                        <span class="badge badge-sm badge-${visibility}">${s.visibility || 'PUBLIC'}</span>
                         <span class="text-muted"> • ${new Date(s.created).toLocaleDateString()}</span>
                     </div>
                 </div>
@@ -348,7 +349,7 @@ const app = {
         
         document.getElementById('editor-heading').textContent = `Edit: ${s.title}`;
         document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility;
+        document.getElementById('edit-visibility').value = s.visibility || 'PUBLIC';
         document.getElementById('edit-desc').value = s.description || '';
         document.getElementById('edit-expire').value = s.expiration || '';
         
@@ -358,6 +359,7 @@ const app = {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
                 headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
+            if (!res.ok) throw new Error('Not found');
             const data = await res.json();
             document.getElementById('edit-code').value = utils.safeAtob(data.content);
         } catch(e) { 
@@ -372,7 +374,7 @@ const app = {
         this.actionInProgress = true;
         
         const title = document.getElementById('edit-title').value.trim();
-        const visibility = document.getElementById('edit-visibility').value;
+        const visibility = document.getElementById('edit-visibility').value || 'PUBLIC';
         const desc = document.getElementById('edit-desc').value.trim();
         const expiration = document.getElementById('edit-expire').value;
         const code = document.getElementById('edit-code').value; 
@@ -399,10 +401,11 @@ const app = {
         try {
             if (!isNew && this.originalTitle && this.originalTitle !== title) {
                 await this.deleteScriptFiles(this.originalTitle);
+                delete this.db.scripts[this.originalTitle];
             }
             
             let luaSha = null;
-            if (!isNew && title === this.originalTitle) {
+            if (!isNew) {
                 const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
                     headers: { 'Authorization': `token ${this.token}` }
                 });
@@ -419,21 +422,15 @@ const app = {
                 })
             });
 
-            await this.loadDatabase();
-            
             const scriptData = {
                 title: title, 
                 visibility: visibility, 
                 description: desc, 
                 expiration: expiration,
                 filename: filename,
-                created: (isNew || title !== this.originalTitle) ? new Date().toISOString() : this.db.scripts[title]?.created || new Date().toISOString(),
+                created: isNew ? new Date().toISOString() : (this.db.scripts[title]?.created || new Date().toISOString()),
                 updated: new Date().toISOString()
             };
-            
-            if (!isNew && this.originalTitle && this.originalTitle !== title) {
-                delete this.db.scripts[this.originalTitle];
-            }
             
             this.db.scripts[title] = scriptData;
             
@@ -449,12 +446,10 @@ const app = {
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
             let indexSha = null;
-            if (!isNew && title === this.originalTitle) {
-                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                if (check.ok) indexSha = (await check.json()).sha;
-            }
+            const indexCheck = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (indexCheck.ok) indexSha = (await indexCheck.json()).sha;
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
                 method: 'PUT',
@@ -466,6 +461,7 @@ const app = {
                 })
             });
             
+            await this.loadDatabase();
             msg.innerHTML = `<span style="color:var(--accent)">Published!</span>`;
             setTimeout(() => { 
                 msg.innerHTML = ''; 
@@ -479,9 +475,9 @@ const app = {
     },
 
     async deleteScriptFiles(title) {
+        if (!title || !this.db.scripts[title]) return;
         const scriptId = utils.sanitizeTitle(title);
         const s = this.db.scripts[title];
-        if (!s) return;
         
         try {
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
@@ -513,13 +509,12 @@ const app = {
     },
 
     async deleteScript(title) {
-        if (this.actionInProgress) return;
+        if (this.actionInProgress || !title) return;
         if (!confirm('Delete permanently?')) return;
         this.actionInProgress = true;
         
         try {
             await this.deleteScriptFiles(title);
-            await this.loadDatabase();
             delete this.db.scripts[title];
             
             await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
@@ -532,13 +527,12 @@ const app = {
                 })
             });
             
-            setTimeout(() => { 
-                this.switchAdminTab('list'); 
-                this.actionInProgress = false; 
-            }, 750);
+            await this.loadDatabase();
+            this.switchAdminTab('list');
         } catch(e) {
             alert('Delete failed: ' + e.message);
-            setTimeout(() => { this.actionInProgress = false; }, 1000);
+        } finally {
+            this.actionInProgress = false;
         }
     },
 
