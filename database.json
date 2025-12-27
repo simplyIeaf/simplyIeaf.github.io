@@ -539,6 +539,16 @@
       "size": 9228,
       "created": "2025-12-27T20:19:27.629Z",
       "updated": "2025-12-27T20:19:27.629Z"
+    },
+    "Character Moveset System ServerScript": {
+      "title": "Character Moveset System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "character-moveset-system-serverscript.lua",
+      "size": 5817,
+      "created": "2025-12-27T20:20:02.681Z",
+      "updated": "2025-12-27T20:20:02.681Z"
     }
   }
 }
