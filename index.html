@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Leaf's Scripts</title>
-    <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/220599690?v=4">
+    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
         <div class="nav-content">
             <div class="nav-left">
                 <div class="brand" onclick="location.hash=''">
-                    <img src="https://avatars.githubusercontent.com/u/220599690?v=4&size=40" class="nav-icon" alt="Profile">
+                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Profile">
                     <span class="nav-title">Leaf's Scripts</span>
                 </div>
             </div>
@@ -34,14 +34,7 @@
                     <button class="btn btn-secondary btn-sm" onclick="app.debouncedToggleLogin()">Login</button>
                 </div>
                 <div id="user-section" style="display: none;">
-                    <button class="btn btn-primary btn-sm" onclick="navigate('admin')">Manage</button>
-                    <button class="btn btn-secondary btn-sm btn-icon-only" onclick="app.logout()" title="Logout">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                            <polyline points="16 17 21 12 16 7"></polyline>
-                            <line x1="21" y1="12" x2="9" y2="12"></line>
-                        </svg>
-                    </button>
+                    <button class="btn btn-sm" onclick="navigate('admin')">Manage</button>
                 </div>
             </div>
         </div>
@@ -66,13 +59,6 @@
 
     <div class="container">
         <div id="view-home" class="view-section animate__animated animate__fadeIn" style="display: block;">
-            
-            <div class="mobile-controls" style="display: none;">
-                <div class="mobile-pill active" onclick="app.filterCategory('all', event)">All</div>
-                <div class="mobile-pill" onclick="app.filterCategory('public', event)">Public</div>
-                <div class="mobile-pill" id="mob-private" style="display:none" onclick="app.filterCategory('private', event)">Private</div>
-            </div>
-            
             <div class="content-wrapper">
                 <aside class="sidebar">
                     <div class="sidebar-section">
@@ -88,7 +74,6 @@
                         <select class="input-field select-sm" style="padding:8px" onchange="app.setSort(this.value)">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
-                            <option value="views">Most Views</option>
                             <option value="alpha">A-Z</option>
                         </select>
                     </div>
@@ -106,16 +91,19 @@
         </div>
 
         <div id="view-admin" class="view-section animate__animated animate__fadeIn">
-            <div style="margin-bottom:24px;">
-                <button style="background:none;border:none;color:#888;cursor:pointer;font-weight:600;" onclick="navigate('')">← Back to Site</button>
+            <div style="margin-bottom:32px;">
+                <button class="btn-back" onclick="navigate('')">Back to Site</button>
             </div>
             
             <div class="admin-panel">
                 <div class="admin-header-flex">
                     <h2>Admin Panel</h2>
-                    <div class="tab-switcher">
-                        <button class="tab-btn active" onclick="app.switchAdminTab('list')">Manage Scripts</button>
-                        <button class="tab-btn" onclick="app.switchAdminTab('create')">Add New</button>
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <button class="btn btn-secondary btn-sm" onclick="app.logout()">Logout</button>
+                        <div class="tab-switcher">
+                            <button class="tab-btn active" onclick="app.switchAdminTab('list')">Manage Scripts</button>
+                            <button class="tab-btn" onclick="app.switchAdminTab('create')">Add New</button>
+                        </div>
                     </div>
                 </div>
 
@@ -174,11 +162,6 @@
             </div>
         </div>
     </div>
-    <script>
-        if(window.innerWidth <= 768) {
-            document.querySelector('.mobile-controls').style.display = 'flex';
-        }
-    </script>
     <script src="app.js"></script>
 </body>
-</html>
+                                                                                                                     </html>
