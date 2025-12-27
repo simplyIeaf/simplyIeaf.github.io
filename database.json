@@ -569,6 +569,16 @@
       "size": 13046,
       "created": "2025-12-27T20:21:06.152Z",
       "updated": "2025-12-27T20:21:06.152Z"
+    },
+    "Better AFK System": {
+      "title": "Better AFK System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "better-afk-system.lua",
+      "size": 5837,
+      "created": "2025-12-27T20:21:30.150Z",
+      "updated": "2025-12-27T20:21:30.150Z"
     }
   }
 }
