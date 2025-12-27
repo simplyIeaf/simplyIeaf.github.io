@@ -379,6 +379,16 @@
       "size": 7783,
       "created": "2025-12-27T20:08:56.742Z",
       "updated": "2025-12-27T20:08:56.742Z"
+    },
+    "Advanced Player Trail System": {
+      "title": "Advanced Player Trail System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "advanced-player-trail-system.lua",
+      "size": 7820,
+      "created": "2025-12-27T20:09:32.402Z",
+      "updated": "2025-12-27T20:09:32.403Z"
     }
   }
 }
