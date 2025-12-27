@@ -43,12 +43,6 @@ const utils = {
         if (!code || code.trim().length === 0) return 'Code is required';
         if (code.length > 100000) return 'Code is too large (max 100KB)';
         return null;
-    },
-
-    generateSecureToken() {
-        const array = new Uint8Array(32);
-        window.crypto.getRandomValues(array);
-        return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
     }
 };
 
@@ -56,14 +50,12 @@ const app = {
     db: { scripts: {} },
     dbSha: null,
     token: null,
-    sessionToken: null,
     currentUser: null,
     currentFilter: 'all',
     currentSort: 'newest',
     actionInProgress: false,
     currentEditingId: null,
     originalTitle: null,
-    securityCheckInterval: null,
     
     async init() {
         this.loadSession();
@@ -78,96 +70,33 @@ const app = {
         
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('edit-expire').min = today;
-        
-        this.startSecurityMonitor();
     },
 
     loadSession() {
-        const storedSession = localStorage.getItem('gh_session');
-        if (storedSession) {
-            try {
-                const session = JSON.parse(storedSession);
-                const now = Date.now();
+        try {
+            const storedToken = localStorage.getItem('gh_token');
+            const storedUser = localStorage.getItem('gh_user');
+            
+            if (storedToken && storedUser) {
+                this.token = storedToken;
+                this.currentUser = JSON.parse(storedUser);
                 
-                if (session.expires > now && session.userAgent === navigator.userAgent) {
-                    this.token = session.token;
-                    this.sessionToken = session.sessionToken;
-                    this.currentUser = { login: CONFIG.user };
-                    return true;
-                } else {
-                    localStorage.removeItem('gh_session');
-                    localStorage.removeItem('gh_token');
+                if (this.currentUser.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
+                    this.logout(true);
+                    return false;
                 }
-            } catch(e) {
-                localStorage.removeItem('gh_session');
-                localStorage.removeItem('gh_token');
+                return true;
             }
+        } catch(e) {
+            this.logout(true);
         }
         return false;
     },
 
     saveSession() {
-        const session = {
-            token: this.token,
-            sessionToken: this.sessionToken,
-            expires: Date.now() + (12 * 60 * 60 * 1000),
-            userAgent: navigator.userAgent,
-            timestamp: Date.now()
-        };
-        localStorage.setItem('gh_session', JSON.stringify(session));
-    },
-
-    startSecurityMonitor() {
-        this.securityCheckInterval = setInterval(() => {
-            this.checkSessionValidity();
-        }, 30000);
-        
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'gh_session' && !e.newValue) {
-                this.logout(true);
-            }
-        });
-        
-        window.addEventListener('beforeunload', () => {
-            if (this.currentUser) {
-                this.saveSession();
-            }
-        });
-    },
-
-    async checkSessionValidity() {
-        if (!this.currentUser || !this.token) return;
-        
-        try {
-            const storedSession = localStorage.getItem('gh_session');
-            if (!storedSession) {
-                this.logout(true);
-                return;
-            }
-            
-            const session = JSON.parse(storedSession);
-            if (session.userAgent !== navigator.userAgent) {
-                this.logout(true);
-                return;
-            }
-            
-            if (session.expires < Date.now()) {
-                this.logout(true);
-                return;
-            }
-            
-            const res = await fetch('https://api.github.com/user', {
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'X-Session-Check': 'true'
-                }
-            });
-            
-            if (!res.ok) {
-                this.logout(true);
-            }
-        } catch(e) {
-            console.warn('Session check failed:', e);
+        if (this.token && this.currentUser) {
+            localStorage.setItem('gh_token', this.token);
+            localStorage.setItem('gh_user', JSON.stringify(this.currentUser));
         }
     },
 
@@ -292,15 +221,9 @@ const app = {
                 return;
             }
             
-            if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
-                this.showLoginError('Invalid token format');
-                return;
-            }
-            
             this.token = token;
             const success = await this.verifyToken(false);
             if (success) {
-                this.sessionToken = utils.generateSecureToken();
                 this.saveSession();
                 this.toggleLoginModal();
                 document.getElementById('auth-token').value = '';
@@ -324,13 +247,10 @@ const app = {
             return;
         }
         
-        clearInterval(this.securityCheckInterval);
-        
-        localStorage.removeItem('gh_session');
         localStorage.removeItem('gh_token');
+        localStorage.removeItem('gh_user');
         
         this.token = null;
-        this.sessionToken = null;
         this.currentUser = null;
         
         document.getElementById('auth-section').style.display = 'block';
@@ -348,10 +268,7 @@ const app = {
     async verifyToken(silent) {
         try {
             const res = await fetch('https://api.github.com/user', {
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: { 'Authorization': `token ${this.token}` }
             });
             
             if (!res.ok) {
@@ -375,39 +292,9 @@ const app = {
                 this.showLoginError(e.message);
             }
             this.token = null;
-            localStorage.removeItem('gh_session');
             localStorage.removeItem('gh_token');
+            localStorage.removeItem('gh_user');
             return false;
-        }
-    },
-
-    async secureFetch(url, options = {}) {
-        if (!this.token || !this.sessionToken) {
-            throw new Error('Not authenticated');
-        }
-        
-        const defaultHeaders = {
-            'Authorization': `token ${this.token}`,
-            'X-Session-Token': this.sessionToken,
-            'X-Requested-With': 'XMLHttpRequest'
-        };
-        
-        const headers = { ...defaultHeaders, ...options.headers };
-        
-        try {
-            const response = await fetch(url, { ...options, headers });
-            
-            if (response.status === 401 || response.status === 403) {
-                this.logout(true);
-                throw new Error('Session expired');
-            }
-            
-            return response;
-        } catch (error) {
-            if (error.message.includes('Session expired')) {
-                throw error;
-            }
-            throw new Error(`Request failed: ${error.message}`);
         }
     },
 
@@ -419,10 +306,7 @@ const app = {
             }
             
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
-                headers: this.token ? { 
-                    'Authorization': `token ${this.token}`,
-                    'X-Requested-With': 'XMLHttpRequest'
-                } : {}
+                headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
             
             if (res.status === 404) {
@@ -730,12 +614,18 @@ const app = {
             
             const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
             try {
-                const luaRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`);
+                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
                 
                 if (luaRes.ok) {
                     const luaData = await luaRes.json();
-                    await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                         method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             message: `Delete ${scriptData.filename}`,
                             sha: luaData.sha
@@ -748,12 +638,18 @@ const app = {
 
             const indexPath = `scripts/${scriptId}/index.html`;
             try {
-                const idxRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`);
+                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
                 
                 if (idxRes.ok) {
                     const idxData = await idxRes.json();
-                    await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                         method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             message: `Delete index for ${scriptTitle}`,
                             sha: idxData.sha
@@ -766,8 +662,12 @@ const app = {
             
             delete this.db.scripts[scriptTitle];
             
-            const dbRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     message: `Remove ${scriptTitle} from database`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
@@ -884,7 +784,9 @@ const app = {
         const scriptId = utils.sanitizeTitle(title);
         
         try {
-            const res = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`);
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
             
             if (res.ok) {
                 const data = await res.json();
@@ -984,12 +886,18 @@ const app = {
                     
                     try {
                         const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
-                        const luaRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`);
+                        const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
                         
                         if (luaRes.ok) {
                             const luaData = await luaRes.json();
-                            await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
                                 method: 'DELETE',
+                                headers: { 
+                                    'Authorization': `token ${this.token}`,
+                                    'Content-Type': 'application/json'
+                                },
                                 body: JSON.stringify({
                                     message: `Delete old Lua file`,
                                     sha: luaData.sha
@@ -1002,12 +910,18 @@ const app = {
                     
                     try {
                         const oldIndexPath = `scripts/${oldScriptId}/index.html`;
-                        const idxRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`);
+                        const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
                         
                         if (idxRes.ok) {
                             const idxData = await idxRes.json();
-                            await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
                                 method: 'DELETE',
+                                headers: { 
+                                    'Authorization': `token ${this.token}`,
+                                    'Content-Type': 'application/json'
+                                },
                                 body: JSON.stringify({
                                     message: `Delete old index`,
                                     sha: idxData.sha
@@ -1040,7 +954,9 @@ const app = {
             
             if (isEditing && !titleChanged) {
                 try {
-                    const check = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`);
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
                     if (check.ok) {
                         const data = await check.json();
                         luaSha = data.sha;
@@ -1050,8 +966,12 @@ const app = {
                 }
             }
             
-            const luaRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
                     content: utils.safeBtoa(code),
@@ -1063,8 +983,12 @@ const app = {
                 throw new Error('Failed to save Lua file');
             }
             
-            const dbRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     message: `${isEditing ? (titleChanged ? 'Rename' : 'Update') : 'Add'} ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
@@ -1085,7 +1009,9 @@ const app = {
             
             if (isEditing && !titleChanged) {
                 try {
-                    const check = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`);
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
                     if (check.ok) {
                         const data = await check.json();
                         indexSha = data.sha;
@@ -1095,8 +1021,12 @@ const app = {
                 }
             }
             
-            const indexRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
                     content: utils.safeBtoa(indexHTML),
@@ -1180,12 +1110,18 @@ const app = {
             
             const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
             try {
-                const luaRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`);
+                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
                 
                 if (luaRes.ok) {
                     const luaData = await luaRes.json();
-                    await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                         method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             message: `Delete ${scriptData.filename}`,
                             sha: luaData.sha
@@ -1198,12 +1134,18 @@ const app = {
 
             const indexPath = `scripts/${scriptId}/index.html`;
             try {
-                const idxRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`);
+                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
                 
                 if (idxRes.ok) {
                     const idxData = await idxRes.json();
-                    await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                         method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify({
                             message: `Delete index for ${scriptTitle}`,
                             sha: idxData.sha
@@ -1216,8 +1158,12 @@ const app = {
             
             delete this.db.scripts[scriptTitle];
             
-            const dbRes = await this.secureFetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     message: `Remove ${scriptTitle} from database`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
@@ -1276,8 +1222,5 @@ function navigate(path) {
     }
     location.hash = path;
 }
-
-Object.freeze(CONFIG);
-Object.freeze(utils);
 
 app.init();
