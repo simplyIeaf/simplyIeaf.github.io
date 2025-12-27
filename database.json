@@ -19,6 +19,16 @@
       "size": 1210,
       "created": "2025-12-27T19:40:49.571Z",
       "updated": "2025-12-27T19:40:49.571Z"
+    },
+    "Nametag System": {
+      "title": "Nametag System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "nametag-system.lua",
+      "size": 7788,
+      "created": "2025-12-27T19:43:10.593Z",
+      "updated": "2025-12-27T19:43:10.593Z"
     }
   }
 }
