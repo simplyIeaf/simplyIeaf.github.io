@@ -19,7 +19,11 @@ const utils = {
     },
     
     safeAtob(str) {
-        return decodeURIComponent(escape(window.atob(str)));
+        try {
+            return decodeURIComponent(escape(window.atob(str)));
+        } catch(e) {
+            return window.atob(str);
+        }
     },
 
     sanitizeTitle(title) {
@@ -49,114 +53,45 @@ const app = {
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
-        
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
     },
 
-    generateScriptHTML(title, scriptData) {
-        const scriptId = utils.sanitizeTitle(title);
-        
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${utils.escapeHtml(scriptData.title)} - Leaf's Scripts</title>
-    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
-    <link rel="stylesheet" href="../../style.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-content">
-            <div class="nav-left">
-                <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
-                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
-                    <span class="nav-title">Leaf's Scripts</span>
-                </a>
-            </div>
-            <div class="nav-right">
-                <a href="../../index.html" class="btn btn-secondary btn-sm">Back</a>
-            </div>
-        </div>
-    </nav>
-    
-    <div class="container">
-        <div class="script-header-lg">
-            <div>
-                <h1>${utils.escapeHtml(scriptData.title)}</h1>
-                <div class="meta-row">
-                    <span class="meta-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        <span>${new Date(scriptData.created).toLocaleDateString()}</span>
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        ${scriptData.description ? `<p class="script-desc">${utils.escapeHtml(scriptData.description)}</p>` : ''}
-        
-        <div class="code-box">
-            <div class="toolbar">
-                <div class="file-info">raw/${scriptData.filename}</div>
-                <div class="toolbar-right">
-                    <button class="btn btn-sm" onclick="downloadScript()">Download</button>
-                    <button class="btn btn-sm" onclick="copyScript(this)">Copy</button>
-                    <a href="raw/${scriptData.filename}" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
-                </div>
-            </div>
-            <pre><code id="code-display" class="language-lua">Loading...</code></pre>
-        </div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
-    <script>
-        const filename = '${scriptData.filename}';
-        const scriptId = '${scriptId}';
-        
-        async function loadScript() {
-            try {
-                const res = await fetch(\`raw/\${filename}\`);
-                const code = await res.text();
-                document.getElementById('code-display').textContent = code;
-                Prism.highlightAll();
-            } catch(e) {
-                document.getElementById('code-display').textContent = '-- Error loading source';
-            }
+    getHeaders() {
+        const headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+        };
+        if (this.token) {
+            headers['Authorization'] = `Bearer ${this.token}`;
         }
-        
-        function copyScript(btn) {
-            const code = document.getElementById('code-display').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                const original = btn.innerText;
-                btn.innerText = 'Copied!';
-                setTimeout(() => btn.innerText = original, 2000);
-            });
-        }
-        
-        function downloadScript() {
-            const code = document.getElementById('code-display').textContent;
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(code));
-            element.setAttribute('download', filename);
-            element.style.display = 'none';
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
-        }
-        
-        loadScript();
-    </script>
-</body>
-</html>`;
+        return headers;
     },
 
-    toggleLoginModal() {
-        const modal = document.getElementById('login-modal');
-        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-        document.getElementById('login-error').style.display = 'none';
+    async verifyToken(silent) {
+        try {
+            const res = await fetch('https://api.github.com/user', {
+                headers: this.getHeaders()
+            });
+            if (!res.ok) throw new Error('Invalid token');
+            const user = await res.json();
+            if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
+                throw new Error(`Unauthorized user.`);
+            }
+            this.currentUser = user;
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('user-section').style.display = 'flex';
+            document.getElementById('private-filter').style.display = 'block';
+            return true;
+        } catch (e) {
+            if (!silent) {
+                const err = document.getElementById('login-error');
+                err.textContent = e.message;
+                err.style.display = 'block';
+            }
+            this.token = null;
+            localStorage.removeItem('gh_token');
+            return false;
+        }
     },
 
     async login() {
@@ -183,43 +118,14 @@ const app = {
     logout() {
         if (confirm('Are you sure you want to logout?')) {
             localStorage.removeItem('gh_token');
-            this.token = null;
-            this.currentUser = null;
-            location.href = '#';
             location.reload();
-        }
-    },
-
-    async verifyToken(silent) {
-        try {
-            const res = await fetch('https://api.github.com/user', {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            if (!res.ok) throw new Error('Invalid token');
-            const user = await res.json();
-            if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
-                throw new Error(`Token belongs to ${user.login}, not repo owner.`);
-            }
-            this.currentUser = user;
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('user-section').style.display = 'flex';
-            document.getElementById('private-filter').style.display = 'block';
-            return true;
-        } catch (e) {
-            if (!silent) {
-                const err = document.getElementById('login-error');
-                err.textContent = e.message;
-                err.style.display = 'block';
-            }
-            this.token = null;
-            return false;
         }
     },
 
     async loadDatabase() {
         try {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
-                headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
+                headers: this.getHeaders()
             });
             if (res.status === 404) {
                 this.db = { scripts: {} };
@@ -236,201 +142,35 @@ const app = {
         }
     },
 
-    renderList() {
-        const list = document.getElementById('script-list');
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const filtered = this.filterLogic(scripts);
-        const sorted = this.sortLogic(filtered);
-        
-        if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-state">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;margin-bottom:16px;">
-                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <h2>No scripts found</h2>
-                <p>Try adjusting your search or filter</p>
-            </div>`;
-            return;
-        }
-        
-        list.innerHTML = sorted.map(s => {
-            const scriptId = utils.sanitizeTitle(s.title);
-            return `
-            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
-                <div class="card-content">
-                    <div class="card-header-section">
-                        <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
-                        ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
-                    </div>
-                    <div class="card-meta">
-                        <span>${new Date(s.created).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            </div>
-        `}).join('');
-    },
-
-    filterLogic(scripts) {
-        const query = document.getElementById('search').value.toLowerCase();
-        return scripts.filter(s => {
-            if (!s.title.toLowerCase().includes(query)) return false;
-            if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
-            if (s.visibility === 'UNLISTED' && !this.currentUser) return false; 
-            if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
-            if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
-            return true;
-        });
-    },
-
-    sortLogic(scripts) {
-        return scripts.sort((a, b) => {
-            if (this.currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
-            if (this.currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
-            if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
-            return 0;
-        });
-    },
-
-    filterCategory(cat, e) {
-        if (e) {
-            e.preventDefault();
-            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            if(e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
-        }
-        this.currentFilter = cat;
-        this.renderList();
-    },
-
-    setSort(val) { 
-        this.currentSort = val; 
-        this.renderList(); 
-    },
-
-    switchAdminTab(tab) {
-        document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        if (tab === 'list') {
-            document.getElementById('admin-tab-list').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[0].classList.add('active');
-            this.renderAdminList();
-        } else if (tab === 'stats') {
-            document.getElementById('admin-tab-stats').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[2].classList.add('active');
-            this.renderStats();
-        } else {
-            document.getElementById('admin-tab-editor').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[1].classList.add('active');
-            this.resetEditor();
-        }
-    },
-
-    async renderAdminList() {
-        const list = document.getElementById('admin-list');
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const sorted = scripts.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
-        
-        document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
-        
-        if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-admin-state">
-                <p>No scripts yet. Click "Add New" to create your first script.</p>
-            </div>`;
-            return;
-        }
-        
-        list.innerHTML = sorted.map(s => {
-            const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
-            return `
-            <div class="admin-item" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
-                <div class="admin-item-left">
-                    <strong>${utils.escapeHtml(s.title)}</strong>
-                    <div class="admin-meta">
-                        <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
-                        <span class="text-muted">Updated ${updated}</span>
-                    </div>
-                </div>
-                <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
-                </div>
-            </div>
-        `}).join('');
-    },
-
-    renderStats() {
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
-        const privateCount = scripts.filter(s => s.visibility === 'PRIVATE').length;
-        const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
-        
-        document.getElementById('stats-content').innerHTML = `
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">${scripts.length}</div>
-                    <div class="stat-label">Total Scripts</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${publicCount}</div>
-                    <div class="stat-label">Public</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${privateCount}</div>
-                    <div class="stat-label">Private</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${unlistedCount}</div>
-                    <div class="stat-label">Unlisted</div>
-                </div>
-            </div>
-        `;
-    },
-
-    resetEditor() {
-        document.getElementById('editor-heading').textContent = 'Create New Script';
-        document.getElementById('edit-title').value = '';
-        document.getElementById('edit-visibility').value = 'PUBLIC';
-        document.getElementById('edit-desc').value = '';
-        document.getElementById('edit-expire').value = '';
-        document.getElementById('edit-code').value = '';
-        document.getElementById('btn-delete').style.display = 'none';
-        this.currentEditingId = null;
-        this.originalTitle = null;
-    },
-
-    async populateEditor(title) {
-        const s = this.db.scripts[title];
-        if (!s) return;
-        
-        this.currentEditingId = title;
-        this.originalTitle = title;
-        this.switchAdminTab('create');
-        
-        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
-        document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility;
-        document.getElementById('edit-desc').value = s.description || '';
-        document.getElementById('edit-expire').value = s.expiration || '';
-        
+    generateScriptHTML(title, scriptData) {
         const scriptId = utils.sanitizeTitle(title);
-        
-        try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
-                headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                document.getElementById('edit-code').value = utils.safeAtob(data.content);
-            } else {
-                document.getElementById('edit-code').value = '-- Error loading content';
-            }
-        } catch(e) { 
-            document.getElementById('edit-code').value = '-- Error loading content'; 
-        }
-        
-        document.getElementById('btn-delete').style.display = 'inline-flex';
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${utils.escapeHtml(scriptData.title)} - Leaf's Scripts</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar"><div class="nav-content"><a href="../../index.html" class="brand">Leaf's Scripts</a></div></nav>
+    <div class="container">
+        <h1>${utils.escapeHtml(scriptData.title)}</h1>
+        <div class="code-box">
+            <pre><code id="code-display" class="language-lua">Loading...</code></pre>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script>
+        fetch('raw/${scriptData.filename}').then(r => r.text()).then(t => {
+            document.getElementById('code-display').textContent = t;
+            Prism.highlightAll();
+        });
+    </script>
+</body>
+</html>`;
     },
 
     async saveScript() {
@@ -445,240 +185,273 @@ const app = {
         const msg = document.getElementById('admin-msg');
         
         if (!title || !code) { 
-            msg.innerHTML = `<span style="color:var(--danger)">Title and Code required</span>`;
-            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2000);
+            msg.innerHTML = `<span style="color:var(--danger)">Required fields missing</span>`;
+            this.actionInProgress = false;
             return; 
         }
-        
-        const isEditing = !!this.currentEditingId;
-        const titleChanged = isEditing && this.originalTitle !== title;
-        const scriptId = utils.sanitizeTitle(title);
-        const filename = scriptId + '.lua';
-        
-        if (this.db.scripts[title] && title !== this.originalTitle) {
-            msg.innerHTML = `<span style="color:var(--danger)">Script with this title already exists</span>`;
-            setTimeout(() => { msg.innerHTML = ''; this.actionInProgress = false; }, 2500);
-            return;
-        }
-        
-        msg.innerHTML = `<span class="loading">Publishing...</span>`;
+
+        msg.innerHTML = `<span class="loading">Processing...</span>`;
         
         try {
-            if (titleChanged) {
-                await this.deleteScriptFiles(this.originalTitle);
+            const scriptId = utils.sanitizeTitle(title);
+            const filename = scriptId + '.lua';
+
+            if (this.currentEditingId && this.currentEditingId !== title) {
+                await this.deleteScriptFiles(this.currentEditingId);
+                delete this.db.scripts[this.currentEditingId];
             }
-            
-            let luaSha = null;
-            if (isEditing && !titleChanged) {
-                try {
-                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (check.ok) {
-                        luaSha = (await check.json()).sha;
-                    }
-                } catch(e) {
-                    console.log('File does not exist yet, creating new');
-                }
-            }
-            
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${filename}`, {
+
+            const luaPath = `scripts/${scriptId}/raw/${filename}`;
+            let existingSha = null;
+            try {
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, { headers: this.getHeaders() });
+                if (check.ok) existingSha = (await check.json()).sha;
+            } catch(e) {}
+
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
-                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
+                    message: `Save ${filename}`,
                     content: utils.safeBtoa(code),
-                    sha: luaSha || undefined
+                    sha: existingSha || undefined
                 })
             });
 
-            await this.loadDatabase();
-            
             const scriptData = {
-                title: title, 
-                visibility: visibility, 
-                description: desc, 
-                expiration: expiration,
-                filename: filename,
-                created: (isEditing && !titleChanged && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
+                title, visibility, description: desc, expiration, filename,
+                created: (this.db.scripts[title]) ? this.db.scripts[title].created : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
-            
-            if (titleChanged && this.originalTitle) {
-                delete this.db.scripts[this.originalTitle];
-            }
-            
             this.db.scripts[title] = scriptData;
-            
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: `Update database`,
-                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha
-                })
-            });
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
+            const indexPath = `scripts/${scriptId}/index.html`;
             let indexSha = null;
-            
-            if (isEditing && !titleChanged) {
-                try {
-                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (check.ok) {
-                        indexSha = (await check.json()).sha;
-                    }
-                } catch(e) {
-                    console.log('Index does not exist yet, creating new');
-                }
-            }
-            
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/index.html`, {
+            try {
+                const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, { headers: this.getHeaders() });
+                if (check.ok) indexSha = (await check.json()).sha;
+            } catch(e) {}
+
+            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
-                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Update index for ${title}`,
+                    message: `Update Index`,
                     content: utils.safeBtoa(indexHTML),
                     sha: indexSha || undefined
                 })
             });
-            
-            msg.innerHTML = `<span style="color:var(--accent)">Published successfully!</span>`;
-            setTimeout(() => { 
-                msg.innerHTML = ''; 
-                this.switchAdminTab('list'); 
-                this.actionInProgress = false; 
-            }, 1500);
-        } catch(e) {
-            msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-            setTimeout(() => { this.actionInProgress = false; }, 2000);
-        }
-    },
 
-    async deleteScriptFiles(title) {
-        if (!title) return;
-        
-        const scriptId = utils.sanitizeTitle(title);
-        const s = this.db.scripts[title];
-        if (!s) return;
-        
-        try {
-            const luaPath = `scripts/${scriptId}/raw/${s.filename}`;
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (luaRes.ok) {
-                const luaData = await luaRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        message: `Delete ${s.filename}`, 
-                        sha: luaData.sha 
-                    })
-                });
-            }
-
-            const indexPath = `scripts/${scriptId}/index.html`;
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (idxRes.ok) {
-                const idxData = await idxRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        message: `Delete index for ${title}`, 
-                        sha: idxData.sha 
-                    })
-                });
-            }
-        } catch(e) {
-            console.error('Error deleting files:', e);
-        }
-    },
-
-    handleDelete() {
-        if (this.currentEditingId) {
-            this.deleteScript(this.currentEditingId);
-        }
-    },
-
-    async deleteScript(title) {
-        if (this.actionInProgress) return;
-        
-        if (!title || !this.db.scripts[title]) {
-            alert('Script not found or already deleted');
-            this.switchAdminTab('list');
-            return;
-        }
-
-        if (!confirm(`Delete "${title}" permanently? This cannot be undone.`)) {
-            return;
-        }
-        
-        this.actionInProgress = true;
-        const msg = document.getElementById('admin-msg');
-        msg.innerHTML = `<span class="loading">Deleting...</span>`;
-        
-        try {
-            await this.deleteScriptFiles(title);
-            
-            await this.loadDatabase();
-            
-            if (this.db.scripts[title]) {
-                delete this.db.scripts[title];
-            }
-            
-            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
-                headers: { 'Authorization': `token ${this.token}`, 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify({
-                    message: `Remove ${title} from database`,
+                    message: `Sync Database`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
             });
-            
-            msg.innerHTML = `<span style="color:var(--accent)">Deleted successfully!</span>`;
-            setTimeout(() => { 
-                msg.innerHTML = '';
-                this.switchAdminTab('list'); 
-            }, 1500);
+            const dbData = await dbRes.json();
+            this.dbSha = dbData.content.sha;
+
+            msg.innerHTML = `<span style="color:var(--accent)">Success!</span>`;
+            setTimeout(() => { this.switchAdminTab('list'); this.actionInProgress = false; }, 1000);
         } catch(e) {
-            msg.innerHTML = `<span style="color:red">Delete failed: ${e.message}</span>`;
-            alert(`Delete failed: ${e.message}`);
-        } finally {
+            msg.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
             this.actionInProgress = false;
         }
+    },
+
+    async deleteScriptFiles(title) {
+        const scriptId = utils.sanitizeTitle(title);
+        const script = this.db.scripts[title];
+        if (!script) return;
+
+        const files = [
+            `scripts/${scriptId}/raw/${script.filename}`,
+            `scripts/${scriptId}/index.html`
+        ];
+
+        for (const path of files) {
+            try {
+                const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                    headers: this.getHeaders()
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                        method: 'DELETE',
+                        headers: this.getHeaders(),
+                        body: JSON.stringify({ message: `Delete ${path}`, sha: data.sha })
+                    });
+                }
+            } catch(e) { console.error("File deletion error", e); }
+        }
+    },
+
+    async deleteScript() {
+        if (this.actionInProgress || !this.currentEditingId) return;
+        if (!confirm(`Permanently delete "${this.currentEditingId}"?`)) return;
+
+        this.actionInProgress = true;
+        const msg = document.getElementById('admin-msg');
+        msg.innerHTML = `<span class="loading">Deleting...</span>`;
+
+        try {
+            await this.deleteScriptFiles(this.currentEditingId);
+            delete this.db.scripts[this.currentEditingId];
+
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: this.getHeaders(),
+                body: JSON.stringify({
+                    message: `Remove script from DB`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            const data = await res.json();
+            this.dbSha = data.content.sha;
+
+            msg.innerHTML = `<span style="color:var(--accent)">Deleted!</span>`;
+            setTimeout(() => { 
+                this.switchAdminTab('list'); 
+                this.actionInProgress = false; 
+                this.renderList();
+            }, 1000);
+        } catch(e) {
+            msg.innerHTML = `<span style="color:red">Failed: ${e.message}</span>`;
+            this.actionInProgress = false;
+        }
+    },
+
+    handleDelete() {
+        this.deleteScript();
+    },
+
+    toggleLoginModal() {
+        const modal = document.getElementById('login-modal');
+        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+    },
+
+    renderList() {
+        const list = document.getElementById('script-list');
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const filtered = this.filterLogic(scripts);
+        const sorted = this.sortLogic(filtered);
+        
+        list.innerHTML = sorted.length ? sorted.map(s => `
+            <div class="script-card" onclick="window.location.href='scripts/${utils.sanitizeTitle(s.title)}/index.html'">
+                <div class="card-content">
+                    <div class="card-header-section">
+                        <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
+                        ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
+                    </div>
+                    <div class="card-meta"><span>${new Date(s.created).toLocaleDateString()}</span></div>
+                </div>
+            </div>
+        `).join('') : '<p class="empty-state">No scripts found.</p>';
+    },
+
+    filterLogic(scripts) {
+        const query = document.getElementById('search').value.toLowerCase();
+        return scripts.filter(s => {
+            if (!s.title.toLowerCase().includes(query)) return false;
+            if (!this.currentUser && s.visibility !== 'PUBLIC') return false;
+            if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
+            if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
+            return true;
+        });
+    },
+
+    sortLogic(scripts) {
+        return scripts.sort((a, b) => {
+            if (this.currentSort === 'newest') return new Date(b.created) - new Date(a.created);
+            if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
+            return 0;
+        });
+    },
+
+    filterCategory(cat, e) {
+        if (e) e.preventDefault();
+        this.currentFilter = cat;
+        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+        if (e) e.target.classList.add('active');
+        this.renderList();
+    },
+
+    setSort(val) { this.currentSort = val; this.renderList(); },
+
+    switchAdminTab(tab) {
+        document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        if (tab === 'list') {
+            document.getElementById('admin-tab-list').style.display = 'block';
+            this.renderAdminList();
+        } else if (tab === 'stats') {
+            document.getElementById('admin-tab-stats').style.display = 'block';
+            this.renderStats();
+        } else {
+            document.getElementById('admin-tab-editor').style.display = 'block';
+            this.resetEditor();
+        }
+    },
+
+    async renderAdminList() {
+        const list = document.getElementById('admin-list');
+        const scripts = Object.entries(this.db.scripts || {});
+        list.innerHTML = scripts.map(([title, s]) => `
+            <div class="admin-item" onclick="app.populateEditor('${title.replace(/'/g, "\\'")}')">
+                <div class="admin-item-left">
+                    <strong>${utils.escapeHtml(title)}</strong>
+                    <div class="admin-meta"><span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span></div>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    async populateEditor(title) {
+        const s = this.db.scripts[title];
+        if (!s) return;
+        this.currentEditingId = title;
+        this.switchAdminTab('create');
+        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+        document.getElementById('edit-title').value = s.title;
+        document.getElementById('edit-visibility').value = s.visibility;
+        document.getElementById('edit-desc').value = s.description || '';
+        document.getElementById('edit-code').value = 'Loading source...';
+        document.getElementById('btn-delete').style.display = 'inline-flex';
+
+        try {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${utils.sanitizeTitle(title)}/raw/${s.filename}`, { headers: this.getHeaders() });
+            const data = await res.json();
+            document.getElementById('edit-code').value = utils.safeAtob(data.content);
+        } catch(e) { document.getElementById('edit-code').value = '-- Error loading code'; }
+    },
+
+    resetEditor() {
+        this.currentEditingId = null;
+        document.getElementById('edit-title').value = '';
+        document.getElementById('edit-code').value = '';
+        document.getElementById('btn-delete').style.display = 'none';
+        document.getElementById('editor-heading').textContent = 'Create New Script';
+    },
+
+    renderStats() {
+        const total = Object.keys(this.db.scripts).length;
+        document.getElementById('stats-content').innerHTML = `<div class="stat-card"><div class="stat-number">${total}</div><div class="stat-label">Scripts</div></div>`;
     },
 
     handleRouting() {
         const hash = location.hash.slice(1);
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-        window.scrollTo(0, 0);
-        
-        if (hash === 'admin') {
-            if (!this.currentUser) { 
-                location.hash = ''; 
-                return; 
-            }
+        if (hash === 'admin' && this.currentUser) {
             document.getElementById('view-admin').style.display = 'block';
-            this.switchAdminTab('list');
         } else {
             document.getElementById('view-home').style.display = 'block';
         }
     }
 };
-
-function navigate(path) { 
-    location.hash = path; 
-}
 
 app.init();
