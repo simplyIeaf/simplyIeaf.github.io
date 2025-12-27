@@ -79,6 +79,16 @@
       "size": 1918,
       "created": "2025-12-27T19:47:05.298Z",
       "updated": "2025-12-27T19:47:05.298Z"
+    },
+    "Customizable Welcome Message": {
+      "title": "Customizable Welcome Message",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "customizable-welcome-message.lua",
+      "size": 4097,
+      "created": "2025-12-27T19:47:43.660Z",
+      "updated": "2025-12-27T19:47:43.660Z"
     }
   }
 }
