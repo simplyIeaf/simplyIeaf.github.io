@@ -17,6 +17,15 @@
       "filename": "system-messages.lua",
       "created": "2025-12-26T23:59:34.887Z",
       "updated": "2025-12-26T23:59:34.889Z"
+    },
+    "Nametag System": {
+      "title": "Nametag System",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "nametag-system.lua",
+      "created": "2025-12-27T00:00:08.817Z",
+      "updated": "2025-12-27T00:00:08.817Z"
     }
   }
 }
