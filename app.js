@@ -146,6 +146,12 @@ const app = {
                         this.logout(true);
                         return false;
                     }
+                    
+                    document.getElementById('auth-section').style.display = 'none';
+                    document.getElementById('user-section').style.display = 'flex';
+                    document.getElementById('private-filter').style.display = 'block';
+                    document.getElementById('unlisted-filter').style.display = 'block';
+                    
                     return true;
                 } else {
                     this.logout(true);
@@ -161,7 +167,7 @@ const app = {
     saveSession() {
         if (this.token && this.currentUser) {
             try {
-                const expiry = Date.now() + (24 * 60 * 60 * 1000);
+                const expiry = Date.now() + (30 * 24 * 60 * 60 * 1000);
                 localStorage.setItem('gh_token', this.token);
                 localStorage.setItem('gh_user', JSON.stringify(this.currentUser));
                 localStorage.setItem('gh_token_expiry', expiry.toString());
@@ -445,7 +451,6 @@ const app = {
             this.isLoading = false;
         }
     },
-
     renderList() {
         const list = document.getElementById('script-list');
         if (!list) return;
@@ -830,7 +835,6 @@ const app = {
         document.getElementById('editor-heading').textContent = 'Create New Script';
         document.getElementById('edit-title').value = '';
         document.getElementById('edit-visibility').value = 'PUBLIC';
-        document.getElementById('edit-desc').value = '';
         document.getElementById('edit-expire').value = '';
         
         if (window.monacoEditor) {
@@ -841,6 +845,8 @@ const app = {
         
         if (window.quillEditor) {
             window.quillEditor.root.innerHTML = '';
+        } else {
+            document.getElementById('edit-desc').value = '';
         }
         
         document.getElementById('btn-delete').style.display = 'none';
@@ -867,12 +873,6 @@ const app = {
         document.getElementById('edit-title').value = s.title;
         document.getElementById('edit-visibility').value = s.visibility;
         document.getElementById('edit-expire').value = s.expiration || '';
-        
-        if (window.quillEditor) {
-            window.quillEditor.root.innerHTML = s.description || '';
-        } else {
-            document.getElementById('edit-desc').value = s.description || '';
-        }
         
         const scriptId = utils.sanitizeTitle(title);
         
@@ -909,6 +909,14 @@ const app = {
             }
         } finally {
             if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+        
+        if (window.quillEditor) {
+            setTimeout(() => {
+                window.quillEditor.root.innerHTML = s.description || '';
+            }, 100);
+        } else {
+            document.getElementById('edit-desc').value = s.description || '';
         }
         
         document.getElementById('btn-delete').style.display = 'inline-flex';
@@ -950,7 +958,7 @@ const app = {
         
         const title = document.getElementById('edit-title').value.trim();
         const visibility = document.getElementById('edit-visibility').value;
-        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value.trim();
+        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
         const expiration = document.getElementById('edit-expire').value;
         const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
@@ -989,19 +997,19 @@ const app = {
             const scriptData = {
                 title: title,
                 visibility: visibility,
-                description: desc,
+                description: desc === '<p><br></p>' ? '' : desc,
                 expiration: expiration,
                 filename: filename,
                 size: code.length,
-                created: (isEditing && !titleChanged && this.db.scripts[title]) ? this.db.scripts[title].created : new Date().toISOString(),
+                created: (isEditing && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
                 updated: new Date().toISOString()
             };
             
-            this.db.scripts[title] = scriptData;
-            
-            if (isEditing && !titleChanged && this.originalTitle && this.originalTitle !== title) {
+            if (isEditing && this.originalTitle && this.originalTitle !== title) {
                 delete this.db.scripts[this.originalTitle];
             }
+            
+            this.db.scripts[title] = scriptData;
             
             const luaPath = `scripts/${scriptId}/raw/${filename}`;
             let luaSha = null;
@@ -1169,8 +1177,6 @@ const app = {
         } catch(e) {
             console.warn('Error deleting old index file:', e.message);
         }
-        
-        delete this.db.scripts[oldTitle];
     },
 
     async deleteScript() {
