@@ -16,7 +16,7 @@
     <nav class="navbar animate__animated animate__fadeInDown">
         <div class="nav-content">
             <div class="nav-left">
-                <button class="brand" onclick="navigate('')" style="background:none;border:none;padding:0;cursor:pointer">
+                <button class="brand" id="home-btn" style="background:none;border:none;padding:0;cursor:pointer">
                     <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
                     <span class="nav-title">Leaf's Scripts</span>
                 </button>
@@ -34,28 +34,28 @@
 
             <div class="nav-right">
                 <div id="auth-section">
-                    <button class="btn btn-secondary btn-sm" onclick="app.toggleLoginModal()" aria-label="Login to manage scripts">Login</button>
+                    <button class="btn btn-secondary btn-sm" id="login-btn">Login</button>
                 </div>
                 <div id="user-section" style="display:none">
-                    <button class="btn btn-primary btn-sm" onclick="navigate('admin')">Manage</button>
+                    <button class="btn btn-primary btn-sm" id="manage-btn">Manage</button>
                 </div>
             </div>
         </div>
     </nav>
     
-    <div id="login-modal" class="modal-overlay animate__animated animate__fadeIn" style="display:none" onclick="if(event.target === this) app.toggleLoginModal()">
+    <div id="login-modal" class="modal-overlay animate__animated animate__fadeIn" style="display:none">
         <div class="modal animate__animated animate__zoomIn">
             <div class="modal-header">
                 <h3>Admin Login</h3>
-                <button class="close-btn" onclick="app.toggleLoginModal()" aria-label="Close login modal">×</button>
+                <button class="close-btn" id="close-login-btn">×</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Password</label>
+                    <label>Token</label>
                     <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
                 </div>
                 <div id="login-error" role="alert" aria-live="polite" style="color:var(--color-danger);font-size:13px;margin:16px 0;text-align:center;display:none"></div>
-                <button class="btn btn-full" onclick="app.login()">Login</button>
+                <button class="btn btn-full" id="submit-login-btn">Login</button>
             </div>
         </div>
     </div>
@@ -102,7 +102,7 @@
                     </div>
                     <div class="sidebar-section sidebar-sort">
                         <h3 class="sidebar-title">Sort By</h3>
-                        <select class="input-field select-sm">
+                        <select class="input-field select-sm" id="sort-select">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
                             <option value="alpha">A-Z</option>
@@ -124,13 +124,13 @@
 
         <div id="view-admin" class="view-section animate__animated animate__fadeIn" style="display:none">
             <div class="admin-top-controls">
-                <button class="btn-back" onclick="navigate('')">
+                <button class="btn-back" id="back-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 12H5M12 19l-7-7 7-7"/>
                     </svg>
                     Back to Site
                 </button>
-                <button class="btn btn-secondary btn-sm" onclick="app.logout()">
+                <button class="btn btn-secondary btn-sm" id="logout-btn">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                         <polyline points="16 17 21 12 16 7"></polyline>
@@ -144,20 +144,20 @@
                 <div class="admin-header-flex">
                     <h2>Admin Panel</h2>
                     <div class="tab-switcher">
-                        <button class="tab-btn active" onclick="app.switchAdminTab('list')">
+                        <button class="tab-btn active" id="tab-list">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                             </svg>
                             Manage
                         </button>
-                        <button class="tab-btn" onclick="app.switchAdminTab('create')">
+                        <button class="tab-btn" id="tab-create">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
                                 <line x1="5" y1="12" x2="19" y2="12"></line>
                             </svg>
                             Add New
                         </button>
-                        <button class="tab-btn" onclick="app.switchAdminTab('stats')">
+                        <button class="tab-btn" id="tab-stats">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M21 21H4.6c-.56 0-.84 0-1.054-.109a1 1 0 01-.437-.437C3 20.24 3 19.96 3 19.4V3"></path>
                                 <path d="M21 16l-5-5-4 4-5-5"></path>
@@ -189,7 +189,7 @@
                             <div class="form-group form-group-flex">
                                 <label>Description</label>
                                 <div id="quill-container" style="height: 120px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--color-border);"></div>
-                                <input type="hidden" id="edit-desc" class="input-field" placeholder="Brief explanation...">
+                                <input type="hidden" id="edit-desc" class="input-field">
                             </div>
                             <div class="form-group">
                                 <label>Expiration</label>
@@ -200,14 +200,14 @@
                         <div class="form-group">
                             <label>Lua Source</label>
                             <div id="editor-container" style="height: 500px; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;"></div>
-                            <textarea id="edit-code" class="input-field code-textarea" placeholder="Paste your Lua code here..." style="display:none;"></textarea>
+                            <textarea id="edit-code" class="input-field code-textarea" style="display:none;"></textarea>
                         </div>
     
                         <div class="editor-actions">
                             <div class="action-buttons">
-                                <button class="btn btn-secondary" onclick="app.switchAdminTab('list')">Cancel</button>
-                                <button class="btn btn-delete" id="btn-delete" style="display:none" onclick="app.deleteScript()">Delete</button>
-                                <button class="btn" onclick="app.saveScript()">Save & Publish</button>
+                                <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
+                                <button class="btn btn-delete" id="btn-delete" style="display:none">Delete</button>
+                                <button class="btn" id="save-btn">Save & Publish</button>
                             </div>
                         </div>
                     </div>
@@ -234,6 +234,79 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
-    <script type="module" src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="app.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('home-btn').addEventListener('click', function() {
+                navigate('');
+            });
+            
+            document.getElementById('login-btn').addEventListener('click', function() {
+                app.toggleLoginModal();
+            });
+            
+            document.getElementById('manage-btn').addEventListener('click', function() {
+                navigate('admin');
+            });
+            
+            document.getElementById('close-login-btn').addEventListener('click', function() {
+                app.toggleLoginModal();
+            });
+            
+            document.getElementById('submit-login-btn').addEventListener('click', function() {
+                app.login();
+            });
+            
+            document.getElementById('login-modal').addEventListener('click', function(e) {
+                if (e.target === this) app.toggleLoginModal();
+            });
+            
+            document.getElementById('back-btn').addEventListener('click', function() {
+                navigate('');
+            });
+            
+            document.getElementById('logout-btn').addEventListener('click', function() {
+                app.logout();
+            });
+            
+            document.getElementById('tab-list').addEventListener('click', function() {
+                app.switchAdminTab('list');
+            });
+            
+            document.getElementById('tab-create').addEventListener('click', function() {
+                app.switchAdminTab('create');
+            });
+            
+            document.getElementById('tab-stats').addEventListener('click', function() {
+                app.switchAdminTab('stats');
+            });
+            
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                app.switchAdminTab('list');
+            });
+            
+            document.getElementById('btn-delete').addEventListener('click', function() {
+                app.deleteScript();
+            });
+            
+            document.getElementById('save-btn').addEventListener('click', function() {
+                app.saveScript();
+            });
+            
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const filter = this.dataset.filter;
+                    app.filterCategory(filter, e);
+                });
+            });
+            
+            document.getElementById('sort-select').addEventListener('change', function(e) {
+                app.setSort(e.target.value);
+            });
+        });
+    </script>
 </body>
 </html>
