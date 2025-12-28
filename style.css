@@ -1001,6 +1001,86 @@ textarea.input-field {
     word-break: break-word;
 }
 
+.monaco-editor {
+    border-radius: 8px;
+}
+
+.ql-toolbar.ql-snow {
+    border: 1px solid var(--color-border) !important;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    background: var(--bg-secondary);
+}
+
+.ql-container.ql-snow {
+    border: 1px solid var(--color-border) !important;
+    border-top: none !important;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    background: var(--bg-secondary);
+}
+
+.ql-editor {
+    color: var(--color-text);
+    font-family: 'Inter', sans-serif;
+    min-height: 80px;
+}
+
+.ql-snow .ql-stroke {
+    stroke: var(--color-text-muted) !important;
+}
+
+.ql-snow .ql-fill {
+    fill: var(--color-text-muted) !important;
+}
+
+.ql-snow .ql-picker {
+    color: var(--color-text-muted) !important;
+}
+
+.ql-snow .ql-picker-options {
+    background: var(--surface) !important;
+    border: 1px solid var(--color-border) !important;
+}
+
+.swal2-popup {
+    background: var(--surface) !important;
+    color: var(--color-text) !important;
+    border: 1px solid var(--color-border) !important;
+}
+
+.swal2-title {
+    color: var(--color-text) !important;
+}
+
+.swal2-html-container {
+    color: var(--color-text-muted) !important;
+}
+
+.swal2-confirm {
+    background: var(--color-primary) !important;
+}
+
+.swal2-cancel {
+    background: transparent !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text) !important;
+}
+
+#nprogress .bar {
+    background: var(--color-primary) !important;
+    height: 3px !important;
+}
+
+#nprogress .peg {
+    box-shadow: 0 0 10px var(--color-primary), 0 0 5px var(--color-primary) !important;
+}
+
+#nprogress .spinner-icon {
+    border-top-color: var(--color-primary) !important;
+    border-left-color: var(--color-primary) !important;
+}
+
 @media print {
     .navbar, .admin-top-controls, .toolbar-right,
     .btn, button, .search-wrapper, .nav-right {
@@ -1184,6 +1264,18 @@ textarea.input-field {
     .modal-text strong {
         font-size: 15px;
     }
+    
+    #editor-container {
+        height: 400px !important;
+    }
+    
+    .ql-toolbar.ql-snow {
+        padding: 8px !important;
+    }
+    
+    .ql-toolbar.ql-snow .ql-formats {
+        margin-right: 8px !important;
+    }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
@@ -1230,6 +1322,14 @@ textarea.input-field {
         padding: 8px 12px;
         font-size: 12px;
     }
+    
+    #editor-container {
+        height: 300px !important;
+    }
+    
+    .editor-container {
+        padding: 16px !important;
+    }
 }
 
 @media (orientation: portrait) and (max-height: 700px) {
@@ -1248,6 +1348,10 @@ textarea.input-field {
 
     .modal-actions .btn {
         padding: 10px 14px;
+    }
+    
+    #editor-container {
+        height: 350px !important;
     }
 }
 
@@ -1271,6 +1375,10 @@ textarea.input-field {
 
     .modal {
         max-width: 350px;
+    }
+    
+    #editor-container {
+        height: 450px !important;
     }
 }
 
