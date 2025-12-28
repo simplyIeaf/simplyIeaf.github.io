@@ -1,1289 +1,501 @@
-const CONFIG = {
-    user: 'simplyIeaf',
-    repo: 'simplyIeaf.github.io',
-    cacheBuster: () => Date.now()
-};
+(function() {
+    let GH_TOKEN = localStorage.getItem('ls_auth_token') || null;
+    let scriptsCache = [];
+    let currentCategory = 'all';
+    let currentSort = 'newest';
+    let monacoEditor = null;
+    let quillEditor = null;
+    let isEditing = false;
+    let currentEditingId = null;
 
-const utils = {
-    debounce(func, wait) {
-        let timeout;
-        return function(...args) {
-            const context = this;
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(context, args), wait);
-        };
-    },
-    
-    safeBtoa(str) {
-        try {
-            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, 
-                (match, p1) => String.fromCharCode('0x' + p1)));
-        } catch(e) {
-            return btoa(unescape(encodeURIComponent(str)));
-        }
-    },
-    
-    safeAtob(str) {
-        try {
-            return decodeURIComponent(atob(str).split('').map(c => 
-                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        } catch(e) {
-            return decodeURIComponent(escape(atob(str)));
-        }
-    },
-
-    sanitizeTitle(title) {
-        return title.toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '')
-            .substring(0, 100);
-    },
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    },
-
-    validateTitle(title) {
-        if (!title || title.trim().length === 0) return 'Title is required';
-        if (title.length > 100) return 'Title must be less than 100 characters';
-        const sanitized = this.sanitizeTitle(title);
-        if (sanitized.includes('..') || sanitized.includes('/') || sanitized.includes('\\')) {
-            return 'Invalid title characters';
-        }
-        const reserved = ['con', 'prn', 'aux', 'nul'];
-        if (reserved.includes(sanitized.toLowerCase())) return 'Invalid title';
-        return null;
-    },
-
-    validateCode(code) {
-        if (!code || code.trim().length === 0) return 'Code is required';
-        if (code.length > 100000) return 'Code is too large (max 100KB)';
-        return null;
-    }
-};
-
-const app = {
-    db: { scripts: {} },
-    dbSha: null,
-    token: null,
-    currentUser: null,
-    currentFilter: 'all',
-    currentSort: 'newest',
-    actionInProgress: false,
-    currentEditingId: null,
-    originalTitle: null,
-    isLoading: false,
-    searchQuery: '',
-    
-    async init() {
-        const sessionValid = this.loadSession();
-        await this.loadDatabase();
-        this.handleRouting();
-        window.addEventListener('hashchange', () => this.handleRouting());
+    const dom = {
+        loginModal: document.getElementById('login-modal'),
+        authToken: document.getElementById('auth-token'),
+        loginError: document.getElementById('login-error'),
+        viewHome: document.getElementById('view-home'),
+        viewAdmin: document.getElementById('view-admin'),
+        userSection: document.getElementById('user-section'),
+        authSection: document.getElementById('auth-section'),
+        scriptList: document.getElementById('script-list'),
+        adminList: document.getElementById('admin-list'),
+        adminTabList: document.getElementById('admin-tab-list'),
+        adminTabEditor: document.getElementById('admin-tab-editor'),
+        adminTabStats: document.getElementById('admin-tab-stats'),
+        searchInput: document.getElementById('search'),
+        editorHeading: document.getElementById('editor-heading'),
         
-        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
+        editTitle: document.getElementById('edit-title'),
+        editVisibility: document.getElementById('edit-visibility'),
+        editExpire: document.getElementById('edit-expire'),
         
-        const today = new Date().toISOString().split('T')[0];
-        const expireInput = document.getElementById('edit-expire');
-        if (expireInput) expireInput.min = today;
-        
-        this.initEventListeners();
-        this.loadMonacoIfNeeded();
-        
-        window.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                e.preventDefault();
-                if (location.hash === '#admin') {
-                    this.saveScript();
-                }
-            }
+        filterLinks: document.querySelectorAll('.sidebar-link'),
+        tabBtns: document.querySelectorAll('.tab-btn')
+    };
+
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: '-- Lua Script\nprint("Hello World")',
+            language: 'lua',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            minimap: { enabled: false },
+            fontSize: 14,
+            scrollBeyondLastLine: false,
+            padding: { top: 16, bottom: 16 }
         });
+    });
 
-        this.startSessionRefresh();
-    },
+    quillEditor = new Quill('#quill-container', {
+        theme: 'snow',
+        modules: {
+            toolbar: [['bold', 'italic', 'underline'], [{ 'list': 'ordered'}, { 'list': 'bullet' }], ['clean']]
+        },
+        placeholder: 'Script description...'
+    });
 
-    startSessionRefresh() {
-        setInterval(() => {
-            if (this.token && this.currentUser) {
-                const expiry = localStorage.getItem('gh_token_expiry');
-                if (expiry && Date.now() >= parseInt(expiry)) {
-                    this.logout(true);
-                }
-            }
-        }, 60000);
-    },
-    
-    initEventListeners() {
-        const searchInput = document.getElementById('search');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.searchQuery = e.target.value;
-                this.debouncedRender();
-            });
-        }
-    },
-    
-    loadMonacoIfNeeded() {
-        if (location.hash === '#admin') {
-            setTimeout(() => {
-                this.loadMonacoEditor();
-                this.loadQuillEditor();
-            }, 100);
-        }
-    },
-
-    loadSession() {
-        try {
-            const storedToken = localStorage.getItem('gh_token');
-            const storedUser = localStorage.getItem('gh_user');
-            const tokenExpiry = localStorage.getItem('gh_token_expiry');
-            
-            if (storedToken && storedUser && tokenExpiry) {
-                const now = Date.now();
-                if (now < parseInt(tokenExpiry)) {
-                    this.token = storedToken;
-                    this.currentUser = JSON.parse(storedUser);
-                    
-                    if (this.currentUser.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
-                        this.logout(true);
-                        return false;
-                    }
-                    
-                    this.updateUIForLoggedInUser();
-                    
-                    return true;
+    function init() {
+        if(GH_TOKEN) {
+            verifyToken(GH_TOKEN).then(valid => {
+                if(valid) {
+                    dom.authSection.style.display = 'none';
+                    dom.userSection.style.display = 'block';
+                    document.getElementById('private-filter').style.display = 'flex';
+                    document.getElementById('unlisted-filter').style.display = 'flex';
                 } else {
-                    this.logout(true);
+                    logout();
                 }
-            }
-        } catch(e) {
-            console.error('Session load error:', e);
-            this.logout(true);
-        }
-        return false;
-    },
-
-    updateUIForLoggedInUser() {
-        document.getElementById('auth-section').style.display = 'none';
-        document.getElementById('user-section').style.display = 'flex';
-        document.getElementById('private-filter').style.display = 'block';
-        document.getElementById('unlisted-filter').style.display = 'block';
-    },
-
-    saveSession() {
-        if (this.token && this.currentUser) {
-            try {
-                const expiry = Date.now() + (30 * 24 * 60 * 60 * 1000);
-                localStorage.setItem('gh_token', this.token);
-                localStorage.setItem('gh_user', JSON.stringify(this.currentUser));
-                localStorage.setItem('gh_token_expiry', expiry.toString());
-            } catch(e) {
-                console.error('Session save error:', e);
-                this.showToast('Failed to save session', 'error');
-            }
-        }
-    },
-
-    generateScriptHTML(title, scriptData) {
-        const scriptId = utils.sanitizeTitle(title);
-        const descriptionHtml = scriptData.description ? 
-            `<div class="script-description">${this.sanitizeHtml(scriptData.description)}</div>` : '';
-        
-        return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${utils.escapeHtml(scriptData.title)} - Leaf's Scripts</title>
-    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
-    <link rel="stylesheet" href="../../style.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-content">
-            <div class="nav-left">
-                <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
-                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
-                    <span class="nav-title">Leaf's Scripts</span>
-                </a>
-            </div>
-            <div class="nav-right">
-                <a href="../../index.html" class="btn btn-secondary btn-sm">Back</a>
-            </div>
-        </div>
-    </nav>
-    
-    <div class="container">
-        <div class="script-header-lg">
-            <div>
-                <h1>${utils.escapeHtml(scriptData.title)}</h1>
-                <div class="meta-row">
-                    <span class="meta-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        <span>${new Date(scriptData.created).toLocaleDateString()}</span>
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        ${descriptionHtml}
-        
-        <div class="code-box">
-            <div class="toolbar">
-                <div class="file-info">raw/${scriptData.filename}</div>
-                <div class="toolbar-right">
-                    <button class="btn btn-sm" onclick="downloadScript()">Download</button>
-                    <button class="btn btn-sm" onclick="copyScript(this)">Copy</button>
-                    <a href="raw/${scriptData.filename}" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
-                </div>
-            </div>
-            <pre><code id="code-display" class="language-lua">Loading...</code></pre>
-        </div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-    <script>
-        const filename = '${scriptData.filename}';
-        const scriptId = '${scriptId}';
-        
-        async function loadScript() {
-            try {
-                const res = await fetch(\`raw/\${filename}\`);
-                const code = await res.text();
-                document.getElementById('code-display').textContent = code;
-                Prism.highlightAll();
-            } catch(e) {
-                document.getElementById('code-display').textContent = '-- Error loading source';
-            }
-        }
-        
-        function copyScript(btn) {
-            const code = document.getElementById('code-display').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                const original = btn.innerText;
-                btn.innerText = 'Copied!';
-                setTimeout(() => btn.innerText = original, 2000);
+                loadScripts();
             });
-        }
-        
-        function downloadScript() {
-            const code = document.getElementById('code-display').textContent;
-            const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
-            saveAs(blob, filename);
-        }
-        
-        loadScript();
-    </script>
-</body>
-</html>`;
-    },
-
-    sanitizeHtml(html) {
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        return temp.innerHTML;
-    },
-
-    toggleLoginModal() {
-        const modal = document.getElementById('login-modal');
-        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-        document.getElementById('login-error').style.display = 'none';
-        if (modal.style.display === 'flex') {
-            document.getElementById('auth-token').focus();
-        }
-    },
-
-    async login() {
-        if (this.actionInProgress) return;
-        this.actionInProgress = true;
-        
-        try {
-            const token = document.getElementById('auth-token').value.trim();
-            if (!token) {
-                this.showLoginError('Token is required');
-                return;
-            }
-            
-            this.token = token;
-            const success = await this.verifyToken(false);
-            if (success) {
-                this.saveSession();
-                this.toggleLoginModal();
-                document.getElementById('auth-token').value = '';
-                await this.loadDatabase();
-                this.renderList();
-                this.showToast('Logged in successfully!', 'success');
-            }
-        } finally {
-            this.actionInProgress = false;
-        }
-    },
-
-    showLoginError(message) {
-        const err = document.getElementById('login-error');
-        err.textContent = message;
-        err.style.display = 'block';
-        this.actionInProgress = false;
-    },
-    
-    showToast(message, type = 'success') {
-        if (typeof Toastify !== 'undefined') {
-            Toastify({
-                text: message,
-                duration: 3000,
-                gravity: "top",
-                position: "right",
-                backgroundColor: type === 'success' ? "#10b981" : type === 'error' ? "#ef4444" : "#f59e0b",
-                stopOnFocus: true
-            }).showToast();
         } else {
-            alert(message);
+            loadScripts();
         }
-    },
 
-    logout(silent = false) {
-        if (!silent && !confirm('Are you sure you want to logout?')) {
-            return;
-        }
-        
-        try {
-            localStorage.removeItem('gh_token');
-            localStorage.removeItem('gh_user');
-            localStorage.removeItem('gh_token_expiry');
-        } catch(e) {
-            console.error('Logout error:', e);
-        }
-        
-        this.token = null;
-        this.currentUser = null;
-        
-        document.getElementById('auth-section').style.display = 'block';
-        document.getElementById('user-section').style.display = 'none';
-        document.getElementById('private-filter').style.display = 'none';
-        document.getElementById('unlisted-filter').style.display = 'none';
-        
-        location.href = '#';
-        
-        if (!silent) {
-            this.showToast('Logged out successfully', 'success');
-            setTimeout(() => location.reload(), 1000);
-        }
-    },
+        dom.searchInput.addEventListener('input', (e) => {
+            renderScripts(e.target.value);
+        });
+    }
 
-    async verifyToken(silent) {
+    async function verifyToken(token) {
         try {
             const res = await fetch('https://api.github.com/user', {
-                headers: { 'Authorization': `token ${this.token}` }
+                headers: { Authorization: `token ${token}` }
             });
-            
-            if (!res.ok) {
-                throw new Error('Invalid token');
-            }
-            
-            const user = await res.json();
-            if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
-                throw new Error(`Token belongs to ${user.login}, not ${CONFIG.user}.`);
-            }
-            
-            this.currentUser = user;
-            this.updateUIForLoggedInUser();
-            
-            return true;
-        } catch (e) {
-            if (!silent) {
-                this.showLoginError(e.message);
-            }
-            this.token = null;
-            try {
-                localStorage.removeItem('gh_token');
-                localStorage.removeItem('gh_user');
-                localStorage.removeItem('gh_token_expiry');
-            } catch(err) {
-                console.error('Error clearing storage:', err);
-            }
-            return false;
-        }
-    },
+            return res.status === 200;
+        } catch { return false; }
+    }
 
-    async loadDatabase() {
+    async function loadScripts() {
+        NProgress.start();
         try {
-            this.isLoading = true;
-            const list = document.getElementById('admin-list');
-            if (list) {
-                list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading scripts...</p></div>`;
-            }
+            const headers = GH_TOKEN ? { Authorization: `token ${GH_TOKEN}` } : {};
+            const res = await fetch('https://api.github.com/gists', { headers });
+            const data = await res.json();
             
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
-                headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
-            });
-            
-            if (res.status === 404) {
-                this.db = { scripts: {} };
-                this.dbSha = null;
-            } else if (res.ok) {
-                const file = await res.json();
-                this.dbSha = file.sha;
+            scriptsCache = data.map(gist => {
+                const file = Object.values(gist.files)[0];
+                if (!file) return null;
+                
+                let content = {};
                 try {
-                    this.db = JSON.parse(utils.safeAtob(file.content));
-                    if (!this.db.scripts) {
-                        this.db = { scripts: {} };
-                    }
-                } catch(parseError) {
-                    console.error('Database parse error:', parseError);
-                    this.showToast('Database corrupted, initializing new database', 'warning');
-                    this.db = { scripts: {} };
+                    content = JSON.parse(gist.description);
+                } catch {
+                    content = { title: file.filename, desc: "No description", visibility: "PUBLIC" };
                 }
-            } else {
-                throw new Error(`Failed to load database: ${res.status}`);
-            }
-            this.renderList();
-            this.renderAdminList();
-        } catch (e) { 
-            console.error("DB Error", e);
-            const list = document.getElementById('admin-list');
-            if (list) {
-                list.innerHTML = `<div class="empty-admin-state">
-                    <p style="color:var(--color-danger)">Error loading scripts: ${e.message}</p>
-                    <button class="btn btn-sm" onclick="app.loadDatabase()" style="margin-top:10px">Retry</button>
-                </div>`;
-            }
-            this.showToast(`Error loading scripts: ${e.message}`, 'error');
-        } finally {
-            this.isLoading = false;
-        }
-    },
 
-    renderList() {
-        const list = document.getElementById('script-list');
-        if (!list) return;
-        
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const filtered = this.filterLogic(scripts);
-        const sorted = this.sortLogic(filtered);
-        
-        if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-state">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;margin-bottom:16px;">
-                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <h2>No scripts found</h2>
-                <p>Try adjusting your search or filter</p>
-            </div>`;
+                return {
+                    id: gist.id,
+                    title: content.title || file.filename,
+                    desc: content.desc || "",
+                    code: null, 
+                    rawUrl: file.raw_url,
+                    visibility: content.visibility || "PUBLIC",
+                    expire: content.expire || "",
+                    updated: new Date(gist.updated_at),
+                    created: new Date(gist.created_at)
+                };
+            }).filter(s => s !== null);
+
+            renderScripts();
+            if(GH_TOKEN) renderAdminList();
+            renderStats();
+        } catch (error) {
+            console.error(error);
+            Toastify({ text: "Failed to load scripts", backgroundColor: "var(--color-danger)" }).showToast();
+        }
+        NProgress.done();
+    }
+
+    function renderScripts(query = "") {
+        const grid = dom.scriptList;
+        grid.innerHTML = '';
+
+        let filtered = scriptsCache.filter(s => {
+            const matchQuery = s.title.toLowerCase().includes(query.toLowerCase());
+            const matchFilter = currentCategory === 'all' || s.visibility.toLowerCase() === currentCategory;
+            const isPublicOrAuthed = s.visibility === 'PUBLIC' || GH_TOKEN;
+            return matchQuery && matchFilter && isPublicOrAuthed;
+        });
+
+        filtered.sort((a, b) => {
+            if(currentSort === 'newest') return b.created - a.created;
+            if(currentSort === 'oldest') return a.created - b.created;
+            if(currentSort === 'alpha') return a.title.localeCompare(b.title);
+            if(currentSort === 'updated') return b.updated - a.updated;
+        });
+
+        if(filtered.length === 0) {
+            grid.innerHTML = `<div style="text-align:center;padding:60px 0;grid-column:1/-1;color:var(--color-text-muted)">No scripts found.</div>`;
             return;
         }
-        
-        list.innerHTML = sorted.map(s => {
-            const scriptId = utils.sanitizeTitle(s.title);
-            const isExpired = s.expiration && new Date(s.expiration) < new Date();
+
+        filtered.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'script-card animate__animated animate__fadeIn';
+            card.onclick = () => viewScript(s);
             
-            return `
-            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
-                <div class="card-content">
-                    <div class="card-header-section">
-                        <h3 class="script-title">${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</h3>
-                        ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
-                        ${isExpired ? `<span class="badge" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
-                    </div>
-                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.replace(/<[^>]*>/g, '').substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
-                    <div class="card-meta">
-                        <span>${new Date(s.created).toLocaleDateString()}</span>
-                        ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
-                    </div>
+            let badgeClass = 'badge-public';
+            if(s.visibility === 'PRIVATE') badgeClass = 'badge-private';
+            if(s.visibility === 'UNLISTED') badgeClass = 'badge-unlisted';
+
+            card.innerHTML = `
+                <div class="card-header-section">
+                    <h3 class="script-title">${s.title}</h3>
+                    ${GH_TOKEN ? `<span class="badge ${badgeClass} badge-sm">${s.visibility}</span>` : ''}
                 </div>
-            </div>
-        `}).join('');
-    },
-
-    filterLogic(scripts) {
-        const query = this.searchQuery.toLowerCase();
-        const now = new Date();
-        
-        return scripts.filter(s => {
-            if (!s.title.toLowerCase().includes(query)) return false;
-            if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
-            if (s.visibility === 'UNLISTED' && !this.currentUser) return false; 
-            if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
-            if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
-            if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
-            if (s.expiration && new Date(s.expiration) < now) return false;
-            return true;
+                <div class="card-meta">
+                    <span>${s.updated.toLocaleDateString()}</span>
+                </div>
+            `;
+            grid.appendChild(card);
         });
-    },
+    }
 
-    sortLogic(scripts) {
-        return scripts.sort((a, b) => {
-            if (this.currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
-            if (this.currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
-            if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
-            if (this.currentSort === 'updated') return new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0);
-            return 0;
-        });
-    },
-
-    filterCategory(cat, e) {
-        if (e) {
-            e.preventDefault();
-            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            if(e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
-        }
-        this.currentFilter = cat;
-        this.renderList();
-    },
-
-    setSort(val) { 
-        this.currentSort = val; 
-        this.renderList(); 
-    },
-
-    switchAdminTab(tab) {
-        if (tab === 'admin' && !this.currentUser) {
-            location.hash = '';
-            return;
-        }
-        
-        document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        if (tab === 'list') {
-            document.getElementById('admin-tab-list').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[0].classList.add('active');
-            this.renderAdminList();
-        } else if (tab === 'stats') {
-            document.getElementById('admin-tab-stats').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[2].classList.add('active');
-            this.renderStats();
-        } else {
-            document.getElementById('admin-tab-editor').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[1].classList.add('active');
-            if (tab === 'create') {
-                this.resetEditor();
-            }
-            this.loadMonacoEditor();
-            this.loadQuillEditor();
-        }
-    },
-
-    async renderAdminList() {
-        if (!this.currentUser) return;
-        const list = document.getElementById('admin-list');
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const sorted = scripts.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
-        document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
-        if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-admin-state">
-                <p>No scripts yet. Click "Add New" to create your first script.</p>
-            </div>`;
-            return;
-        }
-        list.innerHTML = sorted.map(s => {
-            const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
-            const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            return `
-            <div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
-                <div class="admin-item-left">
-                    <strong>${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</strong>
-                    <div class="admin-meta">
-                        <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
-                        ${isExpired ? `<span class="badge badge-sm" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
-                        <span class="text-muted">Updated ${updated}</span>
+    async function viewScript(script) {
+        try {
+            NProgress.start();
+            const res = await fetch(script.rawUrl);
+            const code = await res.text();
+            
+            Swal.fire({
+                title: script.title,
+                html: `
+                    <div style="text-align:left">
+                        <div class="ql-editor" style="padding:0;margin-bottom:15px">${script.desc}</div>
+                        <pre style="max-height:300px;overflow:auto;font-size:12px;border-radius:6px"><code>${code.replace(/</g, '&lt;')}</code></pre>
                     </div>
+                `,
+                width: 800,
+                showCancelButton: true,
+                confirmButtonText: 'Download',
+                cancelButtonText: 'Close'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+                    saveAs(blob, `${script.title}.lua`);
+                }
+            });
+        } catch {
+            Toastify({ text: "Failed to load code", backgroundColor: "var(--color-danger)" }).showToast();
+        }
+        NProgress.done();
+    }
+
+    function renderAdminList() {
+        const list = dom.adminList;
+        list.innerHTML = '';
+        
+        scriptsCache.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'admin-item';
+            
+            const content = document.createElement('div');
+            content.className = 'admin-item-content';
+            content.innerHTML = `
+                <div class="admin-item-left">
+                    <strong>${s.title}</strong>
+                    <span class="text-muted" style="font-size:12px">${s.visibility} • ${s.updated.toLocaleDateString()}</span>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                 </div>
-            </div>
-        `}).join('');
-        this.initSwipeToDelete();
-    },
-
-    initSwipeToDelete() {
-        const adminItems = document.querySelectorAll('.admin-item');
-        adminItems.forEach(item => {
-            let startX = 0;
-            let isSwiping = false;
-            item.addEventListener('touchstart', (e) => {
-                startX = e.touches[0].clientX;
-                isSwiping = false;
-                item.style.transition = 'none';
-            }, { passive: true });
-            item.addEventListener('touchmove', (e) => {
-                if (!startX) return;
-                const currentX = e.touches[0].clientX;
-                const diff = currentX - startX;
-                if (Math.abs(diff) > 30) {
-                    isSwiping = true;
-                    e.preventDefault();
-                    if (diff > 0) {
-                        item.style.transform = `translateX(${Math.min(diff, 100)}px)`;
-                        item.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                    }
-                }
-            }, { passive: false });
-            item.addEventListener('touchend', (e) => {
-                if (!startX || !isSwiping) return;
-                const endX = e.changedTouches[0].clientX;
-                const diff = endX - startX;
-                item.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
-                if (diff > 100) {
-                    item.style.transform = 'translateX(300px)';
-                    item.style.opacity = '0';
-                    setTimeout(() => {
-                        const scriptTitle = item.getAttribute('data-script-title');
-                        this.deleteScriptConfirmation(scriptTitle);
-                    }, 300);
-                } else {
-                    item.style.transform = 'translateX(0)';
-                    item.style.backgroundColor = '';
-                }
-                startX = 0;
-                isSwiping = false;
-            });
-            item.addEventListener('click', (e) => {
-                if (isSwiping) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            });
-        });
-    },
-
-    async deleteScriptConfirmation(scriptTitle) {
-        if (!scriptTitle || !this.db.scripts[scriptTitle]) {
-            this.showToast('Script not found or already deleted.', 'error');
-            await this.loadDatabase();
-            return;
-        }
-
-        const confirmMessage = `Are you sure you want to delete "${scriptTitle}"? This will permanently delete the script, Lua file, and HTML page.`;
-        
-        let shouldDelete = false;
-        
-        if (typeof Swal !== 'undefined') {
-            const result = await Swal.fire({
-                title: 'Delete Script',
-                text: confirmMessage,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Yes, delete it!',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#ef4444'
-            });
-            shouldDelete = result.isConfirmed;
-        } else {
-            shouldDelete = confirm(confirmMessage);
-        }
-
-        if (!shouldDelete) {
-            await this.loadDatabase();
-            return;
-        }
-
-        await this.deleteScriptLogic(scriptTitle);
-    },
-
-    async deleteScriptLogic(scriptTitle) {
-        if (this.actionInProgress) return;
-        if (!this.currentUser) {
-            this.showToast('Please login first.', 'error');
-            return;
-        }
-
-        this.actionInProgress = true;
-        
-        try {
-            if (typeof NProgress !== 'undefined') NProgress.start();
-            
-            const scriptData = this.db.scripts[scriptTitle];
-            const scriptId = utils.sanitizeTitle(scriptTitle);
-            
-            const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
-            try {
-                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                
-                if (luaRes.ok) {
-                    const luaData = await luaRes.json();
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                        method: 'DELETE',
-                        headers: { 
-                            'Authorization': `token ${this.token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: `Delete ${scriptData.filename}`,
-                            sha: luaData.sha
-                        })
-                    });
-                }
-            } catch(e) {
-                console.warn('Lua file deletion error:', e.message);
-            }
-
-            const indexPath = `scripts/${scriptId}/index.html`;
-            try {
-                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                
-                if (idxRes.ok) {
-                    const idxData = await idxRes.json();
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                        method: 'DELETE',
-                        headers: { 
-                            'Authorization': `token ${this.token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: `Delete index for ${scriptTitle}`,
-                            sha: idxData.sha
-                        })
-                    });
-                }
-            } catch(e) {
-                console.warn('Index file deletion error:', e.message);
-            }
-            
-            delete this.db.scripts[scriptTitle];
-            
-            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `Remove ${scriptTitle} from database`,
-                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha
-                })
-            });
-            
-            if (dbRes.ok) {
-                const newDbData = await dbRes.json();
-                this.dbSha = newDbData.content.sha;
-                
-                this.showToast('Script deleted successfully!', 'success');
-                
-                if (this.currentEditingId === scriptTitle) {
-                    this.resetEditor();
-                    this.switchAdminTab('list');
-                }
-                
-                await this.loadDatabase();
-            } else {
-                throw new Error('Failed to update database');
-            }
-            
-        } catch(e) {
-            console.error('Delete error:', e);
-            this.showToast(`Delete failed: ${e.message}`, 'error');
-            await this.loadDatabase();
-        } finally {
-            this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
-        }
-    },
-
-    renderStats() {
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
-        const privateCount = scripts.filter(s => s.visibility === 'PRIVATE').length;
-        const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
-        const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
-        const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
-        if (scripts.length === 0) {
-            document.getElementById('stats-content').innerHTML = `
-                <div class="empty-admin-state">
-                    <p>No scripts yet. Create your first script to see statistics.</p>
-                </div>
             `;
+
+            const bg = document.createElement('div');
+            bg.className = 'swipe-bg';
+            bg.innerHTML = '<span class="swipe-text">Delete</span>';
+
+            item.appendChild(bg);
+            item.appendChild(content);
+            list.appendChild(item);
+
+            setupSwipe(item, s.id);
+
+            item.onclick = (e) => {
+                if(!item.classList.contains('swiping')) {
+                    editScript(s);
+                }
+            };
+        });
+        
+        document.getElementById('total-stats').innerText = `${scriptsCache.length} Scripts`;
+    }
+
+    function setupSwipe(element, id) {
+        let startX = 0;
+        let currentX = 0;
+        let isDragging = false;
+        const threshold = 150;
+
+        const start = (x) => {
+            startX = x;
+            isDragging = true;
+            element.style.transition = 'none';
+        };
+
+        const move = (x) => {
+            if (!isDragging) return;
+            currentX = x - startX;
+            if (currentX > 0) {
+                element.style.transform = `translateX(${currentX}px)`;
+                const opacity = Math.min(currentX / threshold, 1);
+                element.querySelector('.swipe-bg').style.opacity = opacity;
+            }
+        };
+
+        const end = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            element.style.transition = 'transform 0.3s ease';
+            
+            if (currentX > threshold) {
+                element.style.transform = `translateX(100%)`;
+                setTimeout(() => deleteScript(id), 300);
+            } else {
+                element.style.transform = 'translateX(0)';
+                element.querySelector('.swipe-bg').style.opacity = 0;
+            }
+            currentX = 0;
+        };
+
+        element.addEventListener('mousedown', e => start(e.clientX));
+        window.addEventListener('mousemove', e => move(e.clientX));
+        window.addEventListener('mouseup', end);
+        
+        element.addEventListener('touchstart', e => start(e.touches[0].clientX), {passive: true});
+        element.addEventListener('touchmove', e => move(e.touches[0].clientX), {passive: true});
+        element.addEventListener('touchend', end);
+    }
+
+    async function editScript(script) {
+        try {
+            NProgress.start();
+            isEditing = true;
+            currentEditingId = script.id;
+            
+            dom.editTitle.value = script.title;
+            dom.editVisibility.value = script.visibility;
+            dom.editExpire.value = script.expire;
+            
+            quillEditor.root.innerHTML = script.desc;
+            
+            const res = await fetch(script.rawUrl);
+            const code = await res.text();
+            monacoEditor.setValue(code);
+            
+            switchAdminTab('create');
+            dom.editorHeading.innerText = "Edit Script";
+        } catch(e) {
+            Toastify({ text: "Error loading script data", backgroundColor: "var(--color-danger)" }).showToast();
+        }
+        NProgress.done();
+    }
+
+    async function saveScript() {
+        const title = dom.editTitle.value;
+        const code = monacoEditor.getValue();
+        const desc = quillEditor.root.innerHTML;
+        const visibility = dom.editVisibility.value;
+        const expire = dom.editExpire.value;
+
+        if(!title || !code) {
+            Toastify({ text: "Title and Code are required", backgroundColor: "var(--color-danger)" }).showToast();
             return;
         }
+
+        NProgress.start();
+        const meta = JSON.stringify({ title, desc, visibility, expire });
+        const payload = {
+            description: meta,
+            public: visibility === 'PUBLIC',
+            files: {
+                [title + ".lua"]: { content: code }
+            }
+        };
+
+        try {
+            let url = 'https://api.github.com/gists';
+            let method = 'POST';
+            
+            if (isEditing && currentEditingId) {
+                url = `https://api.github.com/gists/${currentEditingId}`;
+                method = 'PATCH';
+                
+                const oldScript = scriptsCache.find(s => s.id === currentEditingId);
+                if(oldScript && oldScript.title !== title) {
+                    payload.files[oldScript.title + ".lua"] = null; 
+                }
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { Authorization: `token ${GH_TOKEN}` },
+                body: JSON.stringify(payload)
+            });
+
+            if(res.ok) {
+                Toastify({ text: "Script saved successfully", backgroundColor: "var(--color-primary)" }).showToast();
+                resetEditor();
+                switchAdminTab('list');
+                loadScripts();
+            } else {
+                throw new Error("API Error");
+            }
+        } catch (e) {
+            Toastify({ text: "Failed to save script", backgroundColor: "var(--color-danger)" }).showToast();
+        }
+        NProgress.done();
+    }
+
+    async function deleteScript(id) {
+        Swal.fire({
+            title: 'Delete Script?',
+            text: "You won't be able to revert this!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                NProgress.start();
+                try {
+                    await fetch(`https://api.github.com/gists/${id}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `token ${GH_TOKEN}` }
+                    });
+                    loadScripts();
+                    Toastify({ text: "Deleted successfully", backgroundColor: "var(--color-primary)" }).showToast();
+                } catch {
+                    Toastify({ text: "Failed to delete", backgroundColor: "var(--color-danger)" }).showToast();
+                }
+                NProgress.done();
+            } else {
+                renderAdminList(); 
+            }
+        });
+    }
+
+    function resetEditor() {
+        isEditing = false;
+        currentEditingId = null;
+        dom.editTitle.value = '';
+        dom.editVisibility.value = 'PUBLIC';
+        dom.editExpire.value = '';
+        quillEditor.setText('');
+        monacoEditor.setValue('-- Lua Script');
+        dom.editorHeading.innerText = "Create New Script";
+    }
+
+    function switchAdminTab(tabName) {
+        document.querySelectorAll('.admin-tab').forEach(el => el.style.display = 'none');
+        document.getElementById(`admin-tab-${tabName}`).style.display = 'block';
+        
+        dom.tabBtns.forEach(btn => btn.classList.remove('active'));
+        event?.currentTarget?.classList.add('active');
+
+        if(tabName === 'create' && !isEditing) resetEditor();
+    }
+
+    function renderStats() {
+        const total = scriptsCache.length;
+        const publicCount = scriptsCache.filter(s => s.visibility === 'PUBLIC').length;
+        const privateCount = scriptsCache.filter(s => s.visibility === 'PRIVATE').length;
+        
         document.getElementById('stats-content').innerHTML = `
             <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">${scripts.length}</div>
-                    <div class="stat-label">Total Scripts</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${publicCount}</div>
-                    <div class="stat-label">Public</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${privateCount}</div>
-                    <div class="stat-label">Private</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${unlistedCount}</div>
-                    <div class="stat-label">Unlisted</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${expiredCount}</div>
-                    <div class="stat-label">Expired</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
-                    <div class="stat-label">Total Size</div>
-                </div>
+                <div class="stat-card"><div class="stat-number">${total}</div><div class="stat-label">Total Scripts</div></div>
+                <div class="stat-card"><div class="stat-number">${publicCount}</div><div class="stat-label">Public</div></div>
+                <div class="stat-card"><div class="stat-number">${privateCount}</div><div class="stat-label">Private</div></div>
             </div>
         `;
-    },
+    }
 
-    resetEditor() {
-        document.getElementById('editor-heading').textContent = 'Create New Script';
-        document.getElementById('edit-title').value = '';
-        document.getElementById('edit-visibility').value = 'PUBLIC';
-        document.getElementById('edit-expire').value = '';
-        
-        if (window.monacoEditor) {
-            window.monacoEditor.setValue('');
-        } else {
-            document.getElementById('edit-code').value = '';
-        }
-        
-        if (window.quillEditor) {
-            window.quillEditor.root.innerHTML = '';
-        } else {
-            document.getElementById('edit-desc').value = '';
-        }
-        
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Publish';
-        
-        const viewBtn = document.querySelector('.btn-view-script');
-        if (viewBtn) viewBtn.remove();
-        
-        this.currentEditingId = null;
-        this.originalTitle = null;
-    },
+    function logout() {
+        GH_TOKEN = null;
+        localStorage.removeItem('ls_auth_token');
+        dom.authSection.style.display = 'block';
+        dom.userSection.style.display = 'none';
+        navigate('');
+        location.reload();
+    }
 
-    async populateEditor(title) {
-        if (!this.currentUser) return;
-        const s = this.db.scripts[title];
-        if (!s) return;
-        
-        this.currentEditingId = title;
-        this.originalTitle = title;
-        
-        this.switchAdminTab('create');
-        
-        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
-        document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility;
-        document.getElementById('edit-expire').value = s.expiration || '';
-        
-        const scriptId = utils.sanitizeTitle(title);
-        
-        try {
-            if (typeof NProgress !== 'undefined') NProgress.start();
+    window.app = {
+        toggleLoginModal: () => {
+            const isVisible = dom.loginModal.style.display === 'flex';
+            dom.loginModal.style.display = isVisible ? 'none' : 'flex';
+            dom.loginError.style.display = 'none';
+            dom.authToken.value = '';
+        },
+        submitLogin: async () => {
+            const token = dom.authToken.value.trim();
+            if(!token) return;
             
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                const code = utils.safeAtob(data.content);
-                
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(code);
-                } else {
-                    document.getElementById('edit-code').value = code;
-                }
+            NProgress.start();
+            if(await verifyToken(token)) {
+                GH_TOKEN = token;
+                localStorage.setItem('ls_auth_token', token);
+                dom.loginModal.style.display = 'none';
+                dom.authSection.style.display = 'none';
+                dom.userSection.style.display = 'block';
+                document.getElementById('private-filter').style.display = 'flex';
+                document.getElementById('unlisted-filter').style.display = 'flex';
+                loadScripts();
+                app.navigate('admin');
             } else {
-                const errorText = '-- Error loading content';
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(errorText);
-                } else {
-                    document.getElementById('edit-code').value = errorText;
-                }
+                dom.loginError.innerText = "Invalid Token";
+                dom.loginError.style.display = 'block';
             }
-        } catch(e) { 
-            const errorText = '-- Error loading content';
-            if (window.monacoEditor) {
-                window.monacoEditor.setValue(errorText);
+            NProgress.done();
+        },
+        navigate: (view) => {
+            if(view === 'admin') {
+                dom.viewHome.style.display = 'none';
+                dom.viewAdmin.style.display = 'block';
+                renderAdminList();
             } else {
-                document.getElementById('edit-code').value = errorText;
+                dom.viewAdmin.style.display = 'none';
+                dom.viewHome.style.display = 'block';
             }
-        } finally {
-            if (typeof NProgress !== 'undefined') NProgress.done();
-        }
-        
-        if (window.quillEditor) {
-            setTimeout(() => {
-                window.quillEditor.root.innerHTML = s.description || '';
-            }, 100);
-        } else {
-            document.getElementById('edit-desc').value = s.description || '';
-        }
-        
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Update Script';
-        
-        this.updateViewButton(scriptId);
-    },
+        },
+        filterCategory: (cat, e) => {
+            e.preventDefault();
+            dom.filterLinks.forEach(l => l.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            currentCategory = cat;
+            renderScripts();
+        },
+        setSort: (val) => {
+            currentSort = val;
+            renderScripts();
+        },
+        switchAdminTab,
+        saveScript,
+        logout
+    };
 
-    updateViewButton(scriptId) {
-        let viewBtn = document.querySelector('.btn-view-script');
-        if (!viewBtn) {
-            const actionButtons = document.querySelector('.action-buttons');
-            viewBtn = document.createElement('a');
-            viewBtn.href = `scripts/${scriptId}/index.html`;
-            viewBtn.target = '_blank';
-            viewBtn.className = 'btn btn-secondary btn-view-script';
-            viewBtn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-                View Script
-            `;
-            actionButtons.appendChild(viewBtn);
-        } else {
-            viewBtn.href = `scripts/${scriptId}/index.html`;
-        }
-    },
-
-    async saveScript() {
-        if (!this.currentUser) {
-            this.showToast('Please login first.', 'error');
-            return;
-        }
-        
-        if (this.actionInProgress) return;
-        this.actionInProgress = true;
-        
-        const title = document.getElementById('edit-title').value.trim();
-        const visibility = document.getElementById('edit-visibility').value;
-        let desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
-        if (desc === '<p><br></p>' || desc === '<p></p>') desc = '';
-        const expiration = document.getElementById('edit-expire').value;
-        const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
-        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
-        const originalBtnText = saveBtn.textContent;
-        
-        const titleError = utils.validateTitle(title);
-        const codeError = utils.validateCode(code);
-        
-        if (titleError || codeError) {
-            this.showToast(titleError || codeError, 'error');
-            this.actionInProgress = false;
-            return;
-        }
-        
-        if (expiration && new Date(expiration) < new Date()) {
-            this.showToast('Expiration date cannot be in the past', 'error');
-            this.actionInProgress = false;
-            return;
-        }
-        
-        const isEditing = !!this.currentEditingId;
-        const scriptId = utils.sanitizeTitle(title);
-        const filename = scriptId + '.lua';
-        
-        saveBtn.disabled = true;
-        saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';
-        
-        if (typeof NProgress !== 'undefined') NProgress.start();
-        
-        try {
-            if (isEditing && this.originalTitle) {
-                await this.deleteOldScriptFiles(this.originalTitle);
-                delete this.db.scripts[this.originalTitle];
-            }
-            
-            const scriptData = {
-                title: title,
-                visibility: visibility,
-                description: desc,
-                expiration: expiration || null,
-                filename: filename,
-                size: code.length,
-                created: (isEditing && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
-                updated: new Date().toISOString()
-            };
-            
-            this.db.scripts[title] = scriptData;
-            
-            const luaPath = `scripts/${scriptId}/raw/${filename}`;
-            
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
-                    content: utils.safeBtoa(code)
-                })
-            });
-            
-            if (!luaRes.ok) {
-                throw new Error('Failed to save Lua file');
-            }
-            
-            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Add'} ${title}`,
-                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha
-                })
-            });
-            
-            if (!dbRes.ok) {
-                throw new Error('Failed to update database');
-            }
-            
-            const newDbData = await dbRes.json();
-            this.dbSha = newDbData.content.sha;
-
-            const indexHTML = this.generateScriptHTML(title, scriptData);
-            const indexPath = `scripts/${scriptId}/index.html`;
-            
-            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
-                    content: utils.safeBtoa(indexHTML)
-                })
-            });
-            
-            if (!indexRes.ok) {
-                throw new Error('Failed to save index.html');
-            }
-            
-            this.showToast(`${isEditing ? 'Updated' : 'Published'} successfully!`, 'success');
-            
-            this.currentEditingId = title;
-            this.originalTitle = title;
-            
-            document.getElementById('editor-heading').textContent = `Edit: ${title}`;
-            saveBtn.textContent = 'Update Script';
-            
-            this.updateViewButton(scriptId);
-            
-            await this.loadDatabase();
-            
-        } catch(e) {
-            console.error('Save error:', e);
-            this.showToast(`Error: ${e.message}`, 'error');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalBtnText;
-            this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
-        }
-    },
-
-    async deleteOldScriptFiles(oldTitle) {
-        const oldScriptData = this.db.scripts[oldTitle];
-        if (!oldScriptData) return;
-        
-        const oldScriptId = utils.sanitizeTitle(oldTitle);
-        
-        try {
-            const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (luaRes.ok) {
-                const luaData = await luaRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Authorization': `token ${this.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Delete old Lua file`,
-                        sha: luaData.sha
-                    })
-                });
-            }
-        } catch(e) {
-            console.warn('Error deleting old Lua file:', e.message);
-        }
-        
-        try {
-            const oldIndexPath = `scripts/${oldScriptId}/index.html`;
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (idxRes.ok) {
-                const idxData = await idxRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Authorization': `token ${this.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Delete old index`,
-                        sha: idxData.sha
-                    })
-                });
-            }
-        } catch(e) {
-            console.warn('Error deleting old index file:', e.message);
-        }
-    },
-
-    async deleteScript() {
-        if (!this.currentUser) {
-            this.showToast('Please login first.', 'error');
-            return;
-        }
-        
-        if (this.actionInProgress) return;
-        
-        if (!this.currentEditingId) {
-            this.showToast('No script selected for deletion.', 'error');
-            return;
-        }
-
-        await this.deleteScriptConfirmation(this.currentEditingId);
-    },
-
-    handleRouting() {
-        const hash = location.hash.slice(1);
-        document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
-        window.scrollTo(0, 0);
-        
-        if (hash === 'admin') {
-            if (!this.currentUser) {
-                this.toggleLoginModal();
-                location.hash = '';
-                return;
-            }
-            document.getElementById('view-admin').style.display = 'block';
-            this.switchAdminTab('list');
-        } else {
-            document.getElementById('view-home').style.display = 'block';
-        }
-    },
-    
-    loadMonacoEditor() {
-        if (typeof monaco !== 'undefined' || window.monacoEditor) return;
-        
-        if (!document.querySelector('#editor-container')) return;
-        
-        const loadMonaco = () => {
-            if (typeof monaco === 'undefined') {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js';
-                script.onload = () => {
-                    require.config({ 
-                        paths: { 
-                            vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' 
-                        } 
-                    });
-                    require(['vs/editor/editor.main'], () => {
-                        window.monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
-                            value: '',
-                            language: 'lua',
-                            theme: 'vs-dark',
-                            fontSize: 14,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            wordWrap: 'on',
-                            lineNumbers: 'on',
-                            automaticLayout: true
-                        });
-                        
-                        const textarea = document.getElementById('edit-code');
-                        if (textarea) textarea.style.display = 'none';
-                    });
-                };
-                document.head.appendChild(script);
-            }
-        };
-        
-        setTimeout(loadMonaco, 100);
-    },
-    
-    loadQuillEditor() {
-        if (typeof Quill !== 'undefined' || window.quillEditor) return;
-        
-        if (!document.querySelector('#quill-container')) return;
-        
-        const loadQuill = () => {
-            if (typeof Quill === 'undefined') {
-                const link = document.createElement('link');
-                link.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css';
-                link.rel = 'stylesheet';
-                document.head.appendChild(link);
-                
-                const script = document.createElement('script');
-                script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
-                script.onload = () => {
-                    window.quillEditor = new Quill('#quill-container', {
-                        theme: 'snow',
-                        modules: {
-                            toolbar: [
-                                ['bold', 'italic', 'underline'],
-                                ['code-block'],
-                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                                ['clean']
-                            ]
-                        },
-                        placeholder: 'Script description...'
-                    });
-                    
-                    const descInput = document.getElementById('edit-desc');
-                    if (descInput) descInput.style.display = 'none';
-                    
-                    window.quillEditor.on('text-change', () => {
-                        const html = window.quillEditor.root.innerHTML;
-                        if (descInput) descInput.value = html === '<p><br></p>' ? '' : html;
-                    });
-                };
-                document.head.appendChild(script);
-            }
-        };
-        
-        setTimeout(loadQuill, 100);
-    }
-};
-
-function navigate(path) {
-    if (path === 'admin' && !app.currentUser) {
-        app.toggleLoginModal();
-        return;
-    }
-    location.hash = path;
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    app.init();
-    
-    if (typeof NProgress !== 'undefined') {
-        NProgress.configure({ 
-            showSpinner: false,
-            speed: 400,
-            trickleSpeed: 200 
-        });
-    }
-});
-
-window.app = app;
-window.navigate = navigate;
+    init();
+})();
