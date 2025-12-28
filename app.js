@@ -418,7 +418,8 @@ const app = {
             }
             return false;
         }
-    }
+    },
+    
     async loadDatabase() {
         try {
             this.isLoading = true;
@@ -799,7 +800,8 @@ const app = {
             this.actionInProgress = false;
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
-    }
+    },
+    
     renderStats() {
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
