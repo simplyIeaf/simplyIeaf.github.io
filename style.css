@@ -118,6 +118,9 @@ input, button, textarea, select {
     gap: 12px; 
     cursor: pointer;
     transition: 0.2s;
+    background: none;
+    border: none;
+    padding: 0;
 }
 
 .brand:hover {
@@ -135,6 +138,9 @@ input, button, textarea, select {
     font-weight: 700; 
     font-size: 18px; 
     letter-spacing: -0.5px; 
+    display: block !important; 
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .nav-center { 
@@ -1120,7 +1126,10 @@ textarea.input-field {
     }
     
     .nav-title { 
-        display: none; 
+        display: block !important; 
+        visibility: visible !important;
+        opacity: 1 !important;
+        font-size: 16px;
     }
     
     .nav-center { 
