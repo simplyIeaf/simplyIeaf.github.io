@@ -84,10 +84,10 @@ const app = {
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
-        this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
         
         const today = new Date().toISOString().split('T')[0];
-        document.getElementById('edit-expire').min = today;
+        const expireInput = document.getElementById('edit-expire');
+        if (expireInput) expireInput.min = today;
         
         this.initEventListeners();
         this.loadMonacoIfNeeded();
@@ -116,22 +116,13 @@ const app = {
     },
     
     initEventListeners() {
-        document.getElementById('search').addEventListener('input', (e) => {
-            this.searchQuery = e.target.value;
-            this.debouncedRender();
-        });
-        
-        document.querySelectorAll('.sidebar-link').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const filter = e.target.dataset.filter || e.target.closest('.sidebar-link').dataset.filter;
-                this.filterCategory(filter, e);
+        const searchInput = document.getElementById('search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchQuery = e.target.value;
+                this.debouncedRender();
             });
-        });
-        
-        document.querySelector('.sidebar-sort select').addEventListener('change', (e) => {
-            this.setSort(e.target.value);
-        });
+        }
     },
     
     loadMonacoIfNeeded() {
@@ -419,7 +410,7 @@ const app = {
             return false;
         }
     },
-    
+
     async loadDatabase() {
         try {
             this.isLoading = true;
@@ -801,7 +792,7 @@ const app = {
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
-    
+
     renderStats() {
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
