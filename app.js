@@ -1,9 +1,3 @@
-import { create } from 'https://esm.sh/zustand@4.5.3';
-import Swal from 'https://esm.sh/sweetalert2@11.15.4';
-import Toastify from 'https://esm.sh/toastify-js@1.12.0';
-import NProgress from 'https://esm.sh/nprogress@0.2.0';
-import { saveAs } from 'https://esm.sh/file-saver@2.0.5';
-
 const CONFIG = {
     user: 'simplyIeaf',
     repo: 'simplyIeaf.github.io',
@@ -67,21 +61,10 @@ const utils = {
         if (!code || code.trim().length === 0) return 'Code is required';
         if (code.length > 100000) return 'Code is too large (max 100KB)';
         return null;
-    },
-
-    showToast(message, type = 'success') {
-        Toastify({
-            text: message,
-            duration: 3000,
-            gravity: "top",
-            position: "right",
-            backgroundColor: type === 'success' ? "#10b981" : type === 'error' ? "#ef4444" : "#f59e0b",
-            stopOnFocus: true
-        }).showToast();
     }
 };
 
-const useStore = create((set, get) => ({
+const app = {
     db: { scripts: {} },
     dbSha: null,
     token: null,
@@ -94,29 +77,22 @@ const useStore = create((set, get) => ({
     isLoading: false,
     searchQuery: '',
     
-    setLoading: (loading) => set({ isLoading: loading }),
-    setSearchQuery: (query) => set({ searchQuery: query }),
-    setCurrentFilter: (filter) => set({ currentFilter: filter }),
-    setCurrentSort: (sort) => set({ currentSort: sort }),
-    
-    setAuth: (token, user) => set({ token, currentUser: user }),
-    clearAuth: () => set({ token: null, currentUser: null }),
-    
-    setDatabase: (db, sha) => set({ db, dbSha: sha }),
-    setEditingId: (id, originalTitle) => set({ currentEditingId: id, originalTitle }),
-    clearEditing: () => set({ currentEditingId: null, originalTitle: null }),
-    
-    startAction: () => set({ actionInProgress: true }),
-    endAction: () => set({ actionInProgress: false }),
-    
     async init() {
-        await this.loadSession();
+        this.loadSession();
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
+        this.debouncedRender = utils.debounce(() => this.renderList(), 300);
+        this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
+        this.debouncedLogin = utils.debounce(() => this.login(), 750);
+        this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
+        
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('edit-expire').min = today;
+        
+        this.initEventListeners();
+        this.loadMonacoIfNeeded();
         
         window.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -125,105 +101,79 @@ const useStore = create((set, get) => ({
             }
         });
     },
+    
+    initEventListeners() {
+        document.getElementById('search').addEventListener('input', (e) => {
+            this.searchQuery = e.target.value;
+            this.debouncedRender();
+        });
+        
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filter = e.target.dataset.filter || e.target.closest('.sidebar-link').dataset.filter;
+                this.filterCategory(filter, e);
+            });
+        });
+        
+        document.querySelector('.sidebar-sort select').addEventListener('change', (e) => {
+            this.setSort(e.target.value);
+        });
+        
+        const loginBtn = document.querySelector('.btn[onclick*="toggleLoginModal"]');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.debouncedToggleLogin();
+            });
+        }
+        
+        const loginSubmitBtn = document.querySelector('.modal .btn-full[onclick*="login"]');
+        if (loginSubmitBtn) {
+            loginSubmitBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.debouncedLogin();
+            });
+        }
+    },
+    
+    loadMonacoIfNeeded() {
+        if (location.hash === '#admin') {
+            setTimeout(() => {
+                this.loadMonacoEditor();
+                this.loadQuillEditor();
+            }, 100);
+        }
+    },
 
-    async loadSession() {
+    loadSession() {
         try {
             const storedToken = sessionStorage.getItem('gh_token');
             const storedUser = sessionStorage.getItem('gh_user');
             
             if (storedToken && storedUser) {
-                const user = JSON.parse(storedUser);
+                this.token = storedToken;
+                this.currentUser = JSON.parse(storedUser);
                 
-                if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
-                    this.clearAuth();
-                    sessionStorage.clear();
+                if (this.currentUser.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
+                    this.logout(true);
                     return false;
                 }
-                
-                this.setAuth(storedToken, user);
-                await this.verifyToken(true);
                 return true;
             }
         } catch(e) {
-            this.clearAuth();
-            sessionStorage.clear();
+            this.logout(true);
         }
         return false;
     },
 
     saveSession() {
-        const { token, currentUser } = get();
-        if (token && currentUser) {
-            sessionStorage.setItem('gh_token', token);
-            sessionStorage.setItem('gh_user', JSON.stringify(currentUser));
+        if (this.token && this.currentUser) {
+            sessionStorage.setItem('gh_token', this.token);
+            sessionStorage.setItem('gh_user', JSON.stringify(this.currentUser));
             setTimeout(() => {
                 sessionStorage.removeItem('gh_token');
             }, 4 * 60 * 60 * 1000);
-        }
-    },
-
-    async verifyToken(silent) {
-        const { token } = get();
-        if (!token) return false;
-        
-        try {
-            NProgress.start();
-            const res = await fetch('https://api.github.com/user', {
-                headers: { 'Authorization': `token ${token}` }
-            });
-            
-            if (!res.ok) throw new Error('Invalid token');
-            
-            const user = await res.json();
-            if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
-                throw new Error(`Token belongs to ${user.login}, not ${CONFIG.user}.`);
-            }
-            
-            this.setAuth(token, user);
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('user-section').style.display = 'flex';
-            document.getElementById('private-filter').style.display = 'block';
-            document.getElementById('unlisted-filter').style.display = 'block';
-            
-            return true;
-        } catch (e) {
-            if (!silent) {
-                utils.showToast(e.message, 'error');
-            }
-            this.clearAuth();
-            sessionStorage.clear();
-            return false;
-        } finally {
-            NProgress.done();
-        }
-    },
-
-    async loadDatabase() {
-        try {
-            this.setLoading(true);
-            const { token } = get();
-            
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
-                headers: token ? { 'Authorization': `token ${token}` } : {}
-            });
-            
-            if (res.status === 404) {
-                this.setDatabase({ scripts: {} }, null);
-            } else if (res.ok) {
-                const file = await res.json();
-                const db = JSON.parse(utils.safeAtob(file.content));
-                this.setDatabase(db, file.sha);
-            } else {
-                throw new Error(`Failed to load database: ${res.status}`);
-            }
-            
-            this.renderList();
-            this.renderAdminList();
-        } catch (e) { 
-            console.error("DB Error", e);
-            utils.showToast(`Error loading scripts: ${e.message}`, 'error');
-        } finally {
-            this.setLoading(false);
         }
     },
 
@@ -288,6 +238,7 @@ const useStore = create((set, get) => ({
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script>
         const filename = '${scriptData.filename}';
         const scriptId = '${scriptId}';
@@ -330,29 +281,165 @@ const useStore = create((set, get) => ({
         return temp.innerHTML.replace(/\n/g, '<br>');
     },
 
-    renderList() {
-        const { db, currentFilter, currentSort, searchQuery, currentUser } = get();
-        const list = document.getElementById('script-list');
-        const scripts = Object.entries(db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+    toggleLoginModal() {
+        const modal = document.getElementById('login-modal');
+        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        document.getElementById('login-error').style.display = 'none';
+        if (modal.style.display === 'flex') {
+            document.getElementById('auth-token').focus();
+        }
+    },
+
+    async login() {
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
         
-        const filtered = scripts.filter(s => {
-            if (!s.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            if (s.visibility === 'PRIVATE' && !currentUser) return false;
-            if (s.visibility === 'UNLISTED' && !currentUser) return false; 
-            if (currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
-            if (currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
-            if (currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
-            if (s.expiration && new Date(s.expiration) < new Date()) return false;
+        try {
+            const token = document.getElementById('auth-token').value.trim();
+            if (!token) {
+                this.showLoginError('Token is required');
+                return;
+            }
+            
+            this.token = token;
+            const success = await this.verifyToken(false);
+            if (success) {
+                this.saveSession();
+                this.toggleLoginModal();
+                document.getElementById('auth-token').value = '';
+                await this.loadDatabase();
+                this.renderList();
+                this.showToast('Logged in successfully!', 'success');
+            }
+        } finally {
+            this.actionInProgress = false;
+        }
+    },
+
+    showLoginError(message) {
+        const err = document.getElementById('login-error');
+        err.textContent = message;
+        err.style.display = 'block';
+        this.actionInProgress = false;
+    },
+    
+    showToast(message, type = 'success') {
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                backgroundColor: type === 'success' ? "#10b981" : type === 'error' ? "#ef4444" : "#f59e0b",
+                stopOnFocus: true
+            }).showToast();
+        } else {
+            alert(message);
+        }
+    },
+
+    logout(silent = false) {
+        if (!silent && !confirm('Are you sure you want to logout?')) {
+            return;
+        }
+        
+        sessionStorage.removeItem('gh_token');
+        sessionStorage.removeItem('gh_user');
+        this.token = null;
+        this.currentUser = null;
+        
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('user-section').style.display = 'none';
+        document.getElementById('private-filter').style.display = 'none';
+        document.getElementById('unlisted-filter').style.display = 'none';
+        
+        location.href = '#';
+        
+        if (!silent) {
+            this.showToast('Logged out successfully', 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    },
+
+    async verifyToken(silent) {
+        try {
+            const res = await fetch('https://api.github.com/user', {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            
+            if (!res.ok) {
+                throw new Error('Invalid token');
+            }
+            
+            const user = await res.json();
+            if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
+                throw new Error(`Token belongs to ${user.login}, not ${CONFIG.user}.`);
+            }
+            
+            this.currentUser = user;
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('user-section').style.display = 'flex';
+            document.getElementById('private-filter').style.display = 'block';
+            document.getElementById('unlisted-filter').style.display = 'block';
+            
             return true;
-        });
+        } catch (e) {
+            if (!silent) {
+                this.showLoginError(e.message);
+            }
+            this.token = null;
+            sessionStorage.removeItem('gh_token');
+            sessionStorage.removeItem('gh_user');
+            return false;
+        }
+    },
+
+    async loadDatabase() {
+        try {
+            this.isLoading = true;
+            const list = document.getElementById('admin-list');
+            if (list) {
+                list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading scripts...</p></div>`;
+            }
+            
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
+                headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
+            });
+            
+            if (res.status === 404) {
+                this.db = { scripts: {} };
+                this.dbSha = null;
+            } else if (res.ok) {
+                const file = await res.json();
+                this.dbSha = file.sha;
+                this.db = JSON.parse(utils.safeAtob(file.content));
+            } else {
+                throw new Error(`Failed to load database: ${res.status}`);
+            }
+            this.renderList();
+            this.renderAdminList();
+        } catch (e) { 
+            console.error("DB Error", e);
+            const list = document.getElementById('admin-list');
+            if (list) {
+                list.innerHTML = `<div class="empty-admin-state">
+                    <p style="color:var(--color-danger)">Error loading scripts: ${e.message}</p>
+                    <button class="btn btn-sm" onclick="app.loadDatabase()" style="margin-top:10px">Retry</button>
+                </div>`;
+            }
+            this.showToast(`Error loading scripts: ${e.message}`, 'error');
+        } finally {
+            this.isLoading = false;
+        }
+    },
+
+    renderList() {
+        const list = document.getElementById('script-list');
+        if (!list) return;
         
-        const sorted = filtered.sort((a, b) => {
-            if (currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
-            if (currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
-            if (currentSort === 'alpha') return a.title.localeCompare(b.title);
-            if (currentSort === 'updated') return new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0);
-            return 0;
-        });
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const filtered = this.filterLogic(scripts);
+        const sorted = this.sortLogic(filtered);
         
         if (sorted.length === 0) {
             list.innerHTML = `<div class="empty-state">
@@ -368,6 +455,7 @@ const useStore = create((set, get) => ({
         list.innerHTML = sorted.map(s => {
             const scriptId = utils.sanitizeTitle(s.title);
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
+            
             return `
             <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
@@ -386,469 +474,49 @@ const useStore = create((set, get) => ({
         `}).join('');
     },
 
-    async updateScript(scriptTitle, newTitle, scriptData) {
-        const { db, dbSha, token, currentEditingId, originalTitle } = get();
+    filterLogic(scripts) {
+        const query = this.searchQuery.toLowerCase();
+        const now = new Date();
         
-        if (!currentEditingId || !originalTitle) {
-            throw new Error('No script being edited');
-        }
-        
-        const oldScriptId = utils.sanitizeTitle(originalTitle);
-        const newScriptId = utils.sanitizeTitle(newTitle);
-        const oldScriptData = db.scripts[originalTitle];
-        
-        const isTitleChanged = newTitle !== originalTitle;
-        
-        try {
-            NProgress.start();
-            
-            if (isTitleChanged && oldScriptData) {
-                const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
-                const oldIndexPath = `scripts/${oldScriptId}/index.html`;
-                
-                await this.deleteGitHubFile(oldLuaPath);
-                await this.deleteGitHubFile(oldIndexPath);
-                
-                delete db.scripts[originalTitle];
-            }
-            
-            const filename = newScriptId + '.lua';
-            const scriptEntry = {
-                title: newTitle,
-                visibility: scriptData.visibility,
-                description: scriptData.description,
-                expiration: scriptData.expiration,
-                filename: filename,
-                size: scriptData.code.length,
-                created: isTitleChanged ? new Date().toISOString() : oldScriptData?.created || new Date().toISOString(),
-                updated: new Date().toISOString()
-            };
-            
-            db.scripts[newTitle] = scriptEntry;
-            
-            const luaPath = `scripts/${newScriptId}/raw/${filename}`;
-            const luaSha = await this.getFileSha(luaPath);
-            
-            await this.putGitHubFile(luaPath, scriptData.code, luaSha, 
-                `${isTitleChanged ? 'Create' : 'Update'} ${filename}`);
-            
-            const indexHTML = this.generateScriptHTML(newTitle, scriptEntry);
-            const indexPath = `scripts/${newScriptId}/index.html`;
-            const indexSha = await this.getFileSha(indexPath);
-            
-            await this.putGitHubFile(indexPath, indexHTML, indexSha, 
-                `${isTitleChanged ? 'Create' : 'Update'} index for ${newTitle}`);
-            
-            const newDbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `${isTitleChanged ? 'Rename' : 'Update'} ${newTitle}`,
-                    content: utils.safeBtoa(JSON.stringify(db, null, 2)),
-                    sha: dbSha
-                })
-            });
-            
-            if (!newDbRes.ok) {
-                throw new Error('Failed to update database');
-            }
-            
-            const newDbData = await newDbRes.json();
-            this.setDatabase(db, newDbData.content.sha);
-            
-            if (isTitleChanged) {
-                this.setEditingId(newTitle, newTitle);
-            }
-            
-            utils.showToast(`Script ${isTitleChanged ? 'renamed and updated' : 'updated'} successfully!`, 'success');
+        return scripts.filter(s => {
+            if (!s.title.toLowerCase().includes(query)) return false;
+            if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
+            if (s.visibility === 'UNLISTED' && !this.currentUser) return false; 
+            if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
+            if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
+            if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
+            if (s.expiration && new Date(s.expiration) < now) return false;
             return true;
-            
-        } catch (error) {
-            console.error('Update error:', error);
-            utils.showToast(`Error: ${error.message}`, 'error');
-            throw error;
-        } finally {
-            NProgress.done();
-        }
-    },
-
-    async deleteGitHubFile(path) {
-        const { token } = get();
-        try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                headers: { 'Authorization': `token ${token}` }
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Authorization': `token ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Delete ${path.split('/').pop()}`,
-                        sha: data.sha
-                    })
-                });
-            }
-        } catch (e) {
-            console.warn(`File deletion error for ${path}:`, e.message);
-        }
-    },
-
-    async getFileSha(path) {
-        const { token } = get();
-        try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                headers: { 'Authorization': `token ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                return data.sha;
-            }
-        } catch (e) {
-            return null;
-        }
-        return null;
-    },
-
-    async putGitHubFile(path, content, sha, message) {
-        const { token } = get();
-        const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-            method: 'PUT',
-            headers: { 
-                'Authorization': `token ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: message,
-                content: utils.safeBtoa(content),
-                sha: sha || undefined
-            })
         });
-        
-        if (!res.ok) {
-            throw new Error(`Failed to save ${path}`);
-        }
-        
-        return await res.json();
     },
 
-    async createScript(scriptData) {
-        const { db, dbSha, token } = get();
-        const scriptId = utils.sanitizeTitle(scriptData.title);
-        const filename = scriptId + '.lua';
-        
-        const scriptEntry = {
-            title: scriptData.title,
-            visibility: scriptData.visibility,
-            description: scriptData.description,
-            expiration: scriptData.expiration,
-            filename: filename,
-            size: scriptData.code.length,
-            created: new Date().toISOString(),
-            updated: new Date().toISOString()
-        };
-        
-        db.scripts[scriptData.title] = scriptEntry;
-        
-        try {
-            NProgress.start();
-            
-            await this.putGitHubFile(
-                `scripts/${scriptId}/raw/${filename}`,
-                scriptData.code,
-                null,
-                `Create ${filename}`
-            );
-            
-            const indexHTML = this.generateScriptHTML(scriptData.title, scriptEntry);
-            
-            await this.putGitHubFile(
-                `scripts/${scriptId}/index.html`,
-                indexHTML,
-                null,
-                `Create index for ${scriptData.title}`
-            );
-            
-            const newDbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `Add ${scriptData.title}`,
-                    content: utils.safeBtoa(JSON.stringify(db, null, 2)),
-                    sha: dbSha
-                })
-            });
-            
-            if (!newDbRes.ok) {
-                throw new Error('Failed to update database');
-            }
-            
-            const newDbData = await newDbRes.json();
-            this.setDatabase(db, newDbData.content.sha);
-            
-            utils.showToast('Script created successfully!', 'success');
-            return true;
-            
-        } catch (error) {
-            console.error('Create error:', error);
-            utils.showToast(`Error: ${error.message}`, 'error');
-            throw error;
-        } finally {
-            NProgress.done();
-        }
-    },
-
-    async saveScript() {
-        const { actionInProgress, currentEditingId, db } = get();
-        if (actionInProgress || !useStore.getState().currentUser) return;
-        
-        const title = document.getElementById('edit-title').value.trim();
-        const visibility = document.getElementById('edit-visibility').value;
-        const desc = document.getElementById('edit-desc').value.trim();
-        const expiration = document.getElementById('edit-expire').value;
-        const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
-        
-        const titleError = utils.validateTitle(title);
-        const codeError = utils.validateCode(code);
-        
-        if (titleError || codeError) {
-            utils.showToast(titleError || codeError, 'error');
-            return;
-        }
-        
-        if (expiration && new Date(expiration) < new Date()) {
-            utils.showToast('Expiration date cannot be in the past', 'error');
-            return;
-        }
-        
-        const scriptData = {
-            title,
-            visibility,
-            description: desc,
-            expiration,
-            code
-        };
-        
-        this.startAction();
-        
-        try {
-            if (currentEditingId) {
-                await this.updateScript(currentEditingId, title, scriptData);
-            } else {
-                if (db.scripts[title]) {
-                    const result = await Swal.fire({
-                        title: 'Script Already Exists',
-                        text: `A script titled "${title}" already exists. Do you want to overwrite it?`,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonText: 'Overwrite',
-                        cancelButtonText: 'Cancel'
-                    });
-                    
-                    if (result.isConfirmed) {
-                        this.setEditingId(title, title);
-                        await this.updateScript(title, title, scriptData);
-                    } else {
-                        return;
-                    }
-                } else {
-                    await this.createScript(scriptData);
-                }
-            }
-            
-            await this.loadDatabase();
-            if (currentEditingId) {
-                this.switchAdminTab('list');
-            }
-            
-        } catch (error) {
-            console.error('Save error:', error);
-        } finally {
-            this.endAction();
-        }
-    },
-
-    async deleteScript() {
-        const { currentEditingId, db, token, dbSha } = get();
-        
-        if (!currentEditingId || !db.scripts[currentEditingId]) {
-            utils.showToast('No script selected for deletion', 'error');
-            return;
-        }
-        
-        const result = await Swal.fire({
-            title: 'Delete Script',
-            text: `Are you sure you want to delete "${currentEditingId}"? This action cannot be undone.`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, delete it!',
-            cancelButtonText: 'Cancel',
-            confirmButtonColor: '#ef4444'
+    sortLogic(scripts) {
+        return scripts.sort((a, b) => {
+            if (this.currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
+            if (this.currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
+            if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
+            if (this.currentSort === 'updated') return new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0);
+            return 0;
         });
-        
-        if (!result.isConfirmed) return;
-        
-        try {
-            NProgress.start();
-            this.startAction();
-            
-            const scriptId = utils.sanitizeTitle(currentEditingId);
-            const scriptData = db.scripts[currentEditingId];
-            
-            await this.deleteGitHubFile(`scripts/${scriptId}/raw/${scriptData.filename}`);
-            await this.deleteGitHubFile(`scripts/${scriptId}/index.html`);
-            
-            delete db.scripts[currentEditingId];
-            
-            const newDbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `Remove ${currentEditingId} from database`,
-                    content: utils.safeBtoa(JSON.stringify(db, null, 2)),
-                    sha: dbSha
-                })
-            });
-            
-            if (!newDbRes.ok) {
-                throw new Error('Failed to update database');
-            }
-            
-            const newDbData = await newDbRes.json();
-            this.setDatabase(db, newDbData.content.sha);
-            this.clearEditing();
-            
-            utils.showToast('Script deleted successfully', 'success');
-            await this.loadDatabase();
-            this.switchAdminTab('list');
-            
-        } catch (error) {
-            console.error('Delete error:', error);
-            utils.showToast(`Delete failed: ${error.message}`, 'error');
-        } finally {
-            this.endAction();
-            NProgress.done();
-        }
     },
 
-    async populateEditor(title) {
-        const { db, currentUser } = get();
-        if (!currentUser) return;
-        
-        const s = db.scripts[title];
-        if (!s) return;
-        
-        this.setEditingId(title, title);
-        this.switchAdminTab('create');
-        
-        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
-        document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility;
-        document.getElementById('edit-desc').value = s.description || '';
-        document.getElementById('edit-expire').value = s.expiration || '';
-        
-        const scriptId = utils.sanitizeTitle(title);
-        
-        try {
-            NProgress.start();
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
-                headers: { 'Authorization': `token ${get().token}` }
-            });
-            
-            if (res.ok) {
-                const data = await res.json();
-                const code = utils.safeAtob(data.content);
-                
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(code);
-                } else {
-                    document.getElementById('edit-code').value = code;
-                }
-            } else {
-                const errorText = '-- Error loading content';
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(errorText);
-                } else {
-                    document.getElementById('edit-code').value = errorText;
-                }
-            }
-        } catch(e) { 
-            const errorText = '-- Error loading content';
-            if (window.monacoEditor) {
-                window.monacoEditor.setValue(errorText);
-            } else {
-                document.getElementById('edit-code').value = errorText;
-            }
-        } finally {
-            NProgress.done();
+    filterCategory(cat, e) {
+        if (e) {
+            e.preventDefault();
+            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+            if(e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
         }
-        
-        document.getElementById('btn-delete').style.display = 'inline-flex';
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Update Script';
-        
-        this.updateViewButton(scriptId);
+        this.currentFilter = cat;
+        this.renderList();
     },
 
-    updateViewButton(scriptId) {
-        let viewBtn = document.querySelector('.btn-view-script');
-        if (!viewBtn) {
-            const actionButtons = document.querySelector('.action-buttons');
-            viewBtn = document.createElement('a');
-            viewBtn.href = `scripts/${scriptId}/index.html`;
-            viewBtn.target = '_blank';
-            viewBtn.className = 'btn btn-secondary btn-view-script';
-            viewBtn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-                View Script
-            `;
-            actionButtons.appendChild(viewBtn);
-        } else {
-            viewBtn.href = `scripts/${scriptId}/index.html`;
-        }
-    },
-
-    resetEditor() {
-        document.getElementById('editor-heading').textContent = 'Create New Script';
-        document.getElementById('edit-title').value = '';
-        document.getElementById('edit-visibility').value = 'PUBLIC';
-        document.getElementById('edit-desc').value = '';
-        document.getElementById('edit-expire').value = '';
-        
-        if (window.monacoEditor) {
-            window.monacoEditor.setValue('');
-        } else {
-            document.getElementById('edit-code').value = '';
-        }
-        
-        document.getElementById('btn-delete').style.display = 'none';
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Save & Publish';
-        
-        const viewBtn = document.querySelector('.btn-view-script');
-        if (viewBtn) viewBtn.remove();
-        
-        this.clearEditing();
+    setSort(val) { 
+        this.currentSort = val; 
+        this.renderList(); 
     },
 
     switchAdminTab(tab) {
-        const { currentUser } = get();
-        if (tab === 'admin' && !currentUser) {
+        if (tab === 'admin' && !this.currentUser) {
             location.hash = '';
             return;
         }
@@ -870,30 +538,26 @@ const useStore = create((set, get) => ({
             if (tab === 'create') {
                 this.resetEditor();
             }
+            this.loadMonacoEditor();
+            this.loadQuillEditor();
         }
     },
 
     async renderAdminList() {
-        const { db, currentUser } = get();
-        if (!currentUser) return;
-        
+        if (!this.currentUser) return;
         const list = document.getElementById('admin-list');
-        const scripts = Object.entries(db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const sorted = scripts.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
-        
         document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
-        
         if (sorted.length === 0) {
             list.innerHTML = `<div class="empty-admin-state">
                 <p>No scripts yet. Click "Add New" to create your first script.</p>
             </div>`;
             return;
         }
-        
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            
             return `
             <div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'")}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
@@ -911,17 +575,201 @@ const useStore = create((set, get) => ({
                 </div>
             </div>
         `}).join('');
+        this.initSwipeToDelete();
+    },
+
+    initSwipeToDelete() {
+        const adminItems = document.querySelectorAll('.admin-item');
+        adminItems.forEach(item => {
+            let startX = 0;
+            let endX = 0;
+            let isSwiping = false;
+            item.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                isSwiping = false;
+                item.style.transition = 'none';
+            }, { passive: true });
+            item.addEventListener('touchmove', (e) => {
+                if (!startX) return;
+                const currentX = e.touches[0].clientX;
+                const diff = currentX - startX;
+                if (Math.abs(diff) > 30) {
+                    isSwiping = true;
+                    e.preventDefault();
+                    if (diff > 0) {
+                        item.style.transform = `translateX(${Math.min(diff, 100)}px)`;
+                        item.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                    }
+                }
+            }, { passive: false });
+            item.addEventListener('touchend', (e) => {
+                if (!startX || !isSwiping) return;
+                endX = e.changedTouches[0].clientX;
+                const diff = endX - startX;
+                item.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+                if (diff > 100) {
+                    item.style.transform = 'translateX(300px)';
+                    item.style.opacity = '0';
+                    setTimeout(() => {
+                        const scriptTitle = item.getAttribute('data-script-title');
+                        this.showSwipeDeleteConfirmation(scriptTitle, item);
+                    }, 300);
+                } else {
+                    item.style.transform = 'translateX(0)';
+                    item.style.backgroundColor = '';
+                }
+                startX = 0;
+                isSwiping = false;
+            });
+            item.addEventListener('click', (e) => {
+                if (isSwiping) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+        });
+    },
+
+    showSwipeDeleteConfirmation(scriptTitle, itemElement) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Delete Script',
+                text: `Are you sure you want to delete "${scriptTitle}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#ef4444'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    this.confirmSwipeDelete(scriptTitle, itemElement);
+                } else {
+                    this.restoreSwipeItem(itemElement);
+                }
+            });
+        } else {
+            if (confirm(`Are you sure you want to delete "${scriptTitle}"?`)) {
+                this.confirmSwipeDelete(scriptTitle, itemElement);
+            } else {
+                this.restoreSwipeItem(itemElement);
+            }
+        }
+    },
+
+    restoreSwipeItem(itemElement) {
+        if (itemElement) {
+            const item = itemElement;
+            item.style.transform = 'translateX(0)';
+            item.style.opacity = '1';
+            item.style.backgroundColor = '';
+            item.style.transition = 'transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease';
+            setTimeout(() => {
+                item.style.transition = '';
+            }, 300);
+        }
+    },
+
+    async confirmSwipeDelete(scriptTitle, itemElement) {
+        if (this.actionInProgress) return;
+        if (!this.currentUser) {
+            alert('Please login first.');
+            this.restoreSwipeItem(itemElement);
+            return;
+        }
+        if (!scriptTitle || !this.db.scripts[scriptTitle]) {
+            alert('Script not found or already deleted.');
+            this.restoreSwipeItem(itemElement);
+            return;
+        }
+        this.actionInProgress = true;
+        try {
+            const scriptId = utils.sanitizeTitle(scriptTitle);
+            const scriptData = this.db.scripts[scriptTitle];
+            const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
+            try {
+                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                if (luaRes.ok) {
+                    const luaData = await luaRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Delete ${scriptData.filename}`,
+                            sha: luaData.sha
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Lua file deletion error:', e.message);
+            }
+            const indexPath = `scripts/${scriptId}/index.html`;
+            try {
+                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                if (idxRes.ok) {
+                    const idxData = await idxRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Delete index for ${scriptTitle}`,
+                            sha: idxData.sha
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Index file deletion error:', e.message);
+            }
+            delete this.db.scripts[scriptTitle];
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `Remove ${scriptTitle} from database`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            if (dbRes.ok) {
+                const newDbData = await dbRes.json();
+                this.dbSha = newDbData.content.sha;
+                if (itemElement) {
+                    itemElement.remove();
+                }
+                setTimeout(() => {
+                    location.reload();
+                }, 500);
+            } else {
+                throw new Error('Failed to update database');
+            }
+        } catch(e) {
+            console.error('Delete error:', e);
+            this.showToast('Delete failed: ' + e.message, 'error');
+            this.restoreSwipeItem(itemElement);
+        } finally {
+            this.actionInProgress = false;
+        }
     },
 
     renderStats() {
-        const { db } = get();
-        const scripts = Object.entries(db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
         const privateCount = scripts.filter(s => s.visibility === 'PRIVATE').length;
         const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
         const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
         const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
-        
         if (scripts.length === 0) {
             document.getElementById('stats-content').innerHTML = `
                 <div class="empty-admin-state">
@@ -930,7 +778,6 @@ const useStore = create((set, get) => ({
             `;
             return;
         }
-        
         document.getElementById('stats-content').innerHTML = `
             <div class="stats-grid">
                 <div class="stat-card">
@@ -961,13 +808,547 @@ const useStore = create((set, get) => ({
         `;
     },
 
+    resetEditor() {
+        document.getElementById('editor-heading').textContent = 'Create New Script';
+        document.getElementById('edit-title').value = '';
+        document.getElementById('edit-visibility').value = 'PUBLIC';
+        document.getElementById('edit-desc').value = '';
+        document.getElementById('edit-expire').value = '';
+        
+        if (window.monacoEditor) {
+            window.monacoEditor.setValue('');
+        } else {
+            document.getElementById('edit-code').value = '';
+        }
+        
+        if (window.quillEditor) {
+            window.quillEditor.root.innerHTML = '';
+        }
+        
+        document.getElementById('btn-delete').style.display = 'none';
+        document.querySelector('.editor-actions .btn:last-child').textContent = 'Save & Publish';
+        
+        const viewBtn = document.querySelector('.btn-view-script');
+        if (viewBtn) viewBtn.remove();
+        
+        this.currentEditingId = null;
+        this.originalTitle = null;
+    },
+
+    async populateEditor(title) {
+        if (!this.currentUser) return;
+        const s = this.db.scripts[title];
+        if (!s) return;
+        
+        this.currentEditingId = title;
+        this.originalTitle = title;
+        
+        this.switchAdminTab('create');
+        
+        document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+        document.getElementById('edit-title').value = s.title;
+        document.getElementById('edit-visibility').value = s.visibility;
+        document.getElementById('edit-desc').value = s.description || '';
+        document.getElementById('edit-expire').value = s.expiration || '';
+        
+        if (window.quillEditor) {
+            window.quillEditor.root.innerHTML = s.description || '';
+        }
+        
+        const scriptId = utils.sanitizeTitle(title);
+        
+        try {
+            if (typeof NProgress !== 'undefined') NProgress.start();
+            
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                const code = utils.safeAtob(data.content);
+                
+                if (window.monacoEditor) {
+                    window.monacoEditor.setValue(code);
+                } else {
+                    document.getElementById('edit-code').value = code;
+                }
+            } else {
+                const errorText = '-- Error loading content';
+                if (window.monacoEditor) {
+                    window.monacoEditor.setValue(errorText);
+                } else {
+                    document.getElementById('edit-code').value = errorText;
+                }
+            }
+        } catch(e) { 
+            const errorText = '-- Error loading content';
+            if (window.monacoEditor) {
+                window.monacoEditor.setValue(errorText);
+            } else {
+                document.getElementById('edit-code').value = errorText;
+            }
+        } finally {
+            if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+        
+        document.getElementById('btn-delete').style.display = 'inline-flex';
+        document.querySelector('.editor-actions .btn:last-child').textContent = 'Update Script';
+        
+        this.updateViewButton(scriptId);
+    },
+
+    updateViewButton(scriptId) {
+        let viewBtn = document.querySelector('.btn-view-script');
+        if (!viewBtn) {
+            const actionButtons = document.querySelector('.action-buttons');
+            viewBtn = document.createElement('a');
+            viewBtn.href = `scripts/${scriptId}/index.html`;
+            viewBtn.target = '_blank';
+            viewBtn.className = 'btn btn-secondary btn-view-script';
+            viewBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                View Script
+            `;
+            actionButtons.appendChild(viewBtn);
+        } else {
+            viewBtn.href = `scripts/${scriptId}/index.html`;
+        }
+    },
+
+    async saveScript() {
+        if (!this.currentUser) {
+            this.showToast('Please login first.', 'error');
+            return;
+        }
+        
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        
+        const title = document.getElementById('edit-title').value.trim();
+        const visibility = document.getElementById('edit-visibility').value;
+        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value.trim();
+        const expiration = document.getElementById('edit-expire').value;
+        const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
+        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
+        const originalBtnText = saveBtn.textContent;
+        
+        const titleError = utils.validateTitle(title);
+        const codeError = utils.validateCode(code);
+        
+        if (titleError || codeError) {
+            this.showToast(titleError || codeError, 'error');
+            this.actionInProgress = false;
+            return;
+        }
+        
+        if (expiration && new Date(expiration) < new Date()) {
+            this.showToast('Expiration date cannot be in the past', 'error');
+            this.actionInProgress = false;
+            return;
+        }
+        
+        const isEditing = !!this.currentEditingId;
+        const titleChanged = isEditing && this.originalTitle !== title;
+        const scriptId = utils.sanitizeTitle(title);
+        const filename = scriptId + '.lua';
+        
+        saveBtn.disabled = true;
+        saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';
+        
+        if (typeof NProgress !== 'undefined') NProgress.start();
+        
+        try {
+            if (isEditing && titleChanged && this.originalTitle) {
+                const oldScriptData = this.db.scripts[this.originalTitle];
+                if (oldScriptData) {
+                    const oldScriptId = utils.sanitizeTitle(this.originalTitle);
+                    
+                    try {
+                        const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
+                        const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
+                        
+                        if (luaRes.ok) {
+                            const luaData = await luaRes.json();
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                                method: 'DELETE',
+                                headers: { 
+                                    'Authorization': `token ${this.token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    message: `Delete old Lua file`,
+                                    sha: luaData.sha
+                                })
+                            });
+                        }
+                    } catch(e) {
+                        console.warn('Error deleting old Lua file:', e.message);
+                    }
+                    
+                    try {
+                        const oldIndexPath = `scripts/${oldScriptId}/index.html`;
+                        const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                            headers: { 'Authorization': `token ${this.token}` }
+                        });
+                        
+                        if (idxRes.ok) {
+                            const idxData = await idxRes.json();
+                            await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                                method: 'DELETE',
+                                headers: { 
+                                    'Authorization': `token ${this.token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    message: `Delete old index`,
+                                    sha: idxData.sha
+                                })
+                            });
+                        }
+                    } catch(e) {
+                        console.warn('Error deleting old index file:', e.message);
+                    }
+                    
+                    delete this.db.scripts[this.originalTitle];
+                }
+            } else if (!isEditing && this.db.scripts[title]) {
+                if (typeof Swal !== 'undefined') {
+                    const result = await Swal.fire({
+                        title: 'Script Already Exists',
+                        text: `A script titled "${title}" already exists. Do you want to overwrite it?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Overwrite',
+                        cancelButtonText: 'Cancel'
+                    });
+                    
+                    if (!result.isConfirmed) {
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = originalBtnText;
+                        this.actionInProgress = false;
+                        if (typeof NProgress !== 'undefined') NProgress.done();
+                        return;
+                    }
+                    
+                    this.currentEditingId = title;
+                    this.originalTitle = title;
+                } else {
+                    if (!confirm(`A script titled "${title}" already exists. Overwrite it?`)) {
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = originalBtnText;
+                        this.actionInProgress = false;
+                        if (typeof NProgress !== 'undefined') NProgress.done();
+                        return;
+                    }
+                    
+                    this.currentEditingId = title;
+                    this.originalTitle = title;
+                }
+            }
+            
+            const scriptData = {
+                title: title,
+                visibility: visibility,
+                description: desc,
+                expiration: expiration,
+                filename: filename,
+                size: code.length,
+                created: (isEditing && !titleChanged && this.db.scripts[title]) ? this.db.scripts[title].created : new Date().toISOString(),
+                updated: new Date().toISOString()
+            };
+            
+            this.db.scripts[title] = scriptData;
+            
+            const luaPath = `scripts/${scriptId}/raw/${filename}`;
+            let luaSha = null;
+            
+            if (isEditing && !titleChanged) {
+                try {
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (check.ok) {
+                        const data = await check.json();
+                        luaSha = data.sha;
+                    }
+                } catch(e) {
+                    console.log('Creating new Lua file');
+                }
+            }
+            
+            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
+                    content: utils.safeBtoa(code),
+                    sha: luaSha || undefined
+                })
+            });
+            
+            if (!luaRes.ok) {
+                throw new Error('Failed to save Lua file');
+            }
+            
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `${isEditing ? (titleChanged ? 'Rename' : 'Update') : 'Add'} ${title}`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            
+            if (!dbRes.ok) {
+                throw new Error('Failed to update database');
+            }
+            
+            const newDbData = await dbRes.json();
+            this.dbSha = newDbData.content.sha;
+
+            const indexHTML = this.generateScriptHTML(title, scriptData);
+            let indexSha = null;
+            const indexPath = `scripts/${scriptId}/index.html`;
+            
+            if (isEditing && !titleChanged) {
+                try {
+                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (check.ok) {
+                        const data = await check.json();
+                        indexSha = data.sha;
+                    }
+                } catch(e) {
+                    console.log('Creating new index file');
+                }
+            }
+            
+            const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
+                    content: utils.safeBtoa(indexHTML),
+                    sha: indexSha || undefined
+                })
+            });
+            
+            if (!indexRes.ok) {
+                throw new Error('Failed to save index.html');
+            }
+            
+            this.showToast(`${isEditing ? 'Updated' : 'Published'} successfully!`, 'success');
+            
+            if (isEditing && titleChanged) {
+                this.currentEditingId = title;
+                this.originalTitle = title;
+            }
+            
+            if (isEditing) {
+                document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+                saveBtn.textContent = 'Update Script';
+            } else {
+                document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+                saveBtn.textContent = 'Update Script';
+                document.getElementById('btn-delete').style.display = 'inline-flex';
+            }
+            
+            const actionButtons = document.querySelector('.action-buttons');
+            const viewBtn = actionButtons.querySelector('.btn-view-script');
+            if (viewBtn) {
+                viewBtn.href = `scripts/${scriptId}/index.html`;
+            } else {
+                const newViewBtn = document.createElement('a');
+                newViewBtn.href = `scripts/${scriptId}/index.html`;
+                newViewBtn.target = '_blank';
+                newViewBtn.className = 'btn btn-secondary btn-view-script';
+                newViewBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                    View Script
+                `;
+                actionButtons.appendChild(newViewBtn);
+            }
+            
+            await this.loadDatabase();
+            
+        } catch(e) {
+            console.error('Save error:', e);
+            this.showToast(`Error: ${e.message}`, 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
+            this.actionInProgress = false;
+            if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+    },
+
+    async deleteScript() {
+        if (!this.currentUser) {
+            this.showToast('Please login first.', 'error');
+            return;
+        }
+        
+        if (this.actionInProgress) return;
+        
+        if (!this.currentEditingId) {
+            this.showToast('No script selected for deletion.', 'error');
+            return;
+        }
+
+        const scriptTitle = this.currentEditingId;
+        
+        if (!this.db.scripts[scriptTitle]) {
+            this.showToast('Script not found or already deleted.', 'error');
+            this.switchAdminTab('list');
+            return;
+        }
+
+        const confirmMessage = `Are you sure you want to delete "${scriptTitle}"? This will permanently delete the script, Lua file, and HTML page.`;
+        
+        let shouldDelete = false;
+        
+        if (typeof Swal !== 'undefined') {
+            const result = await Swal.fire({
+                title: 'Delete Script',
+                text: confirmMessage,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#ef4444'
+            });
+            shouldDelete = result.isConfirmed;
+        } else {
+            shouldDelete = confirm(confirmMessage);
+        }
+
+        if (!shouldDelete) return;
+
+        this.actionInProgress = true;
+        
+        try {
+            if (typeof NProgress !== 'undefined') NProgress.start();
+            
+            const scriptId = utils.sanitizeTitle(scriptTitle);
+            const scriptData = this.db.scripts[scriptTitle];
+            
+            const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
+            try {
+                const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (luaRes.ok) {
+                    const luaData = await luaRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Delete ${scriptData.filename}`,
+                            sha: luaData.sha
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Lua file deletion error:', e.message);
+            }
+
+            const indexPath = `scripts/${scriptId}/index.html`;
+            try {
+                const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                    headers: { 'Authorization': `token ${this.token}` }
+                });
+                
+                if (idxRes.ok) {
+                    const idxData = await idxRes.json();
+                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Delete index for ${scriptTitle}`,
+                            sha: idxData.sha
+                        })
+                    });
+                }
+            } catch(e) {
+                console.warn('Index file deletion error:', e.message);
+            }
+            
+            delete this.db.scripts[scriptTitle];
+            
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `Remove ${scriptTitle} from database`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            
+            if (dbRes.ok) {
+                const newDbData = await dbRes.json();
+                this.dbSha = newDbData.content.sha;
+                
+                this.showToast('Script deleted successfully!', 'success');
+                
+                setTimeout(() => {
+                    this.resetEditor();
+                    this.switchAdminTab('list');
+                }, 1500);
+                
+                await this.loadDatabase();
+            } else {
+                throw new Error('Failed to update database');
+            }
+            
+        } catch(e) {
+            console.error('Delete error:', e);
+            this.showToast(`Delete failed: ${e.message}`, 'error');
+        } finally {
+            this.actionInProgress = false;
+            if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+    },
+
     handleRouting() {
         const hash = location.hash.slice(1);
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
         window.scrollTo(0, 0);
         
         if (hash === 'admin') {
-            if (!get().currentUser) {
+            if (!this.currentUser) {
                 this.toggleLoginModal();
                 location.hash = '';
                 return;
@@ -978,69 +1359,89 @@ const useStore = create((set, get) => ({
             document.getElementById('view-home').style.display = 'block';
         }
     },
-
-    toggleLoginModal() {
-        const modal = document.getElementById('login-modal');
-        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-        document.getElementById('login-error').style.display = 'none';
-        if (modal.style.display === 'flex') {
-            document.getElementById('auth-token').focus();
-        }
-    },
-
-    async login() {
-        const { actionInProgress } = get();
-        if (actionInProgress) return;
+    
+    loadMonacoEditor() {
+        if (typeof monaco !== 'undefined' || window.monacoEditor) return;
         
-        this.startAction();
-        try {
-            const token = document.getElementById('auth-token').value.trim();
-            if (!token) {
-                utils.showToast('Token is required', 'error');
-                return;
+        if (!document.querySelector('#editor-container')) return;
+        
+        const loadMonaco = () => {
+            if (typeof monaco === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js';
+                script.onload = () => {
+                    require.config({ 
+                        paths: { 
+                            vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' 
+                        } 
+                    });
+                    require(['vs/editor/editor.main'], () => {
+                        window.monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
+                            value: '',
+                            language: 'lua',
+                            theme: 'vs-dark',
+                            fontSize: 14,
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            wordWrap: 'on',
+                            lineNumbers: 'on',
+                            automaticLayout: true
+                        });
+                        
+                        const textarea = document.getElementById('edit-code');
+                        if (textarea) textarea.style.display = 'none';
+                    });
+                };
+                document.head.appendChild(script);
             }
-            
-            this.setAuth(token, null);
-            const success = await this.verifyToken(false);
-            
-            if (success) {
-                this.saveSession();
-                this.toggleLoginModal();
-                document.getElementById('auth-token').value = '';
-                await this.loadDatabase();
-                this.renderList();
-                utils.showToast('Logged in successfully!', 'success');
-            }
-        } finally {
-            this.endAction();
-        }
+        };
+        
+        setTimeout(loadMonaco, 100);
     },
-
-    logout() {
-        Swal.fire({
-            title: 'Logout',
-            text: 'Are you sure you want to logout?',
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Yes, logout',
-            cancelButtonText: 'Cancel'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                this.clearAuth();
-                sessionStorage.clear();
-                document.getElementById('auth-section').style.display = 'block';
-                document.getElementById('user-section').style.display = 'none';
-                document.getElementById('private-filter').style.display = 'none';
-                document.getElementById('unlisted-filter').style.display = 'none';
-                location.href = '#';
-                utils.showToast('Logged out successfully', 'success');
-                setTimeout(() => location.reload(), 1000);
+    
+    loadQuillEditor() {
+        if (typeof Quill !== 'undefined' || window.quillEditor) return;
+        
+        if (!document.querySelector('#quill-container')) return;
+        
+        const loadQuill = () => {
+            if (typeof Quill === 'undefined') {
+                const link = document.createElement('link');
+                link.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css';
+                link.rel = 'stylesheet';
+                document.head.appendChild(link);
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
+                script.onload = () => {
+                    window.quillEditor = new Quill('#quill-container', {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: [
+                                ['bold', 'italic', 'underline'],
+                                ['code-block'],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                ['clean']
+                            ]
+                        },
+                        placeholder: 'Script description...'
+                    });
+                    
+                    const descInput = document.getElementById('edit-desc');
+                    if (descInput) descInput.style.display = 'none';
+                    
+                    window.quillEditor.on('text-change', () => {
+                        const html = window.quillEditor.root.innerHTML;
+                        if (descInput) descInput.value = html === '<p><br></p>' ? '' : html;
+                    });
+                };
+                document.head.appendChild(script);
             }
-        });
+        };
+        
+        setTimeout(loadQuill, 100);
     }
-}));
-
-const app = useStore.getState();
+};
 
 function navigate(path) {
     if (path === 'admin' && !app.currentUser) {
@@ -1050,161 +1451,17 @@ function navigate(path) {
     location.hash = path;
 }
 
-function initSearch() {
-    const searchInput = document.getElementById('search');
-    const debouncedSearch = utils.debounce(() => {
-        useStore.getState().setSearchQuery(searchInput.value);
-        useStore.getState().renderList();
-    }, 300);
+window.addEventListener('DOMContentLoaded', () => {
+    app.init();
     
-    searchInput.addEventListener('input', debouncedSearch);
-}
-
-function initMonacoEditor() {
-    if (typeof monaco === 'undefined') return;
-    
-    const container = document.getElementById('editor-container');
-    if (!container) return;
-    
-    window.monacoEditor = monaco.editor.create(container, {
-        value: '',
-        language: 'lua',
-        theme: 'vs-dark',
-        fontSize: 14,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        wordWrap: 'on',
-        lineNumbers: 'on',
-        roundedSelection: false,
-        scrollbar: {
-            vertical: 'visible',
-            horizontal: 'visible',
-            useShadows: false
-        },
-        automaticLayout: true
-    });
-    
-    const textarea = document.getElementById('edit-code');
-    if (textarea) {
-        textarea.style.display = 'none';
-    }
-}
-
-async function loadMonacoEditor() {
-    if (!document.getElementById('admin-tab-editor') || document.getElementById('admin-tab-editor').style.display === 'none') {
-        return;
-    }
-    
-    if (typeof monaco === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js';
-        script.onload = () => {
-            require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' } });
-            require(['vs/editor/editor.main'], () => {
-                initMonacoEditor();
-            });
-        };
-        document.head.appendChild(script);
-    } else {
-        initMonacoEditor();
-    }
-}
-
-function initQuillEditor() {
-    if (typeof Quill === 'undefined') return;
-    
-    const container = document.getElementById('quill-container');
-    if (!container) return;
-    
-    const quill = new Quill(container, {
-        theme: 'snow',
-        modules: {
-            toolbar: [
-                ['bold', 'italic', 'underline'],
-                ['code-block'],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['clean']
-            ]
-        },
-        placeholder: 'Script description...'
-    });
-    
-    quill.on('text-change', () => {
-        document.getElementById('edit-desc').value = quill.root.innerHTML;
-    });
-    
-    return quill;
-}
-
-async function loadQuillEditor() {
-    if (typeof Quill === 'undefined') {
-        const link = document.createElement('link');
-        link.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css';
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
-        
-        const script = document.createElement('script');
-        script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
-        script.onload = () => {
-            const quill = initQuillEditor();
-            window.quillEditor = quill;
-        };
-        document.head.appendChild(script);
-    } else {
-        window.quillEditor = initQuillEditor();
-    }
-}
-
-window.addEventListener('DOMContentLoaded', async () => {
-    NProgress.configure({ 
-        showSpinner: false,
-        speed: 400,
-        trickleSpeed: 200 
-    });
-    
-    await app.init();
-    initSearch();
-    
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                const editorTab = document.getElementById('admin-tab-editor');
-                if (editorTab && editorTab.style.display === 'block') {
-                    loadMonacoEditor();
-                    loadQuillEditor();
-                }
-            }
+    if (typeof NProgress !== 'undefined') {
+        NProgress.configure({ 
+            showSpinner: false,
+            speed: 400,
+            trickleSpeed: 200 
         });
-    });
-    
-    const editorTab = document.getElementById('admin-tab-editor');
-    if (editorTab) {
-        observer.observe(editorTab, { attributes: true });
     }
-    
-    document.getElementById('search').addEventListener('input', (e) => {
-        useStore.getState().setSearchQuery(e.target.value);
-        useStore.getState().renderList();
-    });
-    
-    document.querySelectorAll('.sidebar-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const filter = e.target.getAttribute('onclick').match(/'(.*?)'/)[1];
-            useStore.getState().setCurrentFilter(filter);
-            useStore.getState().renderList();
-            
-            document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            e.target.classList.add('active');
-        });
-    });
-    
-    document.querySelector('.sidebar-sort select').addEventListener('change', (e) => {
-        useStore.getState().setCurrentSort(e.target.value);
-        useStore.getState().renderList();
-    });
 });
 
 window.app = app;
 window.navigate = navigate;
-window.saveAs = saveAs;
