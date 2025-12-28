@@ -78,15 +78,13 @@ const app = {
     searchQuery: '',
     
     async init() {
-        this.loadSession();
+        const sessionValid = this.loadSession();
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
         this.debouncedSave = utils.debounce(() => this.saveScript(), 750);
-        this.debouncedLogin = utils.debounce(() => this.login(), 750);
-        this.debouncedToggleLogin = utils.debounce(() => this.toggleLoginModal(), 200);
         
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('edit-expire').min = today;
@@ -97,9 +95,24 @@ const app = {
         window.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                this.saveScript();
+                if (location.hash === '#admin') {
+                    this.saveScript();
+                }
             }
         });
+
+        this.startSessionRefresh();
+    },
+
+    startSessionRefresh() {
+        setInterval(() => {
+            if (this.token && this.currentUser) {
+                const expiry = localStorage.getItem('gh_token_expiry');
+                if (expiry && Date.now() >= parseInt(expiry)) {
+                    this.logout(true);
+                }
+            }
+        }, 60000);
     },
     
     initEventListeners() {
@@ -147,10 +160,7 @@ const app = {
                         return false;
                     }
                     
-                    document.getElementById('auth-section').style.display = 'none';
-                    document.getElementById('user-section').style.display = 'flex';
-                    document.getElementById('private-filter').style.display = 'block';
-                    document.getElementById('unlisted-filter').style.display = 'block';
+                    this.updateUIForLoggedInUser();
                     
                     return true;
                 } else {
@@ -164,6 +174,13 @@ const app = {
         return false;
     },
 
+    updateUIForLoggedInUser() {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('user-section').style.display = 'flex';
+        document.getElementById('private-filter').style.display = 'block';
+        document.getElementById('unlisted-filter').style.display = 'block';
+    },
+
     saveSession() {
         if (this.token && this.currentUser) {
             try {
@@ -173,6 +190,7 @@ const app = {
                 localStorage.setItem('gh_token_expiry', expiry.toString());
             } catch(e) {
                 console.error('Session save error:', e);
+                this.showToast('Failed to save session', 'error');
             }
         }
     },
@@ -383,10 +401,7 @@ const app = {
             }
             
             this.currentUser = user;
-            document.getElementById('auth-section').style.display = 'none';
-            document.getElementById('user-section').style.display = 'flex';
-            document.getElementById('private-filter').style.display = 'block';
-            document.getElementById('unlisted-filter').style.display = 'block';
+            this.updateUIForLoggedInUser();
             
             return true;
         } catch (e) {
@@ -403,8 +418,7 @@ const app = {
             }
             return false;
         }
-    },
-
+    }
     async loadDatabase() {
         try {
             this.isLoading = true;
@@ -430,6 +444,7 @@ const app = {
                     }
                 } catch(parseError) {
                     console.error('Database parse error:', parseError);
+                    this.showToast('Database corrupted, initializing new database', 'warning');
                     this.db = { scripts: {} };
                 }
             } else {
@@ -451,6 +466,7 @@ const app = {
             this.isLoading = false;
         }
     },
+
     renderList() {
         const list = document.getElementById('script-list');
         if (!list) return;
@@ -482,7 +498,7 @@ const app = {
                         ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
                         ${isExpired ? `<span class="badge" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
                     </div>
-                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.replace(/<[^>]*>/g, ''))}</p>` : ''}
+                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.replace(/<[^>]*>/g, '').substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
                         ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
@@ -600,7 +616,6 @@ const app = {
         const adminItems = document.querySelectorAll('.admin-item');
         adminItems.forEach(item => {
             let startX = 0;
-            let endX = 0;
             let isSwiping = false;
             item.addEventListener('touchstart', (e) => {
                 startX = e.touches[0].clientX;
@@ -622,7 +637,7 @@ const app = {
             }, { passive: false });
             item.addEventListener('touchend', (e) => {
                 if (!startX || !isSwiping) return;
-                endX = e.changedTouches[0].clientX;
+                const endX = e.changedTouches[0].clientX;
                 const diff = endX - startX;
                 item.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
                 if (diff > 100) {
@@ -784,8 +799,7 @@ const app = {
             this.actionInProgress = false;
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
-    },
-
+    }
     renderStats() {
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
@@ -849,7 +863,6 @@ const app = {
             document.getElementById('edit-desc').value = '';
         }
         
-        document.getElementById('btn-delete').style.display = 'none';
         document.querySelector('.editor-actions .btn:last-child').textContent = 'Save & Publish';
         
         const viewBtn = document.querySelector('.btn-view-script');
@@ -879,7 +892,7 @@ const app = {
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
             
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}`, {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
@@ -919,7 +932,6 @@ const app = {
             document.getElementById('edit-desc').value = s.description || '';
         }
         
-        document.getElementById('btn-delete').style.display = 'inline-flex';
         document.querySelector('.editor-actions .btn:last-child').textContent = 'Update Script';
         
         this.updateViewButton(scriptId);
@@ -958,7 +970,8 @@ const app = {
         
         const title = document.getElementById('edit-title').value.trim();
         const visibility = document.getElementById('edit-visibility').value;
-        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
+        let desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
+        if (desc === '<p><br></p>' || desc === '<p></p>') desc = '';
         const expiration = document.getElementById('edit-expire').value;
         const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
@@ -997,8 +1010,8 @@ const app = {
             const scriptData = {
                 title: title,
                 visibility: visibility,
-                description: desc === '<p><br></p>' ? '' : desc,
-                expiration: expiration,
+                description: desc,
+                expiration: expiration || null,
                 filename: filename,
                 size: code.length,
                 created: (isEditing && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
@@ -1107,7 +1120,6 @@ const app = {
             
             document.getElementById('editor-heading').textContent = `Edit: ${title}`;
             saveBtn.textContent = 'Update Script';
-            document.getElementById('btn-delete').style.display = 'inline-flex';
             
             this.updateViewButton(scriptId);
             
