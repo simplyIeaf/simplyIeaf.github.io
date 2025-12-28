@@ -120,28 +120,21 @@ const app = {
             this.setSort(e.target.value);
         });
         
-        document.getElementById('home-btn')?.addEventListener('click', () => navigate(''));
-        document.getElementById('login-btn')?.addEventListener('click', () => this.toggleLoginModal());
-        document.getElementById('manage-btn')?.addEventListener('click', () => navigate('admin'));
-        document.getElementById('close-login-btn')?.addEventListener('click', () => this.toggleLoginModal());
-        document.getElementById('submit-login-btn')?.addEventListener('click', () => this.login());
-        document.getElementById('login-modal')?.addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) this.toggleLoginModal();
-        });
-        document.getElementById('back-btn')?.addEventListener('click', () => navigate(''));
-        document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
-        document.getElementById('tab-list')?.addEventListener('click', () => this.switchAdminTab('list'));
-        document.getElementById('tab-create')?.addEventListener('click', () => this.switchAdminTab('create'));
-        document.getElementById('tab-stats')?.addEventListener('click', () => this.switchAdminTab('stats'));
-        document.getElementById('cancel-btn')?.addEventListener('click', () => this.switchAdminTab('list'));
-        document.getElementById('btn-delete')?.addEventListener('click', () => this.deleteScript());
-        document.getElementById('save-btn')?.addEventListener('click', () => this.saveScript());
+        const loginBtn = document.querySelector('.btn[onclick*="toggleLoginModal"]');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.debouncedToggleLogin();
+            });
+        }
         
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && document.getElementById('login-modal').style.display === 'flex') {
-                this.toggleLoginModal();
-            }
-        });
+        const loginSubmitBtn = document.querySelector('.modal .btn-full[onclick*="login"]');
+        if (loginSubmitBtn) {
+            loginSubmitBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.debouncedLogin();
+            });
+        }
     },
     
     loadMonacoIfNeeded() {
@@ -162,17 +155,10 @@ const app = {
                 this.token = storedToken;
                 this.currentUser = JSON.parse(storedUser);
                 
-                const verified = this.verifyToken(true);
-                if (!verified || this.currentUser.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
+                if (this.currentUser.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
                     this.logout(true);
                     return false;
                 }
-                
-                document.getElementById('auth-section').style.display = 'none';
-                document.getElementById('user-section').style.display = 'flex';
-                document.getElementById('private-filter').style.display = 'block';
-                document.getElementById('unlisted-filter').style.display = 'block';
-                
                 return true;
             }
         } catch(e) {
@@ -482,7 +468,7 @@ const app = {
                     </div>
                 </div>
             </div>
-        `}).join('');
+        `).join('');
     },
 
     filterLogic(scripts) {
