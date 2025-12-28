@@ -3,11 +3,6 @@ const CONFIG = {
     repo: 'simplyIeaf.github.io',
     cacheBuster: () => Date.now()
 };
-aconst CONFIG = {
-    user: 'simplyIeaf',
-    repo: 'simplyIeaf.github.io',
-    cacheBuster: () => Date.now()
-};
 
 const utils = {
     debounce(func, wait) {
