@@ -1,3 +1,4 @@
+// please just update :sob
 const CONFIG = {
     user: 'simplyIeaf',
     repo: 'simplyIeaf.github.io',
