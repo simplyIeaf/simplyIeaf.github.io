@@ -61,6 +61,56 @@ const utils = {
         if (!code || code.trim().length === 0) return 'Code is required';
         if (code.length > 100000) return 'Code is too large (max 100KB)';
         return null;
+    },
+
+    async encryptData(plaintext) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(plaintext);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(CONFIG.user + CONFIG.repo),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: new Uint8Array(16), iterations: 100000, hash: 'SHA-256' },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+        return {
+            iv: Array.from(iv),
+            data: Array.from(new Uint8Array(encrypted))
+        };
+    },
+
+    async decryptData(encryptedObj) {
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(CONFIG.user + CONFIG.repo),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveKey']
+        );
+        const key = await crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: new Uint8Array(16), iterations: 100000, hash: 'SHA-256' },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: new Uint8Array(encryptedObj.iv) },
+            key,
+            new Uint8Array(encryptedObj.data)
+        );
+        return decoder.decode(decrypted);
     }
 };
 
@@ -74,11 +124,12 @@ const app = {
     actionInProgress: false,
     currentEditingId: null,
     originalTitle: null,
+    originalScriptId: null,
     isLoading: false,
     searchQuery: '',
     
     async init() {
-        const sessionValid = this.loadSession();
+        const sessionValid = await this.loadSession();
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
@@ -134,16 +185,17 @@ const app = {
         }
     },
 
-    loadSession() {
+    async loadSession() {
         try {
-            const storedToken = localStorage.getItem('gh_token');
+            const storedEncrypted = localStorage.getItem('gh_encrypted');
             const storedUser = localStorage.getItem('gh_user');
             const tokenExpiry = localStorage.getItem('gh_token_expiry');
             
-            if (storedToken && storedUser && tokenExpiry) {
+            if (storedEncrypted && storedUser && tokenExpiry) {
                 const now = Date.now();
                 if (now < parseInt(tokenExpiry)) {
-                    this.token = storedToken;
+                    const encryptedObj = JSON.parse(storedEncrypted);
+                    this.token = await utils.decryptData(encryptedObj);
                     this.currentUser = JSON.parse(storedUser);
                     
                     if (this.currentUser.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
@@ -172,11 +224,12 @@ const app = {
         document.getElementById('unlisted-filter').style.display = 'block';
     },
 
-    saveSession() {
+    async saveSession() {
         if (this.token && this.currentUser) {
             try {
                 const expiry = Date.now() + (30 * 24 * 60 * 60 * 1000);
-                localStorage.setItem('gh_token', this.token);
+                const encryptedToken = await utils.encryptData(this.token);
+                localStorage.setItem('gh_encrypted', JSON.stringify(encryptedToken));
                 localStorage.setItem('gh_user', JSON.stringify(this.currentUser));
                 localStorage.setItem('gh_token_expiry', expiry.toString());
             } catch(e) {
@@ -353,7 +406,7 @@ const app = {
         }
         
         try {
-            localStorage.removeItem('gh_token');
+            localStorage.removeItem('gh_encrypted');
             localStorage.removeItem('gh_user');
             localStorage.removeItem('gh_token_expiry');
         } catch(e) {
@@ -401,7 +454,7 @@ const app = {
             }
             this.token = null;
             try {
-                localStorage.removeItem('gh_token');
+                localStorage.removeItem('gh_encrypted');
                 localStorage.removeItem('gh_user');
                 localStorage.removeItem('gh_token_expiry');
             } catch(err) {
@@ -857,12 +910,14 @@ const app = {
         }
         
         document.querySelector('.editor-actions .btn:last-child').textContent = 'Publish';
+        document.querySelector('.btn-delete')?.remove();
         
         const viewBtn = document.querySelector('.btn-view-script');
         if (viewBtn) viewBtn.remove();
         
         this.currentEditingId = null;
         this.originalTitle = null;
+        this.originalScriptId = null;
     },
 
     async populateEditor(title) {
@@ -872,6 +927,7 @@ const app = {
         
         this.currentEditingId = title;
         this.originalTitle = title;
+        this.originalScriptId = utils.sanitizeTitle(title);
         
         this.switchAdminTab('create');
         
@@ -880,12 +936,16 @@ const app = {
         document.getElementById('edit-visibility').value = s.visibility;
         document.getElementById('edit-expire').value = s.expiration || '';
         
-        const scriptId = utils.sanitizeTitle(title);
+        if (window.quillEditor) {
+            window.quillEditor.root.innerHTML = s.description || '';
+        } else {
+            document.getElementById('edit-desc').value = s.description || '';
+        }
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
             
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
@@ -917,17 +977,23 @@ const app = {
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
         
-        if (window.quillEditor) {
-            setTimeout(() => {
-                window.quillEditor.root.innerHTML = s.description || '';
-            }, 100);
-        } else {
-            document.getElementById('edit-desc').value = s.description || '';
-        }
-        
         document.querySelector('.editor-actions .btn:last-child').textContent = 'Update Script';
         
-        this.updateViewButton(scriptId);
+        const actionButtons = document.querySelector('.action-buttons');
+        if (!document.querySelector('.btn-delete')) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-delete';
+            deleteBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                </svg>
+                Delete
+            `;
+            deleteBtn.onclick = () => this.deleteScriptConfirmation(title);
+            actionButtons.appendChild(deleteBtn);
+        }
+        
+        this.updateViewButton(this.originalScriptId);
     },
 
     updateViewButton(scriptId) {
@@ -963,10 +1029,9 @@ const app = {
         
         const title = document.getElementById('edit-title').value.trim();
         const visibility = document.getElementById('edit-visibility').value;
-        let desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
-        if (desc === '<p><br></p>' || desc === '<p></p>') desc = '';
         const expiration = document.getElementById('edit-expire').value;
         const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
+        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         const originalBtnText = saveBtn.textContent;
         
@@ -986,8 +1051,9 @@ const app = {
         }
         
         const isEditing = !!this.currentEditingId;
-        const scriptId = utils.sanitizeTitle(title);
-        const filename = scriptId + '.lua';
+        const newScriptId = utils.sanitizeTitle(title);
+        const filename = newScriptId + '.lua';
+        const titleChanged = isEditing && this.originalTitle !== title;
         
         saveBtn.disabled = true;
         saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';
@@ -995,11 +1061,6 @@ const app = {
         if (typeof NProgress !== 'undefined') NProgress.start();
         
         try {
-            if (isEditing && this.originalTitle) {
-                await this.deleteOldScriptFiles(this.originalTitle);
-                delete this.db.scripts[this.originalTitle];
-            }
-            
             const scriptData = {
                 title: title,
                 visibility: visibility,
@@ -1011,9 +1072,37 @@ const app = {
                 updated: new Date().toISOString()
             };
             
+            if (isEditing) {
+                if (titleChanged) {
+                    await this.deleteOldScriptFiles(this.originalTitle);
+                    delete this.db.scripts[this.originalTitle];
+                }
+            }
+            
             this.db.scripts[title] = scriptData;
             
-            const luaPath = `scripts/${scriptId}/raw/${filename}`;
+            const luaPath = `scripts/${newScriptId}/raw/${filename}`;
+            let luaSha = null;
+            
+            if (isEditing && !titleChanged) {
+                try {
+                    const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (luaRes.ok) {
+                        const luaData = await luaRes.json();
+                        luaSha = luaData.sha;
+                    }
+                } catch(e) {
+                    console.warn('Could not fetch Lua file SHA:', e.message);
+                }
+            }
+            
+            const luaBody = {
+                message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
+                content: utils.safeBtoa(code)
+            };
+            if (luaSha) luaBody.sha = luaSha;
             
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
@@ -1021,10 +1110,7 @@ const app = {
                     'Authorization': `token ${this.token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
-                    content: utils.safeBtoa(code)
-                })
+                body: JSON.stringify(luaBody)
             });
             
             if (!luaRes.ok) {
@@ -1052,7 +1138,28 @@ const app = {
             this.dbSha = newDbData.content.sha;
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
-            const indexPath = `scripts/${scriptId}/index.html`;
+            const indexPath = `scripts/${newScriptId}/index.html`;
+            let indexSha = null;
+            
+            if (isEditing && !titleChanged) {
+                try {
+                    const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
+                        headers: { 'Authorization': `token ${this.token}` }
+                    });
+                    if (indexRes.ok) {
+                        const indexData = await indexRes.json();
+                        indexSha = indexData.sha;
+                    }
+                } catch(e) {
+                    console.warn('Could not fetch index file SHA:', e.message);
+                }
+            }
+            
+            const indexBody = {
+                message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
+                content: utils.safeBtoa(indexHTML)
+            };
+            if (indexSha) indexBody.sha = indexSha;
             
             const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
@@ -1060,10 +1167,7 @@ const app = {
                     'Authorization': `token ${this.token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
-                    content: utils.safeBtoa(indexHTML)
-                })
+                body: JSON.stringify(indexBody)
             });
             
             if (!indexRes.ok) {
@@ -1074,11 +1178,12 @@ const app = {
             
             this.currentEditingId = title;
             this.originalTitle = title;
+            this.originalScriptId = newScriptId;
             
             document.getElementById('editor-heading').textContent = `Edit: ${title}`;
             saveBtn.textContent = 'Update Script';
             
-            this.updateViewButton(scriptId);
+            this.updateViewButton(newScriptId);
             
             await this.loadDatabase();
             
