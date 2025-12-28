@@ -584,11 +584,21 @@
       "title": "Advanced NPC Dialogue System",
       "visibility": "PUBLIC",
       "description": "",
-      "expiration": "",
+      "expiration": null,
       "filename": "advanced-npc-dialogue-system.lua",
-      "size": 12891,
-      "created": "2025-12-28T15:05:42.643Z",
-      "updated": "2025-12-28T15:05:42.643Z"
+      "size": 12890,
+      "created": "2025-12-28T16:26:01.759Z",
+      "updated": "2025-12-28T16:26:01.759Z"
+    },
+    "Better AFK Systems": {
+      "title": "Better AFK Systems",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "better-afk-systems.lua",
+      "size": 5837,
+      "created": "2025-12-28T16:32:44.095Z",
+      "updated": "2025-12-28T16:32:44.095Z"
     }
   }
 }
