@@ -586,9 +586,19 @@
       "description": "",
       "expiration": "",
       "filename": "advanced-npc-dialogue-system.lua",
+      "size": 12891,
+      "created": "2025-12-28T15:05:42.643Z",
+      "updated": "2025-12-28T15:05:42.643Z"
+    },
+    "Advanced NPC Dialogue Systems": {
+      "title": "Advanced NPC Dialogue Systems",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": "",
+      "filename": "advanced-npc-dialogue-systems.lua",
       "size": 12887,
-      "created": "2025-12-27T20:22:03.420Z",
-      "updated": "2025-12-27T20:22:03.420Z"
+      "created": "2025-12-28T15:05:57.304Z",
+      "updated": "2025-12-28T15:05:57.304Z"
     }
   }
 }
