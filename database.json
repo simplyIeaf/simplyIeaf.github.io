@@ -590,16 +590,6 @@
       "created": "2025-12-27T20:22:03.420Z",
       "updated": "2025-12-27T20:22:03.420Z"
     },
-    "test script": {
-      "title": "test script",
-      "visibility": "PUBLIC",
-      "description": "",
-      "expiration": "",
-      "filename": "test-script.lua",
-      "size": 4,
-      "created": "2025-12-28T12:57:16.740Z",
-      "updated": "2025-12-28T12:57:16.740Z"
-    },
     "test script yess": {
       "title": "test script yess",
       "visibility": "PUBLIC",
