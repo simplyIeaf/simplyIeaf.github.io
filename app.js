@@ -856,7 +856,7 @@ const app = {
             document.getElementById('edit-desc').value = '';
         }
         
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Save & Publish';
+        document.querySelector('.editor-actions .btn:last-child').textContent = 'Publish';
         
         const viewBtn = document.querySelector('.btn-view-script');
         if (viewBtn) viewBtn.remove();
@@ -986,7 +986,6 @@ const app = {
         }
         
         const isEditing = !!this.currentEditingId;
-        const titleChanged = isEditing && this.originalTitle !== title;
         const scriptId = utils.sanitizeTitle(title);
         const filename = scriptId + '.lua';
         
@@ -996,8 +995,9 @@ const app = {
         if (typeof NProgress !== 'undefined') NProgress.start();
         
         try {
-            if (isEditing && titleChanged && this.originalTitle) {
+            if (isEditing && this.originalTitle) {
                 await this.deleteOldScriptFiles(this.originalTitle);
+                delete this.db.scripts[this.originalTitle];
             }
             
             const scriptData = {
@@ -1011,28 +1011,9 @@ const app = {
                 updated: new Date().toISOString()
             };
             
-            if (isEditing && this.originalTitle && this.originalTitle !== title) {
-                delete this.db.scripts[this.originalTitle];
-            }
-            
             this.db.scripts[title] = scriptData;
             
             const luaPath = `scripts/${scriptId}/raw/${filename}`;
-            let luaSha = null;
-            
-            if (isEditing && !titleChanged) {
-                try {
-                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (check.ok) {
-                        const data = await check.json();
-                        luaSha = data.sha;
-                    }
-                } catch(e) {
-                    console.log('Creating new Lua file');
-                }
-            }
             
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
@@ -1042,8 +1023,7 @@ const app = {
                 },
                 body: JSON.stringify({
                     message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
-                    content: utils.safeBtoa(code),
-                    sha: luaSha || undefined
+                    content: utils.safeBtoa(code)
                 })
             });
             
@@ -1058,7 +1038,7 @@ const app = {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    message: `${isEditing ? (titleChanged ? 'Rename' : 'Update') : 'Add'} ${title}`,
+                    message: `${isEditing ? 'Update' : 'Add'} ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
                     sha: this.dbSha
                 })
@@ -1072,22 +1052,7 @@ const app = {
             this.dbSha = newDbData.content.sha;
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
-            let indexSha = null;
             const indexPath = `scripts/${scriptId}/index.html`;
-            
-            if (isEditing && !titleChanged) {
-                try {
-                    const check = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (check.ok) {
-                        const data = await check.json();
-                        indexSha = data.sha;
-                    }
-                } catch(e) {
-                    console.log('Creating new index file');
-                }
-            }
             
             const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
@@ -1097,8 +1062,7 @@ const app = {
                 },
                 body: JSON.stringify({
                     message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
-                    content: utils.safeBtoa(indexHTML),
-                    sha: indexSha || undefined
+                    content: utils.safeBtoa(indexHTML)
                 })
             });
             
