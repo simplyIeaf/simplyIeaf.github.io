@@ -15,15 +15,28 @@ const utils = {
     },
     
     safeBtoa(str) {
-        return window.btoa(unescape(encodeURIComponent(str)));
+        try {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, 
+                (match, p1) => String.fromCharCode('0x' + p1)));
+        } catch(e) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
     },
     
     safeAtob(str) {
-        return decodeURIComponent(escape(window.atob(str)));
+        try {
+            return decodeURIComponent(atob(str).split('').map(c => 
+                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        } catch(e) {
+            return decodeURIComponent(escape(atob(str)));
+        }
     },
 
     sanitizeTitle(title) {
-        return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        return title.toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .substring(0, 100);
     },
 
     escapeHtml(text) {
@@ -35,7 +48,12 @@ const utils = {
     validateTitle(title) {
         if (!title || title.trim().length === 0) return 'Title is required';
         if (title.length > 100) return 'Title must be less than 100 characters';
-        if (!/^[a-zA-Z0-9\s\-_]+$/.test(title)) return 'Title can only contain letters, numbers, spaces, hyphens, and underscores';
+        const sanitized = this.sanitizeTitle(title);
+        if (sanitized.includes('..') || sanitized.includes('/') || sanitized.includes('\\')) {
+            return 'Invalid title characters';
+        }
+        const reserved = ['con', 'prn', 'aux', 'nul'];
+        if (reserved.includes(sanitized.toLowerCase())) return 'Invalid title';
         return null;
     },
 
@@ -74,8 +92,8 @@ const app = {
 
     loadSession() {
         try {
-            const storedToken = localStorage.getItem('gh_token');
-            const storedUser = localStorage.getItem('gh_user');
+            const storedToken = sessionStorage.getItem('gh_token');
+            const storedUser = sessionStorage.getItem('gh_user');
             
             if (storedToken && storedUser) {
                 this.token = storedToken;
@@ -95,8 +113,11 @@ const app = {
 
     saveSession() {
         if (this.token && this.currentUser) {
-            localStorage.setItem('gh_token', this.token);
-            localStorage.setItem('gh_user', JSON.stringify(this.currentUser));
+            sessionStorage.setItem('gh_token', this.token);
+            sessionStorage.setItem('gh_user', JSON.stringify(this.currentUser));
+            setTimeout(() => {
+                sessionStorage.removeItem('gh_token');
+            }, 4 * 60 * 60 * 1000);
         }
     },
 
@@ -204,7 +225,6 @@ const app = {
         const modal = document.getElementById('login-modal');
         modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
         document.getElementById('login-error').style.display = 'none';
-        
         if (modal.style.display === 'flex') {
             document.getElementById('auth-token').focus();
         }
@@ -213,14 +233,12 @@ const app = {
     async login() {
         if (this.actionInProgress) return;
         this.actionInProgress = true;
-        
         try {
             const token = document.getElementById('auth-token').value.trim();
             if (!token) {
                 this.showLoginError('Token is required');
                 return;
             }
-            
             this.token = token;
             const success = await this.verifyToken(false);
             if (success) {
@@ -246,20 +264,15 @@ const app = {
         if (!silent && !confirm('Are you sure you want to logout?')) {
             return;
         }
-        
-        localStorage.removeItem('gh_token');
-        localStorage.removeItem('gh_user');
-        
+        sessionStorage.removeItem('gh_token');
+        sessionStorage.removeItem('gh_user');
         this.token = null;
         this.currentUser = null;
-        
         document.getElementById('auth-section').style.display = 'block';
         document.getElementById('user-section').style.display = 'none';
         document.getElementById('private-filter').style.display = 'none';
         document.getElementById('unlisted-filter').style.display = 'none';
-        
         location.href = '#';
-        
         if (!silent) {
             location.reload();
         }
@@ -270,30 +283,26 @@ const app = {
             const res = await fetch('https://api.github.com/user', {
                 headers: { 'Authorization': `token ${this.token}` }
             });
-            
             if (!res.ok) {
                 throw new Error('Invalid token');
             }
-            
             const user = await res.json();
             if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
                 throw new Error(`Token belongs to ${user.login}, not ${CONFIG.user}.`);
             }
-            
             this.currentUser = user;
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('user-section').style.display = 'flex';
             document.getElementById('private-filter').style.display = 'block';
             document.getElementById('unlisted-filter').style.display = 'block';
-            
             return true;
         } catch (e) {
             if (!silent) {
                 this.showLoginError(e.message);
             }
             this.token = null;
-            localStorage.removeItem('gh_token');
-            localStorage.removeItem('gh_user');
+            sessionStorage.removeItem('gh_token');
+            sessionStorage.removeItem('gh_user');
             return false;
         }
     },
@@ -304,11 +313,9 @@ const app = {
             if (list) {
                 list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading scripts...</p></div>`;
             }
-            
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
                 headers: this.token ? { 'Authorization': `token ${this.token}` } : {}
             });
-            
             if (res.status === 404) {
                 this.db = { scripts: {} };
                 this.dbSha = null;
@@ -338,7 +345,6 @@ const app = {
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const filtered = this.filterLogic(scripts);
         const sorted = this.sortLogic(filtered);
-        
         if (sorted.length === 0) {
             list.innerHTML = `<div class="empty-state">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;margin-bottom:16px;">
@@ -349,11 +355,9 @@ const app = {
             </div>`;
             return;
         }
-        
         list.innerHTML = sorted.map(s => {
             const scriptId = utils.sanitizeTitle(s.title);
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            
             return `
             <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
@@ -375,7 +379,6 @@ const app = {
     filterLogic(scripts) {
         const query = document.getElementById('search').value.toLowerCase();
         const now = new Date();
-        
         return scripts.filter(s => {
             if (!s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
@@ -433,30 +436,27 @@ const app = {
         } else {
             document.getElementById('admin-tab-editor').style.display = 'block';
             document.querySelectorAll('.tab-btn')[1].classList.add('active');
-            this.resetEditor();
+            if (tab === 'create') {
+                this.resetEditor();
+            }
         }
     },
 
     async renderAdminList() {
         if (!this.currentUser) return;
-        
         const list = document.getElementById('admin-list');
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const sorted = scripts.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
-        
         document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
-        
         if (sorted.length === 0) {
             list.innerHTML = `<div class="empty-admin-state">
                 <p>No scripts yet. Click "Add New" to create your first script.</p>
             </div>`;
             return;
         }
-        
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            
             return `
             <div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'")}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'")}')">
                 <div class="admin-item-left">
@@ -474,53 +474,41 @@ const app = {
                 </div>
             </div>
         `}).join('');
-        
         this.initSwipeToDelete();
     },
 
     initSwipeToDelete() {
         const adminItems = document.querySelectorAll('.admin-item');
-        
         adminItems.forEach(item => {
             let startX = 0;
             let endX = 0;
             let isSwiping = false;
-            
             item.addEventListener('touchstart', (e) => {
                 startX = e.touches[0].clientX;
                 isSwiping = false;
                 item.style.transition = 'none';
             }, { passive: true });
-            
             item.addEventListener('touchmove', (e) => {
                 if (!startX) return;
-                
                 const currentX = e.touches[0].clientX;
                 const diff = currentX - startX;
-                
                 if (Math.abs(diff) > 30) {
                     isSwiping = true;
                     e.preventDefault();
-                    
                     if (diff > 0) {
                         item.style.transform = `translateX(${Math.min(diff, 100)}px)`;
                         item.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
                     }
                 }
             }, { passive: false });
-            
             item.addEventListener('touchend', (e) => {
                 if (!startX || !isSwiping) return;
-                
                 endX = e.changedTouches[0].clientX;
                 const diff = endX - startX;
-                
                 item.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
-                
                 if (diff > 100) {
                     item.style.transform = 'translateX(300px)';
                     item.style.opacity = '0';
-                    
                     setTimeout(() => {
                         const scriptTitle = item.getAttribute('data-script-title');
                         this.showSwipeDeleteConfirmation(scriptTitle, item);
@@ -529,11 +517,9 @@ const app = {
                     item.style.transform = 'translateX(0)';
                     item.style.backgroundColor = '';
                 }
-                
                 startX = 0;
                 isSwiping = false;
             });
-            
             item.addEventListener('click', (e) => {
                 if (isSwiping) {
                     e.preventDefault();
@@ -561,12 +547,9 @@ const app = {
                 </div>
             </div>
         `;
-        
         const existingModal = document.getElementById('swipe-delete-modal');
         if (existingModal) existingModal.remove();
-        
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
         this.pendingSwipeDelete = {
             scriptTitle: scriptTitle,
             itemElement: itemElement
@@ -580,7 +563,6 @@ const app = {
             item.style.opacity = '1';
             item.style.backgroundColor = '';
             item.style.transition = 'transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease';
-            
             setTimeout(() => {
                 item.style.transition = '';
             }, 300);
@@ -591,33 +573,26 @@ const app = {
     async confirmSwipeDelete(scriptTitle) {
         const modal = document.getElementById('swipe-delete-modal');
         if (modal) modal.remove();
-        
         if (this.actionInProgress) return;
-        
         if (!this.currentUser) {
             alert('Please login first.');
             this.restoreSwipeItem();
             return;
         }
-        
         if (!scriptTitle || !this.db.scripts[scriptTitle]) {
             alert('Script not found or already deleted.');
             this.restoreSwipeItem();
             return;
         }
-
         this.actionInProgress = true;
-        
         try {
             const scriptId = utils.sanitizeTitle(scriptTitle);
             const scriptData = this.db.scripts[scriptTitle];
-            
             const luaPath = `scripts/${scriptId}/raw/${scriptData.filename}`;
             try {
                 const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                     headers: { 'Authorization': `token ${this.token}` }
                 });
-                
                 if (luaRes.ok) {
                     const luaData = await luaRes.json();
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
@@ -635,13 +610,11 @@ const app = {
             } catch(e) {
                 console.warn('Lua file deletion error:', e.message);
             }
-
             const indexPath = `scripts/${scriptId}/index.html`;
             try {
                 const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                     headers: { 'Authorization': `token ${this.token}` }
                 });
-                
                 if (idxRes.ok) {
                     const idxData = await idxRes.json();
                     await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
@@ -659,9 +632,7 @@ const app = {
             } catch(e) {
                 console.warn('Index file deletion error:', e.message);
             }
-            
             delete this.db.scripts[scriptTitle];
-            
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 
@@ -674,24 +645,19 @@ const app = {
                     sha: this.dbSha
                 })
             });
-            
             if (dbRes.ok) {
                 const newDbData = await dbRes.json();
                 this.dbSha = newDbData.content.sha;
-                
                 if (this.pendingSwipeDelete && this.pendingSwipeDelete.itemElement) {
                     const item = this.pendingSwipeDelete.itemElement;
                     item.remove();
                 }
-                
                 setTimeout(() => {
                     location.reload();
                 }, 500);
-                
             } else {
                 throw new Error('Failed to update database');
             }
-            
         } catch(e) {
             console.error('Delete error:', e);
             alert('Delete failed: ' + e.message);
@@ -708,7 +674,6 @@ const app = {
         const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
         const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
         const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
-        
         if (scripts.length === 0) {
             document.getElementById('stats-content').innerHTML = `
                 <div class="empty-admin-state">
@@ -717,7 +682,6 @@ const app = {
             `;
             return;
         }
-        
         document.getElementById('stats-content').innerHTML = `
             <div class="stats-grid">
                 <div class="stat-card">
@@ -763,16 +727,21 @@ const app = {
         
         this.currentEditingId = null;
         this.originalTitle = null;
+        
+        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
+        if (saveBtn) {
+            saveBtn.textContent = 'Save & Publish';
+        }
     },
 
     async populateEditor(title) {
         if (!this.currentUser) return;
-        
         const s = this.db.scripts[title];
         if (!s) return;
         
         this.currentEditingId = title;
         this.originalTitle = title;
+        
         this.switchAdminTab('create');
         
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
@@ -800,6 +769,11 @@ const app = {
         
         document.getElementById('btn-delete').style.display = 'inline-flex';
         
+        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
+        if (saveBtn) {
+            saveBtn.textContent = 'Update Script';
+        }
+        
         const viewBtn = document.querySelector('.btn-view-script');
         if (!viewBtn) {
             const actionButtons = document.querySelector('.action-buttons');
@@ -816,6 +790,8 @@ const app = {
                 View Script
             `;
             actionButtons.appendChild(newViewBtn);
+        } else {
+            viewBtn.href = `scripts/${scriptId}/index.html`;
         }
     },
 
@@ -858,7 +834,7 @@ const app = {
         const filename = scriptId + '.lua';
         
         saveBtn.disabled = true;
-        saveBtn.textContent = 'Publishing...';
+        saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';
         
         if (isEditing && !titleChanged) {
             if (this.db.scripts[title] && this.db.scripts[title] !== this.db.scripts[this.originalTitle]) {
@@ -876,7 +852,7 @@ const app = {
             return;
         }
         
-        msg.innerHTML = `<span class="loading">Publishing...</span>`;
+        msg.innerHTML = `<span class="loading">${isEditing ? 'Updating...' : 'Publishing...'}</span>`;
         
         try {
             if (isEditing && titleChanged && this.originalTitle) {
@@ -1045,6 +1021,15 @@ const app = {
                 this.originalTitle = title;
             }
             
+            if (isEditing) {
+                document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+                saveBtn.textContent = 'Update Script';
+            } else {
+                document.getElementById('editor-heading').textContent = `Edit: ${title}`;
+                saveBtn.textContent = 'Update Script';
+                document.getElementById('btn-delete').style.display = 'inline-flex';
+            }
+            
             const actionButtons = document.querySelector('.action-buttons');
             const viewBtn = actionButtons.querySelector('.btn-view-script');
             if (viewBtn) {
@@ -1200,7 +1185,6 @@ const app = {
         const hash = location.hash.slice(1);
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
         window.scrollTo(0, 0);
-        
         if (hash === 'admin') {
             if (!this.currentUser) {
                 this.toggleLoginModal();
