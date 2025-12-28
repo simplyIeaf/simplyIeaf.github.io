@@ -52,7 +52,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Token</label>
-                    <input type="password" id="auth-token" class="input-field" placeholder="ghp_...">
+                    <input type="password" id="auth-token" class="input-field" placeholder="ghp_..." autocomplete="off">
                 </div>
                 <div id="login-error" role="alert" aria-live="polite" style="color:var(--color-danger);font-size:13px;margin:16px 0;text-align:center;display:none"></div>
                 <button class="btn btn-full" id="submit-login-btn">Login</button>
@@ -206,7 +206,6 @@
                         <div class="editor-actions">
                             <div class="action-buttons">
                                 <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
-                                <button class="btn btn-delete" id="btn-delete" style="display:none">Delete</button>
                                 <button class="btn" id="save-btn">Save & Publish</button>
                             </div>
                         </div>
@@ -258,6 +257,12 @@
             document.getElementById('submit-login-btn').addEventListener('click', function() {
                 app.login();
             });
+
+            document.getElementById('auth-token').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    app.login();
+                }
+            });
             
             document.getElementById('login-modal').addEventListener('click', function(e) {
                 if (e.target === this) app.toggleLoginModal();
@@ -285,10 +290,6 @@
             
             document.getElementById('cancel-btn').addEventListener('click', function() {
                 app.switchAdminTab('list');
-            });
-            
-            document.getElementById('btn-delete').addEventListener('click', function() {
-                app.deleteScript();
             });
             
             document.getElementById('save-btn').addEventListener('click', function() {
