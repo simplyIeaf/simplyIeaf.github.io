@@ -16,17 +16,19 @@ const utils = {
     
     safeBtoa(str) {
         try {
-            return btoa(unescape(encodeURIComponent(str)));
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, 
+                (match, p1) => String.fromCharCode('0x' + p1)));
         } catch(e) {
-            return btoa(str);
+            return btoa(unescape(encodeURIComponent(str)));
         }
     },
     
     safeAtob(str) {
         try {
-            return decodeURIComponent(escape(atob(str)));
+            return decodeURIComponent(atob(str).split('').map(c => 
+                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
         } catch(e) {
-            return atob(str);
+            return decodeURIComponent(escape(atob(str)));
         }
     },
 
@@ -72,12 +74,11 @@ const app = {
     actionInProgress: false,
     currentEditingId: null,
     originalTitle: null,
-    originalScriptId: null,
     isLoading: false,
     searchQuery: '',
     
     async init() {
-        const sessionValid = await this.loadSession();
+        const sessionValid = this.loadSession();
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
@@ -133,7 +134,7 @@ const app = {
         }
     },
 
-    async loadSession() {
+    loadSession() {
         try {
             const storedToken = localStorage.getItem('gh_token');
             const storedUser = localStorage.getItem('gh_user');
@@ -151,6 +152,7 @@ const app = {
                     }
                     
                     this.updateUIForLoggedInUser();
+                    
                     return true;
                 } else {
                     this.logout(true);
@@ -158,6 +160,7 @@ const app = {
             }
         } catch(e) {
             console.error('Session load error:', e);
+            this.logout(true);
         }
         return false;
     },
@@ -185,7 +188,8 @@ const app = {
 
     generateScriptHTML(title, scriptData) {
         const scriptId = utils.sanitizeTitle(title);
-        const descriptionHtml = scriptData.description ? `<div class="script-description">${scriptData.description}</div>` : '';
+        const descriptionHtml = scriptData.description ? 
+            `<div class="script-description">${this.sanitizeHtml(scriptData.description)}</div>` : '';
         
         return `<!DOCTYPE html>
 <html lang="en">
@@ -280,6 +284,12 @@ const app = {
 </html>`;
     },
 
+    sanitizeHtml(html) {
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        return temp.innerHTML;
+    },
+
     toggleLoginModal() {
         const modal = document.getElementById('login-modal');
         modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
@@ -329,7 +339,9 @@ const app = {
                 duration: 3000,
                 gravity: "top",
                 position: "right",
-                backgroundColor: type === 'success' ? "#10b981" : type === 'error' ? "#ef4444" : "#f59e0b",
+                style: {
+                    background: type === 'success' ? "#10b981" : type === 'error' ? "#ef4444" : "#f59e0b"
+                },
                 stopOnFocus: true
             }).showToast();
         } else {
@@ -383,6 +395,7 @@ const app = {
             
             this.currentUser = user;
             this.updateUIForLoggedInUser();
+            
             return true;
         } catch (e) {
             if (!silent) {
@@ -433,7 +446,7 @@ const app = {
             }
             this.renderList();
             this.renderAdminList();
-        } catch (e) {
+        } catch (e) { 
             console.error("DB Error", e);
             const list = document.getElementById('admin-list');
             if (list) {
@@ -471,7 +484,8 @@ const app = {
             const scriptId = utils.sanitizeTitle(s.title);
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
             
-            return `<div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
+            return `
+            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</h3>
@@ -484,8 +498,8 @@ const app = {
                         ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
                     </div>
                 </div>
-            </div>`;
-        }).join('');
+            </div>
+        `}).join('');
     },
 
     filterLogic(scripts) {
@@ -495,7 +509,7 @@ const app = {
         return scripts.filter(s => {
             if (!s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
-            if (s.visibility === 'UNLISTED' && !this.currentUser) return false;
+            if (s.visibility === 'UNLISTED' && !this.currentUser) return false; 
             if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
             if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
             if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
@@ -518,15 +532,15 @@ const app = {
         if (e) {
             e.preventDefault();
             document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            if (e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
+            if(e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
         }
         this.currentFilter = cat;
         this.renderList();
     },
 
-    setSort(val) {
-        this.currentSort = val;
-        this.renderList();
+    setSort(val) { 
+        this.currentSort = val; 
+        this.renderList(); 
     },
 
     switchAdminTab(tab) {
@@ -572,7 +586,8 @@ const app = {
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            return `<div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+            return `
+            <div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</strong>
                     <div class="admin-meta">
@@ -586,8 +601,8 @@ const app = {
                         <path d="M9 18l6-6-6-6"/>
                     </svg>
                 </div>
-            </div>`;
-        }).join('');
+            </div>
+        `}).join('');
         this.initSwipeToDelete();
     },
 
@@ -788,37 +803,41 @@ const app = {
         const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
         const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
         if (scripts.length === 0) {
-            document.getElementById('stats-content').innerHTML = `<div class="empty-admin-state">
-                <p>No scripts yet. Create your first script to see statistics.</p>
-            </div>`;
+            document.getElementById('stats-content').innerHTML = `
+                <div class="empty-admin-state">
+                    <p>No scripts yet. Create your first script to see statistics.</p>
+                </div>
+            `;
             return;
         }
-        document.getElementById('stats-content').innerHTML = `<div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number">${scripts.length}</div>
-                <div class="stat-label">Total Scripts</div>
+        document.getElementById('stats-content').innerHTML = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">${scripts.length}</div>
+                    <div class="stat-label">Total Scripts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${publicCount}</div>
+                    <div class="stat-label">Public</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${privateCount}</div>
+                    <div class="stat-label">Private</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${unlistedCount}</div>
+                    <div class="stat-label">Unlisted</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${expiredCount}</div>
+                    <div class="stat-label">Expired</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
+                    <div class="stat-label">Total Size</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">${publicCount}</div>
-                <div class="stat-label">Public</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${privateCount}</div>
-                <div class="stat-label">Private</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${unlistedCount}</div>
-                <div class="stat-label">Unlisted</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${expiredCount}</div>
-                <div class="stat-label">Expired</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
-                <div class="stat-label">Total Size</div>
-            </div>
-        </div>`;
+        `;
     },
 
     resetEditor() {
@@ -839,16 +858,14 @@ const app = {
             document.getElementById('edit-desc').value = '';
         }
         
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Publish';
-        const deleteBtn = document.querySelector('.btn-delete');
-        if (deleteBtn) deleteBtn.remove();
+        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
+        if (saveBtn) saveBtn.textContent = 'Publish';
         
         const viewBtn = document.querySelector('.btn-view-script');
         if (viewBtn) viewBtn.remove();
         
         this.currentEditingId = null;
         this.originalTitle = null;
-        this.originalScriptId = null;
     },
 
     async populateEditor(title) {
@@ -858,73 +875,69 @@ const app = {
         
         this.currentEditingId = title;
         this.originalTitle = title;
-        this.originalScriptId = utils.sanitizeTitle(title);
         
         this.switchAdminTab('create');
         
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
         document.getElementById('edit-title').value = s.title;
-        document.getElementById('edit-visibility').value = s.visibility;
+        document.getElementById('edit-visibility').value = s.visibility || 'PUBLIC';
         document.getElementById('edit-expire').value = s.expiration || '';
         
-        if (window.quillEditor) {
-            setTimeout(() => {
-                window.quillEditor.root.innerHTML = s.description || '';
-                const descInput = document.getElementById('edit-desc');
-                if (descInput) descInput.value = s.description || '';
-            }, 100);
-        } else {
-            document.getElementById('edit-desc').value = s.description || '';
-        }
+        const scriptId = utils.sanitizeTitle(title);
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
             
-            const res = await fetch(`scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`);
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${scriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
             
             if (res.ok) {
-                const code = await res.text();
+                const data = await res.json();
+                const code = utils.safeAtob(data.content);
                 
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(code);
-                } else {
-                    document.getElementById('edit-code').value = code;
-                }
+                setTimeout(() => {
+                    if (window.monacoEditor) {
+                        window.monacoEditor.setValue(code);
+                    } else {
+                        document.getElementById('edit-code').value = code;
+                    }
+                }, 200);
             } else {
                 const errorText = '-- Error loading content';
+                setTimeout(() => {
+                    if (window.monacoEditor) {
+                        window.monacoEditor.setValue(errorText);
+                    } else {
+                        document.getElementById('edit-code').value = errorText;
+                    }
+                }, 200);
+            }
+        } catch(e) { 
+            const errorText = '-- Error loading content';
+            setTimeout(() => {
                 if (window.monacoEditor) {
                     window.monacoEditor.setValue(errorText);
                 } else {
                     document.getElementById('edit-code').value = errorText;
                 }
-            }
-        } catch(e) {
-            console.error('Load error:', e);
-            const errorText = '-- Error loading content';
-            if (window.monacoEditor) {
-                window.monacoEditor.setValue(errorText);
-            } else {
-                document.getElementById('edit-code').value = errorText;
-            }
+            }, 200);
         } finally {
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
         
-        document.querySelector('.editor-actions .btn:last-child').textContent = 'Update Script';
+        setTimeout(() => {
+            if (window.quillEditor) {
+                window.quillEditor.root.innerHTML = s.description || '';
+            } else {
+                document.getElementById('edit-desc').value = s.description || '';
+            }
+        }, 300);
         
-        const actionButtons = document.querySelector('.action-buttons');
-        let deleteBtn = document.querySelector('.btn-delete');
-        if (!deleteBtn) {
-            deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn btn-delete';
-            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-            </svg> Delete`;
-            deleteBtn.onclick = () => this.deleteScriptConfirmation(title);
-            actionButtons.appendChild(deleteBtn);
-        }
+        const saveBtn = document.querySelector('.editor-actions .btn:last-child');
+        if (saveBtn) saveBtn.textContent = 'Update Script';
         
-        this.updateViewButton(this.originalScriptId);
+        this.updateViewButton(scriptId);
     },
 
     updateViewButton(scriptId) {
@@ -935,11 +948,14 @@ const app = {
             viewBtn.href = `scripts/${scriptId}/index.html`;
             viewBtn.target = '_blank';
             viewBtn.className = 'btn btn-secondary btn-view-script';
-            viewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg> View Script`;
+            viewBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                View Script
+            `;
             actionButtons.appendChild(viewBtn);
         } else {
             viewBtn.href = `scripts/${scriptId}/index.html`;
@@ -957,9 +973,10 @@ const app = {
         
         const title = document.getElementById('edit-title').value.trim();
         const visibility = document.getElementById('edit-visibility').value;
+        let desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
+        if (desc === '<p><br></p>' || desc === '<p></p>') desc = '';
         const expiration = document.getElementById('edit-expire').value;
         const code = window.monacoEditor ? window.monacoEditor.getValue() : document.getElementById('edit-code').value;
-        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : document.getElementById('edit-desc').value;
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         const originalBtnText = saveBtn.textContent;
         
@@ -979,9 +996,8 @@ const app = {
         }
         
         const isEditing = !!this.currentEditingId;
-        const newScriptId = utils.sanitizeTitle(title);
-        const filename = newScriptId + '.lua';
-        const titleChanged = isEditing && this.originalTitle !== title;
+        const scriptId = utils.sanitizeTitle(title);
+        const filename = scriptId + '.lua';
         
         saveBtn.disabled = true;
         saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';
@@ -989,6 +1005,19 @@ const app = {
         if (typeof NProgress !== 'undefined') NProgress.start();
         
         try {
+            let originalCreatedDate = new Date().toISOString();
+            
+            if (isEditing && this.originalTitle && this.db.scripts[this.originalTitle]) {
+                originalCreatedDate = this.db.scripts[this.originalTitle].created;
+                
+                console.log('Deleting old files for:', this.originalTitle);
+                await this.deleteOldScriptFiles(this.originalTitle);
+                
+                delete this.db.scripts[this.originalTitle];
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
             const scriptData = {
                 title: title,
                 visibility: visibility,
@@ -996,55 +1025,33 @@ const app = {
                 expiration: expiration || null,
                 filename: filename,
                 size: code.length,
-                created: (isEditing && this.db.scripts[this.originalTitle]) ? this.db.scripts[this.originalTitle].created : new Date().toISOString(),
+                created: originalCreatedDate,
                 updated: new Date().toISOString()
             };
             
-            if (isEditing) {
-                if (titleChanged) {
-                    await this.deleteOldScriptFiles(this.originalTitle);
-                    delete this.db.scripts[this.originalTitle];
-                }
-            }
-            
             this.db.scripts[title] = scriptData;
             
-            const luaPath = `scripts/${newScriptId}/raw/${filename}`;
-            let luaSha = null;
+            const luaPath = `scripts/${scriptId}/raw/${filename}`;
             
-            if (isEditing && !titleChanged) {
-                try {
-                    const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (luaRes.ok) {
-                        const luaData = await luaRes.json();
-                        luaSha = luaData.sha;
-                    }
-                } catch(e) {
-                    console.warn('Could not fetch Lua file SHA:', e.message);
-                }
-            }
-            
-            const luaBody = {
-                message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
-                content: utils.safeBtoa(code)
-            };
-            if (luaSha) luaBody.sha = luaSha;
-            
+            console.log('Creating new Lua file at:', luaPath);
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
                 headers: { 
                     'Authorization': `token ${this.token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(luaBody)
+                body: JSON.stringify({
+                    message: `${isEditing ? 'Update' : 'Create'} ${filename}`,
+                    content: utils.safeBtoa(code)
+                })
             });
             
             if (!luaRes.ok) {
-                throw new Error('Failed to save Lua file');
+                const errorData = await luaRes.json();
+                throw new Error(errorData.message || 'Failed to save Lua file');
             }
             
+            console.log('Updating database.json');
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
                 headers: { 
@@ -1059,65 +1066,51 @@ const app = {
             });
             
             if (!dbRes.ok) {
-                throw new Error('Failed to update database');
+                const errorData = await dbRes.json();
+                throw new Error(errorData.message || 'Failed to update database');
             }
             
             const newDbData = await dbRes.json();
             this.dbSha = newDbData.content.sha;
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
-            const indexPath = `scripts/${newScriptId}/index.html`;
-            let indexSha = null;
+            const indexPath = `scripts/${scriptId}/index.html`;
             
-            if (isEditing && !titleChanged) {
-                try {
-                    const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
-                        headers: { 'Authorization': `token ${this.token}` }
-                    });
-                    if (indexRes.ok) {
-                        const indexData = await indexRes.json();
-                        indexSha = indexData.sha;
-                    }
-                } catch(e) {
-                    console.warn('Could not fetch index file SHA:', e.message);
-                }
-            }
-            
-            const indexBody = {
-                message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
-                content: utils.safeBtoa(indexHTML)
-            };
-            if (indexSha) indexBody.sha = indexSha;
-            
+            console.log('Creating new index.html at:', indexPath);
             const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
                 headers: { 
                     'Authorization': `token ${this.token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(indexBody)
+                body: JSON.stringify({
+                    message: `${isEditing ? 'Update' : 'Create'} index for ${title}`,
+                    content: utils.safeBtoa(indexHTML)
+                })
             });
             
             if (!indexRes.ok) {
-                throw new Error('Failed to save index.html');
+                const errorData = await indexRes.json();
+                throw new Error(errorData.message || 'Failed to save index.html');
             }
             
-            this.showToast(`${isEditing ? 'Updated' : 'Published'} successfully!`, 'success');
+            this.showToast(`${isEditing ? 'Script updated' : 'Script published'} successfully!`, 'success');
             
             this.currentEditingId = title;
             this.originalTitle = title;
-            this.originalScriptId = newScriptId;
             
             document.getElementById('editor-heading').textContent = `Edit: ${title}`;
             saveBtn.textContent = 'Update Script';
             
-            this.updateViewButton(newScriptId);
+            this.updateViewButton(scriptId);
             
             await this.loadDatabase();
             
         } catch(e) {
             console.error('Save error:', e);
             this.showToast(`Error: ${e.message}`, 'error');
+            
+            await this.loadDatabase();
         } finally {
             saveBtn.disabled = false;
             saveBtn.textContent = originalBtnText;
@@ -1128,29 +1121,39 @@ const app = {
 
     async deleteOldScriptFiles(oldTitle) {
         const oldScriptData = this.db.scripts[oldTitle];
-        if (!oldScriptData) return;
+        if (!oldScriptData) {
+            console.warn('Old script data not found for:', oldTitle);
+            return;
+        }
         
         const oldScriptId = utils.sanitizeTitle(oldTitle);
         
         try {
             const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
+            console.log('Fetching old Lua file SHA:', oldLuaPath);
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
             if (luaRes.ok) {
                 const luaData = await luaRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
+                console.log('Deleting old Lua file with SHA:', luaData.sha);
+                const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
                     method: 'DELETE',
                     headers: { 
                         'Authorization': `token ${this.token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        message: `Delete old Lua file`,
+                        message: `Delete old Lua file for ${oldTitle}`,
                         sha: luaData.sha
                     })
                 });
+                
+                if (!deleteRes.ok) {
+                    const errorData = await deleteRes.json();
+                    console.warn('Failed to delete old Lua file:', errorData.message);
+                }
             }
         } catch(e) {
             console.warn('Error deleting old Lua file:', e.message);
@@ -1158,27 +1161,50 @@ const app = {
         
         try {
             const oldIndexPath = `scripts/${oldScriptId}/index.html`;
+            console.log('Fetching old index file SHA:', oldIndexPath);
             const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
             if (idxRes.ok) {
                 const idxData = await idxRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
+                console.log('Deleting old index file with SHA:', idxData.sha);
+                const deleteRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
                     method: 'DELETE',
                     headers: { 
                         'Authorization': `token ${this.token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        message: `Delete old index`,
+                        message: `Delete old index for ${oldTitle}`,
                         sha: idxData.sha
                     })
                 });
+                
+                if (!deleteRes.ok) {
+                    const errorData = await deleteRes.json();
+                    console.warn('Failed to delete old index file:', errorData.message);
+                }
             }
         } catch(e) {
             console.warn('Error deleting old index file:', e.message);
         }
+    },
+
+    async deleteScript() {
+        if (!this.currentUser) {
+            this.showToast('Please login first.', 'error');
+            return;
+        }
+        
+        if (this.actionInProgress) return;
+        
+        if (!this.currentEditingId) {
+            this.showToast('No script selected for deletion.', 'error');
+            return;
+        }
+
+        await this.deleteScriptConfirmation(this.currentEditingId);
     },
 
     handleRouting() {
@@ -1200,38 +1226,59 @@ const app = {
     },
     
     loadMonacoEditor() {
-        if (typeof monaco !== 'undefined' || window.monacoEditor) return;
+        if (window.monacoEditor) return;
         
         if (!document.querySelector('#editor-container')) return;
         
         const loadMonaco = () => {
-            if (typeof monaco === 'undefined') {
+            if (typeof monaco === 'undefined' && !window.monacoLoading) {
+                window.monacoLoading = true;
                 const script = document.createElement('script');
                 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js';
                 script.onload = () => {
-                    require.config({ 
-                        paths: { 
-                            vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' 
-                        } 
-                    });
-                    require(['vs/editor/editor.main'], () => {
-                        window.monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
-                            value: '',
-                            language: 'lua',
-                            theme: 'vs-dark',
-                            fontSize: 14,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            wordWrap: 'on',
-                            lineNumbers: 'on',
-                            automaticLayout: true
+                    if (typeof require !== 'undefined') {
+                        require.config({ 
+                            paths: { 
+                                vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' 
+                            } 
                         });
-                        
-                        const textarea = document.getElementById('edit-code');
-                        if (textarea) textarea.style.display = 'none';
-                    });
+                        require(['vs/editor/editor.main'], () => {
+                            if (!window.monacoEditor) {
+                                window.monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
+                                    value: '',
+                                    language: 'lua',
+                                    theme: 'vs-dark',
+                                    fontSize: 14,
+                                    minimap: { enabled: false },
+                                    scrollBeyondLastLine: false,
+                                    wordWrap: 'on',
+                                    lineNumbers: 'on',
+                                    automaticLayout: true
+                                });
+                                
+                                const textarea = document.getElementById('edit-code');
+                                if (textarea) textarea.style.display = 'none';
+                            }
+                            window.monacoLoading = false;
+                        });
+                    }
                 };
                 document.head.appendChild(script);
+            } else if (typeof monaco !== 'undefined' && !window.monacoEditor) {
+                window.monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
+                    value: '',
+                    language: 'lua',
+                    theme: 'vs-dark',
+                    fontSize: 14,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    lineNumbers: 'on',
+                    automaticLayout: true
+                });
+                
+                const textarea = document.getElementById('edit-code');
+                if (textarea) textarea.style.display = 'none';
             }
         };
         
@@ -1239,7 +1286,7 @@ const app = {
     },
     
     loadQuillEditor() {
-        if (typeof Quill !== 'undefined' || window.quillEditor) return;
+        if (window.quillEditor) return;
         
         if (!document.querySelector('#quill-container')) return;
         
@@ -1253,6 +1300,34 @@ const app = {
                 const script = document.createElement('script');
                 script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
                 script.onload = () => {
+                    setTimeout(() => {
+                        if (typeof Quill !== 'undefined' && !window.quillEditor) {
+                            window.quillEditor = new Quill('#quill-container', {
+                                theme: 'snow',
+                                modules: {
+                                    toolbar: [
+                                        ['bold', 'italic', 'underline'],
+                                        ['code-block'],
+                                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                        ['clean']
+                                    ]
+                                },
+                                placeholder: 'Script description...'
+                            });
+                            
+                            const descInput = document.getElementById('edit-desc');
+                            if (descInput) descInput.style.display = 'none';
+                            
+                            window.quillEditor.on('text-change', () => {
+                                const html = window.quillEditor.root.innerHTML;
+                                if (descInput) descInput.value = html === '<p><br></p>' ? '' : html;
+                            });
+                        }
+                    }, 100);
+                };
+                document.head.appendChild(script);
+            } else {
+                if (!window.quillEditor) {
                     window.quillEditor = new Quill('#quill-container', {
                         theme: 'snow',
                         modules: {
@@ -1273,8 +1348,7 @@ const app = {
                         const html = window.quillEditor.root.innerHTML;
                         if (descInput) descInput.value = html === '<p><br></p>' ? '' : html;
                     });
-                };
-                document.head.appendChild(script);
+                }
             }
         };
         
