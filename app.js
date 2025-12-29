@@ -151,7 +151,6 @@ const app = {
                     }
                     
                     this.updateUIForLoggedInUser();
-                    
                     return true;
                 } else {
                     this.logout(true);
@@ -186,8 +185,7 @@ const app = {
 
     generateScriptHTML(title, scriptData) {
         const scriptId = utils.sanitizeTitle(title);
-        const descriptionHtml = scriptData.description ? 
-            `<div class="script-description">${scriptData.description}</div>` : '';
+        const descriptionHtml = scriptData.description ? `<div class="script-description">${scriptData.description}</div>` : '';
         
         return `<!DOCTYPE html>
 <html lang="en">
@@ -385,7 +383,6 @@ const app = {
             
             this.currentUser = user;
             this.updateUIForLoggedInUser();
-            
             return true;
         } catch (e) {
             if (!silent) {
@@ -436,7 +433,7 @@ const app = {
             }
             this.renderList();
             this.renderAdminList();
-        } catch (e) { 
+        } catch (e) {
             console.error("DB Error", e);
             const list = document.getElementById('admin-list');
             if (list) {
@@ -474,8 +471,7 @@ const app = {
             const scriptId = utils.sanitizeTitle(s.title);
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
             
-            return `
-            <div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
+            return `<div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</h3>
@@ -488,8 +484,8 @@ const app = {
                         ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
                     </div>
                 </div>
-            </div>
-        `}).join('');
+            </div>`;
+        }).join('');
     },
 
     filterLogic(scripts) {
@@ -499,7 +495,7 @@ const app = {
         return scripts.filter(s => {
             if (!s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
-            if (s.visibility === 'UNLISTED' && !this.currentUser) return false; 
+            if (s.visibility === 'UNLISTED' && !this.currentUser) return false;
             if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
             if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
             if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
@@ -522,15 +518,15 @@ const app = {
         if (e) {
             e.preventDefault();
             document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            if(e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
+            if (e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
         }
         this.currentFilter = cat;
         this.renderList();
     },
 
-    setSort(val) { 
-        this.currentSort = val; 
-        this.renderList(); 
+    setSort(val) {
+        this.currentSort = val;
+        this.renderList();
     },
 
     switchAdminTab(tab) {
@@ -576,8 +572,7 @@ const app = {
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            return `
-            <div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+            return `<div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</strong>
                     <div class="admin-meta">
@@ -591,8 +586,8 @@ const app = {
                         <path d="M9 18l6-6-6-6"/>
                     </svg>
                 </div>
-            </div>
-        `}).join('');
+            </div>`;
+        }).join('');
         this.initSwipeToDelete();
     },
 
@@ -793,41 +788,37 @@ const app = {
         const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
         const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
         if (scripts.length === 0) {
-            document.getElementById('stats-content').innerHTML = `
-                <div class="empty-admin-state">
-                    <p>No scripts yet. Create your first script to see statistics.</p>
-                </div>
-            `;
+            document.getElementById('stats-content').innerHTML = `<div class="empty-admin-state">
+                <p>No scripts yet. Create your first script to see statistics.</p>
+            </div>`;
             return;
         }
-        document.getElementById('stats-content').innerHTML = `
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">${scripts.length}</div>
-                    <div class="stat-label">Total Scripts</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${publicCount}</div>
-                    <div class="stat-label">Public</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${privateCount}</div>
-                    <div class="stat-label">Private</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${unlistedCount}</div>
-                    <div class="stat-label">Unlisted</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${expiredCount}</div>
-                    <div class="stat-label">Expired</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
-                    <div class="stat-label">Total Size</div>
-                </div>
+        document.getElementById('stats-content').innerHTML = `<div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">${scripts.length}</div>
+                <div class="stat-label">Total Scripts</div>
             </div>
-        `;
+            <div class="stat-card">
+                <div class="stat-number">${publicCount}</div>
+                <div class="stat-label">Public</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${privateCount}</div>
+                <div class="stat-label">Private</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${unlistedCount}</div>
+                <div class="stat-label">Unlisted</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${expiredCount}</div>
+                <div class="stat-label">Expired</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
+                <div class="stat-label">Total Size</div>
+            </div>
+        </div>`;
     },
 
     resetEditor() {
@@ -907,7 +898,7 @@ const app = {
                     document.getElementById('edit-code').value = errorText;
                 }
             }
-        } catch(e) { 
+        } catch(e) {
             console.error('Load error:', e);
             const errorText = '-- Error loading content';
             if (window.monacoEditor) {
@@ -926,12 +917,9 @@ const app = {
         if (!deleteBtn) {
             deleteBtn = document.createElement('button');
             deleteBtn.className = 'btn btn-delete';
-            deleteBtn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-                </svg>
-                Delete
-            `;
+            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+            </svg> Delete`;
             deleteBtn.onclick = () => this.deleteScriptConfirmation(title);
             actionButtons.appendChild(deleteBtn);
         }
@@ -947,14 +935,11 @@ const app = {
             viewBtn.href = `scripts/${scriptId}/index.html`;
             viewBtn.target = '_blank';
             viewBtn.className = 'btn btn-secondary btn-view-script';
-            viewBtn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-                View Script
-            `;
+            viewBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg> View Script`;
             actionButtons.appendChild(viewBtn);
         } else {
             viewBtn.href = `scripts/${scriptId}/index.html`;
