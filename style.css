@@ -1087,6 +1087,10 @@ textarea.input-field {
     border-left-color: var(--color-primary) !important;
 }
 
+.Toastify__toast {
+    background: #333 !important;
+}
+
 @media print {
     .navbar, .admin-top-controls, .toolbar-right,
     .btn, button, .search-wrapper, .nav-right {
