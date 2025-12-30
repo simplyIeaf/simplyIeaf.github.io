@@ -3,61 +3,118 @@ on:
   workflow_dispatch:
     inputs:
       botId:
+        description: 'Bot ID'
         required: true
       title:
+        description: 'Post title'
         required: true
       message:
+        description: 'Post message'
         required: true
       scheduled:
+        description: 'Is scheduled post'
+        required: false
         default: 'false'
+      scheduledTime:
+        description: 'Scheduled time'
+        required: false
+        default: ''
+
 jobs:
   send-discord-post:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup database
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Setup Python
         run: |
-          if [ ! -f "database.json" ]; then
-            echo '{"scripts": {}, "bots": {}}' > database.json
-          fi
+          python3 -c "
+          import json
+          import os
+          import sys
+          
+          try:
+              if os.path.exists('database.json'):
+                  with open('database.json', 'r') as f:
+                      data = json.load(f)
+              else:
+                  data = {'scripts': {}, 'bots': {}}
+              
+              bot_id = '${{ github.event.inputs.botId }}'
+              if 'bots' not in data:
+                  data['bots'] = {}
+              
+              import datetime
+              timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+              
+              if bot_id in data['bots']:
+                  data['bots'][bot_id]['sent'] = True
+                  data['bots'][bot_id]['sentTime'] = timestamp
+                  data['bots'][bot_id]['status'] = 'sent'
+                  data['bots'][bot_id]['scheduled'] = False
+              
+              with open('database.json', 'w') as f:
+                  json.dump(data, f, indent=2)
+              
+              print('Database updated')
+          except Exception as e:
+              print(f'Error: {e}')
+              sys.exit(1)
+          "
+      
       - name: Send Discord post
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"content\": \"${{ github.event.inputs.message }}\",
-              \"thread_name\": \"${{ github.event.inputs.title }}\",
-              \"avatar_url\": \"https://avatars.githubusercontent.com/u/220599690?v=4\",
-              \"username\": \"Leaf's Helper\"
-            }"
-      - name: Update database for scheduled posts
-        if: github.event.inputs.scheduled == 'true'
-        run: |
-          BOT_ID="${{ github.event.inputs.botId }}"
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           python3 -c "
           import json
-          with open('database.json', 'r') as f:
-            data = json.load(f)
-          if '$BOT_ID' in data.get('bots', {}):
-            data['bots']['$BOT_ID']['sent'] = True
-            data['bots']['$BOT_ID']['sentTime'] = '$TIMESTAMP'
-            data['bots']['$BOT_ID']['status'] = 'sent'
-          with open('database.json', 'w') as f:
-            json.dump(data, f, indent=2)
+          import urllib.request
+          import urllib.error
+          
+          webhook_url = '${{ secrets.DISCORD_WEBHOOK }}'
+          title = '''${{ github.event.inputs.title }}'''
+          message = '''${{ github.event.inputs.message }}'''
+          
+          payload = {
+              'content': message,
+              'thread_name': title,
+              'avatar_url': 'https://avatars.githubusercontent.com/u/220599690?v=4',
+              'username': 'Leaf/'s Helper'
+          }
+          
+          try:
+              req = urllib.request.Request(
+                  webhook_url,
+                  data=json.dumps(payload).encode('utf-8'),
+                  headers={'Content-Type': 'application/json'}
+              )
+              
+              with urllib.request.urlopen(req) as response:
+                  if response.status in [200, 204]:
+                      print('Post sent successfully!')
+                  else:
+                      print(f'Unexpected status: {response.status}')
+          except urllib.error.HTTPError as e:
+              print(f'HTTP Error: {e.code} - {e.reason}')
+          except Exception as e:
+              print(f'Error: {e}')
           "
+      
       - name: Commit database changes
-        if: github.event.inputs.scheduled == 'true'
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add database.json
+          
           if git diff --staged --quiet; then
-            echo "No changes"
+            echo "No changes to database"
           else
-            git commit -m "Update bot: ${{ github.event.inputs.botId }}"
+            git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
             git push
+            echo "Database updated and pushed"
           fi
