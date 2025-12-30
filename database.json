@@ -768,13 +768,13 @@
       "id": "1767135291596",
       "title": "Hdbdbdhdjhdhd",
       "message": "Xhhxhdjdhdjjd",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2025-12-30T23:55",
       "timezone": "Europe/Paris",
       "created": "2025-12-30T22:54:51.596Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2025-12-30T22:55:01.453Z",
       "cancelled": false
     }
   }
