@@ -599,6 +599,16 @@
       "size": 15115,
       "created": "2025-12-30T14:14:05.764Z",
       "updated": "2025-12-30T14:14:05.765Z"
+    },
+    "Better Admin Panel ServerScript": {
+      "title": "Better Admin Panel ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-admin-panel-serverscript.lua",
+      "size": 51065,
+      "created": "2025-12-30T14:14:56.553Z",
+      "updated": "2025-12-30T14:14:56.553Z"
     }
   }
 }
