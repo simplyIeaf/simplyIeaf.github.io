@@ -589,6 +589,16 @@
       "size": 12890,
       "created": "2025-12-28T16:26:01.759Z",
       "updated": "2025-12-28T16:26:01.759Z"
+    },
+    "Better Admin Panel LocalScript": {
+      "title": "Better Admin Panel LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-admin-panel-localscript.lua",
+      "size": 15115,
+      "created": "2025-12-30T14:14:05.764Z",
+      "updated": "2025-12-30T14:14:05.765Z"
     }
   }
 }
