@@ -3,102 +3,61 @@ on:
   workflow_dispatch:
     inputs:
       botId:
-        description: 'Bot ID'
         required: true
       title:
-        description: 'Post title'
         required: true
       message:
-        description: 'Post message'
         required: true
-
+      scheduled:
+        default: 'false'
 jobs:
   send-discord-post:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Create and run Python script
+      - name: Setup database
+        run: |
+          if [ ! -f "database.json" ]; then
+            echo '{"scripts": {}, "bots": {}}' > database.json
+          fi
+      - name: Send Discord post
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          cat > script.py << 'PYSCRIPT'
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"${{ github.event.inputs.message }}\",
+              \"thread_name\": \"${{ github.event.inputs.title }}\",
+              \"avatar_url\": \"https://avatars.githubusercontent.com/u/220599690?v=4\",
+              \"username\": \"Leaf's Helper\"
+            }"
+      - name: Update database for scheduled posts
+        if: github.event.inputs.scheduled == 'true'
+        run: |
+          BOT_ID="${{ github.event.inputs.botId }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          python3 -c "
           import json
-          import datetime
-          import urllib.request
-          import urllib.error
-          
-          bot_id = '${{ github.event.inputs.botId }}'
-          title = '${{ github.event.inputs.title }}'
-          message = '''${{ github.event.inputs.message }}'''
-          webhook_url = '${{ secrets.DISCORD_WEBHOOK }}'
-          
-          timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
-          
-          try:
-              with open('database.json', 'r') as f:
-                  data = json.load(f)
-          except FileNotFoundError:
-              data = {'scripts': {}, 'bots': {}}
-          
-          if 'bots' not in data:
-              data['bots'] = {}
-          
-          if bot_id in data['bots']:
-              data['bots'][bot_id]['sent'] = True
-              data['bots'][bot_id]['sentTime'] = timestamp
-              data['bots'][bot_id]['status'] = 'sent'
-              data['bots'][bot_id]['scheduled'] = False
-          
+          with open('database.json', 'r') as f:
+            data = json.load(f)
+          if '$BOT_ID' in data.get('bots', {}):
+            data['bots']['$BOT_ID']['sent'] = True
+            data['bots']['$BOT_ID']['sentTime'] = '$TIMESTAMP'
+            data['bots']['$BOT_ID']['status'] = 'sent'
           with open('database.json', 'w') as f:
-              json.dump(data, f, indent=2)
-          
-          print('Database updated')
-          
-          discord_payload = {
-              'content': message,
-              'thread_name': title,
-              'username': "Yuki",
-              'avatar_url': 'https://github.com/simplyIeaf.png'
-          }
-          
-          try:
-              req = urllib.request.Request(
-                  webhook_url,
-                  data=json.dumps(discord_payload).encode('utf-8'),
-                  headers={'Content-Type': 'application/json'}
-              )
-              
-              with urllib.request.urlopen(req) as response:
-                  if response.status in [200, 204]:
-                      print('Discord post sent successfully')
-                  else:
-                      print(f'Status: {response.status}')
-          except urllib.error.HTTPError as e:
-              print(f'HTTP Error: {e.code} - {e.reason}')
-          except Exception as e:
-              print(f'Error: {e}')
-          PYSCRIPT
-          
-          python3 script.py
-          
-      - name: Commit changes
+            json.dump(data, f, indent=2)
+          "
+      - name: Commit database changes
+        if: github.event.inputs.scheduled == 'true'
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          
-          git fetch origin
-          git pull origin main
-          
           git add database.json
-          
-          if ! git diff --staged --quiet; then
-            git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
-            git push origin main
-            echo "Changes committed"
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Update bot: ${{ github.event.inputs.botId }}"
+            git push
           fi
