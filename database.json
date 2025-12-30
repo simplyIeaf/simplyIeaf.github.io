@@ -716,13 +716,13 @@
       "id": "1767132293226",
       "title": "Dufufufuufuuufdhududud",
       "message": "Cfvf fvgvybybyv",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2025-12-30T23:05",
       "timezone": "Europe/Paris",
       "created": "2025-12-30T22:04:53.226Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2025-12-30T22:05:00.999Z",
       "cancelled": false
     }
   }
