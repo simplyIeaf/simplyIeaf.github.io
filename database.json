@@ -610,5 +610,19 @@
       "created": "2025-12-30T14:14:56.553Z",
       "updated": "2025-12-30T14:14:56.553Z"
     }
+  },
+  "bots": {
+    "1767126564415": {
+      "id": "1767126564415",
+      "title": "test",
+      "message": "test",
+      "scheduled": true,
+      "scheduledTime": "2025-12-30T21:30",
+      "timezone": "Europe/Paris",
+      "created": "2025-12-30T20:29:24.416Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null
+    }
   }
 }
