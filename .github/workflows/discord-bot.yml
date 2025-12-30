@@ -23,65 +23,69 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Update database and send Discord message
+      - name: Create and run Python script
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          python3 -c "
-import json
-import datetime
-import urllib.request
-import urllib.error
-
-bot_id = '${{ github.event.inputs.botId }}'
-title = '${{ github.event.inputs.title }}'
-message = '''${{ github.event.inputs.message }}'''
-webhook_url = '${{ secrets.DISCORD_WEBHOOK }}'
-
-timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
-
-try:
-    with open('database.json', 'r') as f:
-        data = json.load(f)
-except FileNotFoundError:
-    data = {'scripts': {}, 'bots': {}}
-
-if 'bots' not in data:
-    data['bots'] = {}
-
-if bot_id in data['bots']:
-    data['bots'][bot_id]['sent'] = True
-    data['bots'][bot_id]['sentTime'] = timestamp
-    data['bots'][bot_id]['status'] = 'sent'
-    data['bots'][bot_id]['scheduled'] = False
-
-with open('database.json', 'w') as f:
-    json.dump(data, f, indent=2)
-
-discord_payload = {
-    'content': message,
-    'thread_name': title,
-    'username': \"Leaf's Helper\",
-    'avatar_url': 'https://github.com/simplyIeaf.png'
-}
-
-try:
-    req = urllib.request.Request(
-        webhook_url,
-        data=json.dumps(discord_payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json'}
-    )
-    
-    with urllib.request.urlopen(req) as response:
-        if response.status in [200, 204]:
-            print('Success')
-        else:
-            print(f'Status: {response.status}')
-except urllib.error.HTTPError as e:
-    print(f'HTTP Error: {e.code}')
-except Exception as e:
-    print(f'Error: {e}')
-"
+          cat > script.py << 'PYSCRIPT'
+          import json
+          import datetime
+          import urllib.request
+          import urllib.error
+          
+          bot_id = '${{ github.event.inputs.botId }}'
+          title = '${{ github.event.inputs.title }}'
+          message = '''${{ github.event.inputs.message }}'''
+          webhook_url = '${{ secrets.DISCORD_WEBHOOK }}'
+          
+          timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+          
+          try:
+              with open('database.json', 'r') as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              data = {'scripts': {}, 'bots': {}}
+          
+          if 'bots' not in data:
+              data['bots'] = {}
+          
+          if bot_id in data['bots']:
+              data['bots'][bot_id]['sent'] = True
+              data['bots'][bot_id]['sentTime'] = timestamp
+              data['bots'][bot_id]['status'] = 'sent'
+              data['bots'][bot_id]['scheduled'] = False
+          
+          with open('database.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print('Database updated')
+          
+          discord_payload = {
+              'content': message,
+              'thread_name': title,
+              'username': "Leaf's Helper",
+              'avatar_url': 'https://github.com/simplyIeaf.png'
+          }
+          
+          try:
+              req = urllib.request.Request(
+                  webhook_url,
+                  data=json.dumps(discord_payload).encode('utf-8'),
+                  headers={'Content-Type': 'application/json'}
+              )
+              
+              with urllib.request.urlopen(req) as response:
+                  if response.status in [200, 204]:
+                      print('Discord post sent successfully')
+                  else:
+                      print(f'Status: {response.status}')
+          except urllib.error.HTTPError as e:
+              print(f'HTTP Error: {e.code} - {e.reason}')
+          except Exception as e:
+              print(f'Error: {e}')
+          PYSCRIPT
+          
+          python3 script.py
           
       - name: Commit changes
         run: |
@@ -89,11 +93,12 @@ except Exception as e:
           git config --global user.email "actions@github.com"
           
           git fetch origin
-          git pull origin main --rebase || git pull origin main --no-rebase
+          git pull origin main
           
           git add database.json
           
           if ! git diff --staged --quiet; then
             git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
             git push origin main
+            echo "Changes committed"
           fi
