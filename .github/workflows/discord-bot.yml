@@ -41,7 +41,6 @@ jobs:
           import datetime
           
           try:
-              # First, get the latest version from origin
               if os.path.exists('database.json'):
                   with open('database.json', 'r') as f:
                       data = json.load(f)
@@ -52,9 +51,9 @@ jobs:
               if 'bots' not in data:
                   data['bots'] = {}
               
-              timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+              # Fixed deprecation warning
+              timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
               
-              # Update only the specific bot entry
               if bot_id in data['bots']:
                   data['bots'][bot_id]['sent'] = True
                   data['bots'][bot_id]['sentTime'] = timestamp
@@ -89,7 +88,7 @@ jobs:
           payload = {
               'content': message,
               'thread_name': title,
-              'avatar_url': 'https://avatars.githubusercontent.com/u/220599690?v=4',
+              'avatar_url': 'https://github.com/simplyIeaf.png',
               'username': "Leaf's Helper"
           }
           
@@ -121,13 +120,10 @@ jobs:
           rm -fr ".git/rebase-merge" 2>/dev/null || true
           rm -fr ".git/rebase-apply" 2>/dev/null || true
           
-          # Get the latest changes
           git fetch origin
-          
-          # Reset to origin/main (overwrites any local changes)
           git reset --hard origin/main
           
-          # Now run the update again with the latest database
+          # First update attempt
           python3 << 'EOF'
           import json
           import os
@@ -143,7 +139,8 @@ jobs:
           if 'bots' not in data:
               data['bots'] = {}
           
-          timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+          # Fixed deprecation warning
+          timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
           
           if bot_id in data['bots']:
               data['bots'][bot_id]['sent'] = True
@@ -157,7 +154,6 @@ jobs:
           print('Database updated with latest version')
           EOF
           
-          # Add and commit
           git add database.json
           
           if git diff --staged --quiet; then
@@ -181,7 +177,8 @@ jobs:
             git reset --hard origin/main
             
             # Re-apply the update
-            python3 << 'EOF'
+            # FIX: Added '-' to << for indented EOF
+            python3 <<- 'EOF'
             import json
             import os
             import datetime
@@ -196,7 +193,7 @@ jobs:
             if 'bots' not in data:
                 data['bots'] = {}
             
-            timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+            timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
             
             if bot_id in data['bots']:
                 data['bots'][bot_id]['sent'] = True
@@ -214,3 +211,4 @@ jobs:
           
           echo "❌ Failed to push after 3 attempts"
           exit 1
+
