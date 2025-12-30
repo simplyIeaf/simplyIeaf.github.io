@@ -656,9 +656,9 @@
       "scheduledTime": "2025-12-30T22:13",
       "timezone": "Europe/Paris",
       "created": "2025-12-30T21:12:01.273Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2025-12-30T21:13:09.052Z"
     }
   }
 }
