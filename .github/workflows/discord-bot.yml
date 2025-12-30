@@ -63,7 +63,7 @@ jobs:
           discord_payload = {
               'content': message,
               'thread_name': title,
-              'username': "Leaf\'s Helper",
+              'username': "Yuki",
               'avatar_url': 'https://github.com/simplyIeaf.png'
           }
           
