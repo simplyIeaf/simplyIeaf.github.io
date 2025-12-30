@@ -690,13 +690,13 @@
       "id": "1767131122120",
       "title": "Jdjdidjde",
       "message": "Djjdjjd",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2025-12-30T22:46",
       "timezone": "Europe/Paris",
       "created": "2025-12-30T21:45:22.120Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2025-12-30T21:46:01.575Z",
       "cancelled": false
     }
   }
