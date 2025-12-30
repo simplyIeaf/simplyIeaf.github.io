@@ -750,6 +750,19 @@
       "status": "cancelled",
       "sentTime": null,
       "cancelled": true
+    },
+    "1767134090718": {
+      "id": "1767134090718",
+      "title": "Jnjnhnhnh u nu nu",
+      "message": "Bunny buubunun",
+      "scheduled": true,
+      "scheduledTime": "2025-12-30T23:35",
+      "timezone": "Europe/Paris",
+      "created": "2025-12-30T22:34:50.718Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false
     }
   }
 }
