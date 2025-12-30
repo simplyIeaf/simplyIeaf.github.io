@@ -609,6 +609,16 @@
       "size": 51065,
       "created": "2025-12-30T14:14:56.553Z",
       "updated": "2025-12-30T14:14:56.553Z"
+    },
+    "Egg": {
+      "title": "Egg",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "egg.lua",
+      "size": 4,
+      "created": "2025-12-30T21:25:42.769Z",
+      "updated": "2025-12-30T21:25:42.769Z"
     }
   },
   "bots": {
