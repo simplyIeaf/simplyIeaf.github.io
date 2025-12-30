@@ -747,9 +747,9 @@
       "timezone": "America/Chicago",
       "created": "2025-12-30T22:28:05.645Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false
+      "cancelled": true
     }
   }
 }
