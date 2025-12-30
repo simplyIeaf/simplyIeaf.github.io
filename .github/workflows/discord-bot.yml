@@ -84,7 +84,7 @@ jobs:
               'content': message,
               'thread_name': title,
               'avatar_url': 'https://avatars.githubusercontent.com/u/220599690?v=4',
-              'username': 'Leaf/'s Helper'
+              'username': 'Yuki'
           }
           
           try:
