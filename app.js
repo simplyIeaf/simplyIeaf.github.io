@@ -63,7 +63,7 @@ const utils = {
 };
 
 const app = {
-    db: { scripts: {} },
+    db: { scripts: {}, bots: {} },
     dbSha: null,
     token: null,
     currentUser: null,
@@ -73,6 +73,7 @@ const app = {
     currentEditingId: null,
     originalTitle: null,
     originalScriptId: null,
+    currentBotId: null,
     isLoading: false,
     searchQuery: '',
     
@@ -95,12 +96,18 @@ const app = {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 if (location.hash === '#admin') {
-                    this.saveScript();
+                    const activeTab = document.querySelector('.tab-btn.active').textContent.toLowerCase();
+                    if (activeTab.includes('add new')) {
+                        this.saveScript();
+                    } else if (activeTab.includes('bots') || activeTab.includes('create bot')) {
+                        this.saveBot();
+                    }
                 }
             }
         });
 
         this.startSessionRefresh();
+        this.startBotScheduler();
     },
 
     startSessionRefresh() {
@@ -112,6 +119,14 @@ const app = {
                 }
             }
         }, 60000);
+    },
+    
+    startBotScheduler() {
+        setInterval(async () => {
+            if (this.currentUser) {
+                await this.checkScheduledBots();
+            }
+        }, 30000);
     },
     
     initEventListeners() {
@@ -185,7 +200,7 @@ const app = {
 
     generateScriptHTML(title, scriptData) {
         const scriptId = utils.sanitizeTitle(title);
-        const descriptionHtml = scriptData.description ? `<div class="script-description">${scriptData.description}</div>` : '';
+        const descriptionHtml = scriptData.description ? `<div class="script-description">${utils.escapeHtml(scriptData.description.replace(/<[^>]*>/g, ''))}</div>` : '';
         
         return `<!DOCTYPE html>
 <html lang="en">
@@ -405,7 +420,7 @@ const app = {
             this.isLoading = true;
             const list = document.getElementById('admin-list');
             if (list) {
-                list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading scripts...</p></div>`;
+                list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading...</p></div>`;
             }
             
             const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`, {
@@ -413,20 +428,19 @@ const app = {
             });
             
             if (res.status === 404) {
-                this.db = { scripts: {} };
+                this.db = { scripts: {}, bots: {} };
                 this.dbSha = null;
             } else if (res.ok) {
                 const file = await res.json();
                 this.dbSha = file.sha;
                 try {
                     this.db = JSON.parse(utils.safeAtob(file.content));
-                    if (!this.db.scripts) {
-                        this.db = { scripts: {} };
-                    }
+                    if (!this.db.scripts) this.db.scripts = {};
+                    if (!this.db.bots) this.db.bots = {};
                 } catch(parseError) {
                     console.error('Database parse error:', parseError);
                     this.showToast('Database corrupted, initializing new database', 'warning');
-                    this.db = { scripts: {} };
+                    this.db = { scripts: {}, bots: {} };
                 }
             } else {
                 throw new Error(`Failed to load database: ${res.status}`);
@@ -438,11 +452,11 @@ const app = {
             const list = document.getElementById('admin-list');
             if (list) {
                 list.innerHTML = `<div class="empty-admin-state">
-                    <p style="color:var(--color-danger)">Error loading scripts: ${e.message}</p>
+                    <p style="color:var(--color-danger)">Error loading: ${e.message}</p>
                     <button class="btn btn-sm" onclick="app.loadDatabase()" style="margin-top:10px">Retry</button>
                 </div>`;
             }
-            this.showToast(`Error loading scripts: ${e.message}`, 'error');
+            this.showToast(`Error loading: ${e.message}`, 'error');
         } finally {
             this.isLoading = false;
         }
@@ -471,7 +485,7 @@ const app = {
             const scriptId = utils.sanitizeTitle(s.title);
             const isExpired = s.expiration && new Date(s.expiration) < new Date();
             
-            return `<div class="script-card animate__animated animate__fadeInUp" onclick="window.location.href='scripts/${scriptId}/index.html'">
+            return `<div class="script-card" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</h3>
@@ -542,10 +556,14 @@ const app = {
             document.getElementById('admin-tab-list').style.display = 'block';
             document.querySelectorAll('.tab-btn')[0].classList.add('active');
             this.renderAdminList();
-        } else if (tab === 'stats') {
-            document.getElementById('admin-tab-stats').style.display = 'block';
+        } else if (tab === 'bots') {
+            document.getElementById('admin-tab-bots').style.display = 'block';
             document.querySelectorAll('.tab-btn')[2].classList.add('active');
-            this.renderStats();
+            this.renderBotsList();
+        } else if (tab === 'create-bot') {
+            document.getElementById('admin-tab-bot-editor').style.display = 'block';
+            document.querySelectorAll('.tab-btn')[2].classList.add('active');
+            this.resetBotEditor();
         } else {
             document.getElementById('admin-tab-editor').style.display = 'block';
             document.querySelectorAll('.tab-btn')[1].classList.add('active');
@@ -562,7 +580,8 @@ const app = {
         const list = document.getElementById('admin-list');
         const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
         const sorted = scripts.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
-        document.getElementById('total-stats').textContent = `${scripts.length} Total Scripts`;
+        const botsCount = Object.keys(this.db.bots || {}).length;
+        document.getElementById('total-stats').textContent = `${scripts.length} Scripts, ${botsCount} Bots`;
         if (sorted.length === 0) {
             list.innerHTML = `<div class="empty-admin-state">
                 <p>No scripts yet. Click "Add New" to create your first script.</p>
@@ -579,6 +598,43 @@ const app = {
                         <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
                         ${isExpired ? `<span class="badge badge-sm" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
                         <span class="text-muted">Updated ${updated}</span>
+                    </div>
+                </div>
+                <div class="admin-item-right">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18l6-6-6-6"/>
+                    </svg>
+                </div>
+            </div>`;
+        }).join('');
+        this.initSwipeToDelete();
+    },
+
+    renderBotsList() {
+        if (!this.currentUser) return;
+        const list = document.getElementById('bots-list');
+        const bots = Object.entries(this.db.bots || {}).map(([id, data]) => ({ id, ...data }));
+        const sorted = bots.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+        
+        if (sorted.length === 0) {
+            list.innerHTML = `<div class="empty-admin-state">
+                <p>No bots yet. Click "Create Bot" to add one.</p>
+            </div>`;
+            return;
+        }
+        
+        list.innerHTML = sorted.map(b => {
+            const status = b.sent ? 'Sent' : (b.scheduled ? 'Scheduled' : 'Pending');
+            const statusClass = b.sent ? 'status-sent' : (b.scheduled ? 'status-scheduled' : '');
+            const timeInfo = b.sent ? `Sent: ${new Date(b.sentTime).toLocaleString()}` : 
+                         (b.scheduled ? `Scheduled: ${new Date(b.scheduledTime).toLocaleString()}` : 'Pending');
+            
+            return `<div class="admin-item" onclick="app.populateBotEditor('${b.id}')">
+                <div class="admin-item-left">
+                    <strong>${utils.escapeHtml(b.title)}</strong>
+                    <div class="admin-meta">
+                        <span class="bot-status ${statusClass}">${status}</span>
+                        <span class="text-muted">${timeInfo}</span>
                     </div>
                 </div>
                 <div class="admin-item-right">
@@ -624,7 +680,12 @@ const app = {
                     item.style.opacity = '0';
                     setTimeout(() => {
                         const scriptTitle = item.getAttribute('data-script-title');
-                        this.deleteScriptConfirmation(scriptTitle);
+                        const botId = item.getAttribute('data-bot-id');
+                        if (scriptTitle) {
+                            this.deleteScriptConfirmation(scriptTitle);
+                        } else if (botId) {
+                            this.deleteBotConfirmation(botId);
+                        }
                     }, 300);
                 } else {
                     item.style.transform = 'translateX(0)';
@@ -649,7 +710,7 @@ const app = {
             return;
         }
 
-        const confirmMessage = `Are you sure you want to delete "${scriptTitle}"? This will permanently delete the script, Lua file, and HTML page.`;
+        const confirmMessage = `Are you sure you want to delete "${scriptTitle}"?`;
         
         let shouldDelete = false;
         
@@ -780,47 +841,6 @@ const app = {
         }
     },
 
-    renderStats() {
-        const scripts = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
-        const publicCount = scripts.filter(s => s.visibility === 'PUBLIC').length;
-        const privateCount = scripts.filter(s => s.visibility === 'PRIVATE').length;
-        const unlistedCount = scripts.filter(s => s.visibility === 'UNLISTED').length;
-        const expiredCount = scripts.filter(s => s.expiration && new Date(s.expiration) < new Date()).length;
-        const totalSize = scripts.reduce((acc, s) => acc + (s.size || 0), 0);
-        if (scripts.length === 0) {
-            document.getElementById('stats-content').innerHTML = `<div class="empty-admin-state">
-                <p>No scripts yet. Create your first script to see statistics.</p>
-            </div>`;
-            return;
-        }
-        document.getElementById('stats-content').innerHTML = `<div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number">${scripts.length}</div>
-                <div class="stat-label">Total Scripts</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${publicCount}</div>
-                <div class="stat-label">Public</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${privateCount}</div>
-                <div class="stat-label">Private</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${unlistedCount}</div>
-                <div class="stat-label">Unlisted</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${expiredCount}</div>
-                <div class="stat-label">Expired</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${(totalSize / 1024).toFixed(1)}KB</div>
-                <div class="stat-label">Total Size</div>
-            </div>
-        </div>`;
-    },
-
     resetEditor() {
         document.getElementById('editor-heading').textContent = 'Create New Script';
         document.getElementById('edit-title').value = '';
@@ -849,6 +869,27 @@ const app = {
         this.currentEditingId = null;
         this.originalTitle = null;
         this.originalScriptId = null;
+    },
+
+    resetBotEditor() {
+        document.getElementById('bot-editor-heading').textContent = 'Create New Bot';
+        document.getElementById('bot-title').value = '';
+        document.getElementById('bot-message').value = '';
+        document.getElementById('bot-schedule').checked = false;
+        document.getElementById('bot-schedule-time').value = '';
+        document.getElementById('bot-timezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        document.querySelector('.bot-actions .btn:last-child').textContent = 'Send Bot';
+        this.currentBotId = null;
+        this.toggleScheduleFields();
+    },
+
+    toggleScheduleFields() {
+        const scheduleCheckbox = document.getElementById('bot-schedule');
+        const scheduleFields = document.getElementById('schedule-fields');
+        if (scheduleCheckbox && scheduleFields) {
+            scheduleFields.style.display = scheduleCheckbox.checked ? 'block' : 'none';
+            scheduleFields.classList.toggle('show', scheduleCheckbox.checked);
+        }
     },
 
     async populateEditor(title) {
@@ -927,6 +968,26 @@ const app = {
         this.updateViewButton(this.originalScriptId);
     },
 
+    async populateBotEditor(botId) {
+        if (!this.currentUser) return;
+        const bot = this.db.bots[botId];
+        if (!bot) return;
+        
+        this.currentBotId = botId;
+        this.switchAdminTab('create-bot');
+        
+        document.getElementById('bot-editor-heading').textContent = `Edit Bot: ${bot.title}`;
+        document.getElementById('bot-title').value = bot.title;
+        document.getElementById('bot-message').value = bot.message;
+        document.getElementById('bot-schedule').checked = bot.scheduled || false;
+        document.getElementById('bot-schedule-time').value = bot.scheduledTime || '';
+        document.getElementById('bot-timezone').value = bot.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+        document.querySelector('.bot-actions .btn:last-child').textContent = 'Update Bot';
+        
+        this.toggleScheduleFields();
+    },
+
     updateViewButton(scriptId) {
         let viewBtn = document.querySelector('.btn-view-script');
         if (!viewBtn) {
@@ -997,8 +1058,6 @@ const app = {
                     originalCreationDate = this.db.scripts[this.originalTitle].created;
                     
                     if (titleChanged || scriptIdChanged) {
-                        console.log('Editing with changes - deleting old files...');
-                        
                         const oldScriptData = this.db.scripts[this.originalTitle];
                         const oldScriptId = utils.sanitizeTitle(this.originalTitle);
                         
@@ -1019,11 +1078,10 @@ const app = {
                                         'Content-Type': 'application/json'
                                     },
                                     body: JSON.stringify({
-                                        message: `Delete old Lua file for ${this.originalTitle}`,
+                                        message: `Delete old Lua file`,
                                         sha: oldLuaData.sha
                                     })
                                 });
-                                console.log('Old Lua file deleted');
                             }
                         } catch(e) {
                             console.warn('Old Lua file deletion error:', e.message);
@@ -1043,11 +1101,10 @@ const app = {
                                         'Content-Type': 'application/json'
                                     },
                                     body: JSON.stringify({
-                                        message: `Delete old index for ${this.originalTitle}`,
+                                        message: `Delete old index`,
                                         sha: oldIndexData.sha
                                     })
                                 });
-                                console.log('Old HTML file deleted');
                             }
                         } catch(e) {
                             console.warn('Old HTML file deletion error:', e.message);
@@ -1079,7 +1136,6 @@ const app = {
                 content: utils.safeBtoa(code)
             };
             
-            console.log('Creating new Lua file...');
             const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${luaPath}`, {
                 method: 'PUT',
                 headers: { 
@@ -1091,10 +1147,8 @@ const app = {
             
             if (!luaRes.ok) {
                 const errorData = await luaRes.json();
-                console.error('Lua file error:', errorData);
                 throw new Error(`Failed to save Lua file: ${errorData.message || 'Unknown error'}`);
             }
-            console.log('Lua file created successfully');
             
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                 method: 'PUT',
@@ -1111,13 +1165,11 @@ const app = {
             
             if (!dbRes.ok) {
                 const errorData = await dbRes.json();
-                console.error('Database error:', errorData);
                 throw new Error(`Failed to update database: ${errorData.message || 'Unknown error'}`);
             }
             
             const newDbData = await dbRes.json();
             this.dbSha = newDbData.content.sha;
-            console.log('Database updated successfully');
 
             const indexHTML = this.generateScriptHTML(title, scriptData);
             const indexPath = `scripts/${newScriptId}/index.html`;
@@ -1126,7 +1178,6 @@ const app = {
                 content: utils.safeBtoa(indexHTML)
             };
             
-            console.log('Creating new HTML file...');
             const indexRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${indexPath}`, {
                 method: 'PUT',
                 headers: { 
@@ -1138,10 +1189,8 @@ const app = {
             
             if (!indexRes.ok) {
                 const errorData = await indexRes.json();
-                console.error('HTML file error:', errorData);
                 throw new Error(`Failed to save index.html: ${errorData.message || 'Unknown error'}`);
             }
-            console.log('HTML file created successfully');
             
             this.showToast(`${isEditing ? 'Updated' : 'Published'} successfully!`, 'success');
             
@@ -1167,58 +1216,231 @@ const app = {
         }
     },
 
-    async deleteOldScriptFiles(oldTitle) {
-        const oldScriptData = this.db.scripts[oldTitle];
-        if (!oldScriptData) return;
-        
-        const oldScriptId = utils.sanitizeTitle(oldTitle);
-        
-        try {
-            const oldLuaPath = `scripts/${oldScriptId}/raw/${oldScriptData.filename}`;
-            const luaRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (luaRes.ok) {
-                const luaData = await luaRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldLuaPath}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Authorization': `token ${this.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Delete old Lua file`,
-                        sha: luaData.sha
-                    })
-                });
-            }
-        } catch(e) {
-            console.warn('Error deleting old Lua file:', e.message);
+    async saveBot() {
+        if (!this.currentUser) {
+            this.showToast('Please login first.', 'error');
+            return;
         }
         
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        
+        const title = document.getElementById('bot-title').value.trim();
+        const message = document.getElementById('bot-message').value.trim();
+        const schedule = document.getElementById('bot-schedule').checked;
+        const scheduleTime = document.getElementById('bot-schedule-time').value;
+        const timezone = document.getElementById('bot-timezone').value;
+        const saveBtn = document.querySelector('.bot-actions .btn:last-child');
+        const originalBtnText = saveBtn.textContent;
+        
+        if (!title || !message) {
+            this.showToast('Title and message are required', 'error');
+            this.actionInProgress = false;
+            return;
+        }
+        
+        if (schedule && !scheduleTime) {
+            this.showToast('Schedule time is required when scheduling', 'error');
+            this.actionInProgress = false;
+            return;
+        }
+        
+        if (schedule) {
+            const scheduledDate = new Date(scheduleTime);
+            if (scheduledDate < new Date()) {
+                this.showToast('Schedule time cannot be in the past', 'error');
+                this.actionInProgress = false;
+                return;
+            }
+        }
+        
+        saveBtn.disabled = true;
+        saveBtn.textContent = schedule ? 'Scheduling...' : 'Sending...';
+        
+        if (typeof NProgress !== 'undefined') NProgress.start();
+        
         try {
-            const oldIndexPath = `scripts/${oldScriptId}/index.html`;
-            const idxRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
-                headers: { 'Authorization': `token ${this.token}` }
+            const botId = this.currentBotId || Date.now().toString();
+            const now = new Date().toISOString();
+            
+            const botData = {
+                id: botId,
+                title: title,
+                message: message,
+                scheduled: schedule,
+                scheduledTime: schedule ? scheduleTime : null,
+                timezone: schedule ? timezone : null,
+                created: now,
+                sent: !schedule,
+                status: schedule ? 'scheduled' : 'pending',
+                sentTime: !schedule ? now : null
+            };
+            
+            this.db.bots[botId] = botData;
+            
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `${this.currentBotId ? 'Update' : 'Create'} bot: ${title}`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
             });
             
-            if (idxRes.ok) {
-                const idxData = await idxRes.json();
-                await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${oldIndexPath}`, {
-                    method: 'DELETE',
-                    headers: { 
-                        'Authorization': `token ${this.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Delete old index`,
-                        sha: idxData.sha
-                    })
-                });
+            if (!dbRes.ok) {
+                const errorData = await dbRes.json();
+                throw new Error(`Failed to update database: ${errorData.message || 'Unknown error'}`);
             }
+            
+            const newDbData = await dbRes.json();
+            this.dbSha = newDbData.content.sha;
+            
+            if (!schedule) {
+                const sendResult = await this.sendDiscordPost(botData);
+                
+                if (sendResult.success) {
+                    this.showToast('Post sent successfully!', 'success');
+                    this.db.bots[botId].sent = true;
+                    this.db.bots[botId].sentTime = now;
+                    this.db.bots[botId].status = 'sent';
+                    
+                    await this.updateDatabase();
+                } else {
+                    this.showToast(`Failed to send: ${sendResult.error}`, 'error');
+                    this.db.bots[botId].status = 'failed';
+                    await this.updateDatabase();
+                }
+            } else {
+                this.showToast('Bot scheduled successfully!', 'success');
+                
+                const scheduleResult = await this.scheduleDiscordPost(botData);
+                if (!scheduleResult.success) {
+                    this.showToast(`Warning: ${scheduleResult.error}`, 'warning');
+                }
+            }
+            
+            await this.loadDatabase();
+            
         } catch(e) {
-            console.warn('Error deleting old index file:', e.message);
+            console.error('Bot save error:', e);
+            this.showToast(`Error: ${e.message}`, 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
+            this.actionInProgress = false;
+            if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+    },
+
+    async sendDiscordPost(botData) {
+        if (!this.token || !this.currentUser) {
+            return { success: false, error: 'Not authenticated' };
+        }
+
+        const isScheduled = botData.scheduled || false;
+        
+        try {
+            const workflowResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${this.token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ref: 'main',
+                    inputs: {
+                        botId: botData.id,
+                        title: botData.title,
+                        message: botData.message,
+                        scheduled: isScheduled.toString()
+                    }
+                })
+            });
+            
+            if (workflowResponse.status === 204) {
+                return {
+                    success: true,
+                    message: 'Post queued for sending!'
+                };
+            } else {
+                const errorText = await workflowResponse.text();
+                return {
+                    success: false,
+                    error: `GitHub API error: ${workflowResponse.status}`
+                };
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: `Network error: ${error.message}`
+            };
+        }
+    },
+
+    async scheduleDiscordPost(botData) {
+        return await this.sendDiscordPost(botData);
+    },
+
+    async checkScheduledBots() {
+        if (!this.currentUser) return;
+        
+        const now = new Date();
+        const bots = Object.entries(this.db.bots);
+        
+        for (const [botId, bot] of bots) {
+            if (bot.scheduled && bot.scheduledTime && !bot.sent) {
+                const scheduledTime = new Date(bot.scheduledTime);
+                
+                if (scheduledTime <= now) {
+                    try {
+                        const result = await this.sendDiscordPost(bot);
+                        
+                        if (result.success) {
+                            this.db.bots[botId].sent = true;
+                            this.db.bots[botId].sentTime = now.toISOString();
+                            this.db.bots[botId].status = 'sent';
+                            
+                            await this.updateDatabase();
+                        }
+                    } catch (error) {
+                        console.error('Failed to send scheduled bot:', error);
+                    }
+                }
+            }
+        }
+    },
+
+    async updateDatabase() {
+        if (!this.token) return false;
+        
+        try {
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: 'Update bot statuses',
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+            
+            if (dbRes.ok) {
+                const newDbData = await dbRes.json();
+                this.dbSha = newDbData.content.sha;
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Update database error:', error);
+            return false;
         }
     },
 
