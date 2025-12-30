@@ -1,0 +1,82 @@
+name: Discord Bot Manager
+
+on:
+  workflow_dispatch:
+    inputs:
+      botId:
+        description: 'Bot ID'
+        required: true
+      title:
+        description: 'Post title'
+        required: true
+      message:
+        description: 'Post message'
+        required: true
+      scheduled:
+        description: 'Is scheduled post'
+        required: false
+        default: 'false'
+
+jobs:
+  send-discord-post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Load database
+        run: |
+          if [ -f "database.json" ]; then
+            echo "Database found"
+          else
+            echo "Database not found, creating empty one"
+            echo '{"scripts": {}, "bots": {}}' > database.json
+          fi
+        
+      - name: Send to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          echo "Sending Discord post: ${{ github.event.inputs.title }}"
+          
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"${{ github.event.inputs.message }}\", \"thread_name\": \"${{ github.event.inputs.title }}\"}"
+          
+          echo "Post sent successfully!"
+        
+      - name: Update bot status in database
+        run: |
+          if [ "${{ github.event.inputs.scheduled }}" = "true" ]; then
+            echo "Updating scheduled bot status"
+            
+            # Install jq if not present
+            if ! command -v jq &> /dev/null; then
+              sudo apt-get update && sudo apt-get install -y jq
+            fi
+            
+            BOT_ID="${{ github.event.inputs.botId }}"
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            
+            if [ -f "database.json" ]; then
+              jq --arg botId "$BOT_ID" --arg timestamp "$TIMESTAMP" \
+                '.bots[$botId].sent = true | .bots[$botId].sentTime = $timestamp | .bots[$botId].status = "sent"' \
+                database.json > database.tmp && mv database.tmp database.json
+              
+              echo "Database updated for bot: $BOT_ID"
+            fi
+          fi
+        
+      - name: Commit changes if database was updated
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          if git diff --quiet database.json; then
+            echo "No changes to database"
+          else
+            git add database.json
+            git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
+            git push
+            echo "Database changes committed"
+          fi
