@@ -30,13 +30,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
           
       - name: Setup Python
         run: |
-          python3 -c "
+          python3 << 'EOF'
           import json
           import os
           import sys
+          import datetime
           
           try:
               if os.path.exists('database.json'):
@@ -49,7 +51,6 @@ jobs:
               if 'bots' not in data:
                   data['bots'] = {}
               
-              import datetime
               timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
               
               if bot_id in data['bots']:
@@ -65,26 +66,29 @@ jobs:
           except Exception as e:
               print(f'Error: {e}')
               sys.exit(1)
-          "
+          EOF
       
       - name: Send Discord post
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+          TITLE: ${{ github.event.inputs.title }}
+          MESSAGE: ${{ github.event.inputs.message }}
         run: |
-          python3 -c "
+          python3 << 'EOF'
           import json
           import urllib.request
           import urllib.error
+          import os
           
-          webhook_url = '${{ secrets.DISCORD_WEBHOOK }}'
-          title = '''${{ github.event.inputs.title }}'''
-          message = '''${{ github.event.inputs.message }}'''
+          webhook_url = os.environ['WEBHOOK_URL']
+          title = os.environ['TITLE']
+          message = os.environ['MESSAGE']
           
           payload = {
               'content': message,
               'thread_name': title,
               'avatar_url': 'https://avatars.githubusercontent.com/u/220599690?v=4',
-              'username': 'Leaf\'s Helper'
+              'username': "Leaf's Helper"
           }
           
           try:
@@ -103,18 +107,37 @@ jobs:
               print(f'HTTP Error: {e.code} - {e.reason}')
           except Exception as e:
               print(f'Error: {e}')
-          "
+          EOF
       
       - name: Commit database changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          
+          git fetch origin
+          git checkout main
           git add database.json
           
           if git diff --staged --quiet; then
             echo "No changes to database"
-          else
-            git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
-            git push
-            echo "Database updated and pushed"
+            exit 0
           fi
+          
+          git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
+          
+          for i in 1 2 3; do
+            echo "Attempt $i to push changes..."
+            if git pull --rebase origin main && git push origin main; then
+              echo "✅ Database updated and pushed"
+              exit 0
+            fi
+            echo "Retrying..."
+            sleep 2
+            git fetch origin
+            git reset --hard origin/main
+            git add database.json
+            git commit -m "Update bot status: ${{ github.event.inputs.botId }}" --allow-empty
+          done
+          
+          echo "❌ Failed to push after 3 attempts"
+          exit 1
