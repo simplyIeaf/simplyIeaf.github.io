@@ -51,7 +51,6 @@ jobs:
               if 'bots' not in data:
                   data['bots'] = {}
               
-              # Fixed deprecation warning
               timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
               
               if bot_id in data['bots']:
@@ -88,7 +87,7 @@ jobs:
           payload = {
               'content': message,
               'thread_name': title,
-              'avatar_url': 'https://github.com/simplyIeaf.png',
+              'avatar_url': 'https://avatars.githubusercontent.com/u/220599690?v=4',
               'username': "Leaf's Helper"
           }
           
@@ -115,7 +114,6 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          # Clean up any leftover rebase
           git rebase --abort 2>/dev/null || true
           rm -fr ".git/rebase-merge" 2>/dev/null || true
           rm -fr ".git/rebase-apply" 2>/dev/null || true
@@ -123,7 +121,6 @@ jobs:
           git fetch origin
           git reset --hard origin/main
           
-          # First update attempt
           python3 << 'EOF'
           import json
           import os
@@ -139,7 +136,6 @@ jobs:
           if 'bots' not in data:
               data['bots'] = {}
           
-          # Fixed deprecation warning
           timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
           
           if bot_id in data['bots']:
@@ -150,8 +146,6 @@ jobs:
           
           with open('database.json', 'w') as f:
               json.dump(data, f, indent=2)
-          
-          print('Database updated with latest version')
           EOF
           
           git add database.json
@@ -163,52 +157,41 @@ jobs:
           
           git commit -m "Update bot status: ${{ github.event.inputs.botId }}"
           
-          # Push with retry logic
           for i in 1 2 3; do
-            echo "Attempt $i to push changes..."
+            echo "Attempt $i to push..."
             if git push origin main; then
-              echo "✅ Database updated and pushed"
               exit 0
             fi
             
-            echo "Push failed, fetching latest changes and retrying..."
             sleep 2
             git fetch origin
             git reset --hard origin/main
             
-            # Re-apply the update
-            # FIX: Added '-' to << for indented EOF
-            python3 <<- 'EOF'
-            import json
-            import os
-            import datetime
-            
-            if os.path.exists('database.json'):
-                with open('database.json', 'r') as f:
-                    data = json.load(f)
-            else:
-                data = {'scripts': {}, 'bots': {}}
-            
-            bot_id = '${{ github.event.inputs.botId }}'
-            if 'bots' not in data:
-                data['bots'] = {}
-            
-            timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
-            
-            if bot_id in data['bots']:
-                data['bots'][bot_id]['sent'] = True
-                data['bots'][bot_id]['sentTime'] = timestamp
-                data['bots'][bot_id]['status'] = 'sent'
-                data['bots'][bot_id]['scheduled'] = False
-            
-            with open('database.json', 'w') as f:
-                json.dump(data, f, indent=2)
-            EOF
+          python3 << 'EOF'
+          import json
+          import os
+          import datetime
+          if os.path.exists('database.json'):
+              with open('database.json', 'r') as f:
+                  data = json.load(f)
+          else:
+              data = {'scripts': {}, 'bots': {}}
+          bot_id = '${{ github.event.inputs.botId }}'
+          if 'bots' not in data:
+              data['bots'] = {}
+          timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+          if bot_id in data['bots']:
+              data['bots'][bot_id]['sent'] = True
+              data['bots'][bot_id]['sentTime'] = timestamp
+              data['bots'][bot_id]['status'] = 'sent'
+              data['bots'][bot_id]['scheduled'] = False
+          with open('database.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          EOF
             
             git add database.json
             git commit -m "Update bot status: ${{ github.event.inputs.botId }}" --allow-empty
           done
           
-          echo "❌ Failed to push after 3 attempts"
           exit 1
 
