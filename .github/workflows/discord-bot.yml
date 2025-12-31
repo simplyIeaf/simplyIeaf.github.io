@@ -49,7 +49,7 @@ jobs:
           python3 << 'EOF'
           import json
           import os
-          from datetime import datetime, timezone, timedelta
+          from datetime import datetime, timezone
           import subprocess
           import sys
           import requests
@@ -136,27 +136,27 @@ jobs:
             echo '{"scripts": {}, "bots": {}}' > database.json
           fi
           
-          BOT_ID="${{ github.event.inputs.botId }}"
-          
-          python3 << EOF
+          python3 << 'EOF'
           import json, sys
           
           with open('database.json', 'r') as f:
               data = json.load(f)
           
-          if '$BOT_ID' not in data.get('bots', {}):
-              print(f"Bot {BOT_ID} not found")
+          bot_id = '${{ github.event.inputs.botId }}'
+          
+          if bot_id not in data.get('bots', {}):
+              print(f"Bot {bot_id} not found")
               sys.exit(1)
           
-          bot = data['bots']['$BOT_ID']
+          bot = data['bots'][bot_id]
           
           # Prevent duplicate sends
           if bot.get('sent', False):
-              print(f"Bot {BOT_ID} already sent")
+              print(f"Bot {bot_id} already sent")
               sys.exit(0)
           
           if bot.get('cancelled', False):
-              print(f"Bot {BOT_ID} is cancelled")
+              print(f"Bot {bot_id} is cancelled")
               sys.exit(0)
           
           print(f"Processing bot: {bot['title']}")
@@ -212,30 +212,32 @@ jobs:
       - name: Update database with sent status
         if: steps.discord-post.outputs.status == 'success'
         run: |
-          BOT_ID="${{ github.event.inputs.botId }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           THREAD_ID="${{ steps.discord-post.outputs.thread_id }}"
           
-          python3 << EOF
+          python3 << 'EOF'
           import json, sys
           
           with open('database.json', 'r') as f:
               data = json.load(f)
           
-          if '$BOT_ID' in data.get('bots', {}):
-              data['bots']['$BOT_ID']['sent'] = True
-              data['bots']['$BOT_ID']['sentTime'] = '$TIMESTAMP'
-              data['bots']['$BOT_ID']['status'] = 'sent'
-              data['bots']['$BOT_ID']['scheduled'] = False
-              if '$THREAD_ID' and '$THREAD_ID' != 'null' and '$THREAD_ID' != 'empty':
-                  data['bots']['$BOT_ID']['threadId'] = '$THREAD_ID'
+          bot_id = '${{ github.event.inputs.botId }}'
+          
+          if bot_id in data.get('bots', {}):
+              data['bots'][bot_id]['sent'] = True
+              data['bots'][bot_id]['sentTime'] = '$TIMESTAMP'
+              data['bots'][bot_id]['status'] = 'sent'
+              data['bots'][bot_id]['scheduled'] = False
+              thread_id = '$THREAD_ID'
+              if thread_id and thread_id != 'null' and thread_id != 'empty':
+                  data['bots'][bot_id]['threadId'] = thread_id
               
               # Save to file
               with open('database.json', 'w') as f:
                   json.dump(data, f, indent=2, ensure_ascii=False)
-              print("Database updated successfully")
+              print(f"Database updated successfully for bot {bot_id}")
           else:
-              print(f"Bot {BOT_ID} not found in database")
+              print(f"Bot {bot_id} not found in database")
               sys.exit(1)
           EOF
 
