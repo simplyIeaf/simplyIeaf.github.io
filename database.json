@@ -789,6 +789,19 @@
       "status": "scheduled",
       "sentTime": null,
       "cancelled": false
+    },
+    "1767139698689": {
+      "id": "1767139698689",
+      "title": "Better Admin Panel",
+      "message": "StarterGui Script Link: \nhttps://simplyieaf.github.io/scripts/better-admin-panel-localscript/index.html \nServerScriptService Script Link: \nhttps://simplyieaf.github.io/scripts/better-admin-panel-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2025-12-31T10:01",
+      "timezone": "Europe/Paris",
+      "created": "2025-12-31T00:08:18.689Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false
     }
   }
 }
