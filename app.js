@@ -1,6 +1,7 @@
 const CONFIG = {
     user: 'simplyIeaf',
     repo: 'simplyIeaf.github.io',
+    branch: 'main',
     cacheBuster: () => Date.now()
 };
 
@@ -59,6 +60,10 @@ const utils = {
         if (!code || code.trim().length === 0) return 'Code is required';
         if (code.length > 100000) return 'Code is too large (max 100KB)';
         return null;
+    },
+    
+    formatGitHubDate(date) {
+        return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
     }
 };
 
@@ -402,13 +407,69 @@ const app = {
         
         if (delay > 0) {
             this.scheduledTimers[botId] = setTimeout(async () => {
-                await this.sendBotNow(botId);
+                await this.triggerScheduledBot(botId);
                 delete this.scheduledTimers[botId];
             }, delay);
             console.log(`Scheduled bot ${botId} for ${new Date(scheduledTime).toLocaleString()}`);
         } else if (delay <= 0 && delay > -60000) {
-            setTimeout(() => this.sendBotNow(botId), 1000);
+            setTimeout(() => this.triggerScheduledBot(botId), 1000);
         }
+    },
+
+    async triggerScheduledBot(botId) {
+        try {
+            const bot = this.db.bots[botId];
+            if (!bot || bot.sent || bot.cancelled) return;
+            
+            const workflowResponse = await fetch(
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${this.token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ref: 'main',
+                        inputs: {
+                            botId: botId,
+                            title: bot.title,
+                            message: bot.message,
+                            scheduled: 'true'
+                        }
+                    })
+                }
+            );
+            
+            if (workflowResponse.status === 204) {
+                console.log(`Triggered scheduled bot: ${botId}`);
+                this.showToast(`Scheduled bot "${bot.title}" has been sent`, 'success');
+            } else {
+                throw new Error(`Failed to trigger workflow: ${workflowResponse.status}`);
+            }
+        } catch (error) {
+            console.error('Error triggering scheduled bot:', error);
+            this.showToast(`Failed to send scheduled bot: ${error.message}`, 'error');
+        }
+    },
+
+    async checkScheduledBots() {
+        if (!this.currentUser || !this.db) return;
+        
+        const now = Date.now();
+        Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
+            if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled) {
+                const scheduledTime = new Date(bot.scheduledTime).getTime();
+                const timeDiff = scheduledTime - now;
+                
+                if (timeDiff <= 300000 && timeDiff > 0) {
+                    if (!this.scheduledTimers[botId]) {
+                        this.scheduleBotTimer(botId, bot);
+                    }
+                }
+            }
+        });
     },
 
     renderList() {
@@ -744,6 +805,13 @@ const app = {
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
             
+            const script = this.db.scripts[scriptTitle];
+            if (!script) throw new Error('Script not found');
+            
+            const scriptId = utils.sanitizeTitle(scriptTitle);
+            
+            await this.deleteScriptFiles(scriptId, script.filename);
+            
             delete this.db.scripts[scriptTitle];
             
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
@@ -775,6 +843,36 @@ const app = {
         } finally {
             this.actionInProgress = false;
             if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+    },
+
+    async deleteScriptFiles(scriptId, filename) {
+        try {
+            const scriptDir = `scripts/${scriptId}`;
+            
+            const dirUrl = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${scriptDir}`;
+            const dirRes = await fetch(dirUrl, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            
+            if (dirRes.ok) {
+                const files = await dirRes.json();
+                for (const file of Array.isArray(files) ? files : [files]) {
+                    await fetch(file.url, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Authorization': `token ${this.token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Delete script files: ${scriptId}`,
+                            sha: file.sha
+                        })
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Error deleting script files:', e);
         }
     },
 
@@ -873,6 +971,16 @@ const app = {
         const scheduleFields = document.getElementById('schedule-fields');
         if (scheduleCheckbox && scheduleFields) {
             scheduleFields.style.display = scheduleCheckbox.checked ? 'block' : 'none';
+            if (scheduleCheckbox.checked) {
+                const now = new Date();
+                const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+                    .toISOString()
+                    .slice(0, 16);
+                document.getElementById('bot-schedule-time').min = localDateTime;
+                if (!document.getElementById('bot-schedule-time').value) {
+                    document.getElementById('bot-schedule-time').value = localDateTime;
+                }
+            }
         }
     },
 
@@ -957,11 +1065,16 @@ const app = {
         document.getElementById('bot-title').value = bot.title;
         document.getElementById('bot-message').value = bot.message;
         document.getElementById('bot-schedule').checked = bot.scheduled || false;
-        document.getElementById('bot-schedule-time').value = bot.scheduledTime || '';
+        
+        if (bot.scheduledTime) {
+            const localDateTime = new Date(bot.scheduledTime).toISOString().slice(0, 16);
+            document.getElementById('bot-schedule-time').value = localDateTime;
+        }
+        
         document.getElementById('bot-timezone').value = bot.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         
         const saveBtn = document.querySelector('.bot-actions .btn:last-child');
-        if (saveBtn) saveBtn.textContent = 'Update Bot';
+        if (saveBtn) saveBtn.textContent = bot.scheduled ? 'Update Schedule' : 'Send Now';
         
         this.toggleScheduleFields();
     },
@@ -1035,6 +1148,8 @@ const app = {
                 updated: new Date().toISOString()
             };
             
+            await this.createScriptFiles(newScriptId, filename, code, isEditing, this.originalScriptId);
+            
             this.db.scripts[title] = scriptData;
             
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
@@ -1077,6 +1192,87 @@ const app = {
             saveBtn.textContent = originalBtnText;
             this.actionInProgress = false;
             if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+    },
+
+    async createScriptFiles(scriptId, filename, code, isEditing, oldScriptId = null) {
+        const scriptDir = `scripts/${scriptId}`;
+        const rawDir = `${scriptDir}/raw`;
+        const indexPath = `${scriptDir}/index.html`;
+        const rawFilePath = `${rawDir}/${filename}`;
+        
+        const scriptViewerHTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${scriptId} - Leaf's Scripts</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+    <style>
+        body { margin: 0; padding: 20px; background: #0a0a0a; color: #fff; font-family: monospace; }
+        pre { background: #1a1a1a; padding: 20px; border-radius: 8px; overflow-x: auto; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { margin-bottom: 20px; }
+        .back-btn { display: inline-block; margin-bottom: 20px; color: #10b981; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back to scripts</a>
+        <div class="header">
+            <h1>${scriptId}</h1>
+        </div>
+        <pre><code class="language-lua">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+    </div>
+</body>
+</html>`;
+        
+        if (isEditing && oldScriptId && oldScriptId !== scriptId) {
+            await this.deleteScriptFiles(oldScriptId, filename);
+        }
+        
+        await this.createOrUpdateFile(indexPath, scriptViewerHTML, 'text/html');
+        await this.createOrUpdateFile(rawFilePath, code, 'text/plain');
+    },
+
+    async createOrUpdateFile(path, content, contentType) {
+        const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
+        
+        const getRes = await fetch(url, {
+            headers: { 'Authorization': `token ${this.token}` }
+        });
+        
+        let sha = null;
+        if (getRes.ok) {
+            const existingFile = await getRes.json();
+            sha = existingFile.sha;
+        }
+        
+        const body = {
+            message: `Create/update ${path}`,
+            content: utils.safeBtoa(content),
+            branch: CONFIG.branch
+        };
+        
+        if (sha) {
+            body.sha = sha;
+        }
+        
+        const putRes = await fetch(url, {
+            method: 'PUT',
+            headers: { 
+                'Authorization': `token ${this.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        
+        if (!putRes.ok) {
+            const error = await putRes.json();
+            throw new Error(`Failed to create/update file ${path}: ${error.message}`);
         }
     },
 
@@ -1149,7 +1345,7 @@ const app = {
                 title: title,
                 message: message,
                 scheduled: schedule,
-                scheduledTime: schedule ? scheduleTime : null,
+                scheduledTime: schedule ? new Date(scheduleTime).toISOString() : null,
                 timezone: schedule ? timezone : null,
                 created: now,
                 sent: false,
@@ -1207,23 +1403,26 @@ const app = {
         const bot = this.db.bots[botId];
         
         try {
-            const workflowResponse = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `token ${this.token}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    ref: 'main',
-                    inputs: {
-                        botId: botId,
-                        title: bot.title,
-                        message: bot.message,
-                        scheduled: 'false'
-                    }
-                })
-            });
+            const workflowResponse = await fetch(
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${this.token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ref: 'main',
+                        inputs: {
+                            botId: botId,
+                            title: bot.title,
+                            message: bot.message,
+                            scheduled: 'false'
+                        }
+                    })
+                }
+            );
             
             if (workflowResponse.status === 204) {
                 this.db.bots[botId].sent = true;
@@ -1255,6 +1454,9 @@ const app = {
                     this.showToast('Post sent successfully!', 'success');
                     return true;
                 }
+            } else {
+                const errorData = await workflowResponse.json();
+                throw new Error(`Workflow dispatch failed: ${errorData.message}`);
             }
             
             return false;
@@ -1263,26 +1465,6 @@ const app = {
             console.error('Send bot error:', error);
             this.showToast(`Error: ${error.message}`, 'error');
             return false;
-        }
-    },
-
-    async checkScheduledBots() {
-        if (!this.currentUser || !this.db) return;
-        
-        const now = Date.now();
-        const bots = Object.entries(this.db.bots || {});
-        
-        for (const [botId, bot] of bots) {
-            if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled) {
-                const scheduledTime = new Date(bot.scheduledTime).getTime();
-                const timeDiff = scheduledTime - now;
-                
-                if (timeDiff <= 0 && timeDiff > -300000) {
-                    if (!this.scheduledTimers[botId]) {
-                        await this.sendBotNow(botId);
-                    }
-                }
-            }
         }
     },
 
