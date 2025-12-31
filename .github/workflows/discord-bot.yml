@@ -56,6 +56,7 @@ jobs:
           import subprocess
           import sys
           
+          # Load database
           with open('database.json', 'r') as f:
               data = json.load(f)
           
@@ -63,6 +64,7 @@ jobs:
           sent_bots = []
           
           for bot_id, bot in data.get('bots', {}).items():
+              # Check if scheduled, not sent, not cancelled, and time has arrived
               if (bot.get('scheduled') and 
                   not bot.get('sent', False) and 
                   not bot.get('cancelled', False) and
@@ -73,13 +75,18 @@ jobs:
                       scheduled_time_str = scheduled_time_str[:-1] + '+00:00'
                   
                   scheduled_time = datetime.fromisoformat(scheduled_time_str)
+                  
+                  # Check if scheduled time has passed (within 5 minute window)
                   time_diff = (scheduled_time - now).total_seconds()
                   
-                  if -300 <= time_diff <= 0:
+                  if -300 <= time_diff <= 0:  # Within 5 minutes after scheduled time
                       print(f"Triggering bot: {bot_id} - {bot['title']}")
                       
+                      # Trigger the send job via curl
                       import subprocess
                       import json as json_module
+                      
+                      repo = os.environ['GITHUB_REPOSITORY']
                       
                       payload = json_module.dumps({
                           'ref': 'main',
@@ -96,7 +103,7 @@ jobs:
                           '-H', 'Authorization: Bearer ' + os.environ['GITHUB_TOKEN'],
                           '-H', 'Accept: application/vnd.github.v3+json',
                           '-H', 'Content-Type: application/json',
-                          f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/actions/workflows/discord_bot.yml/dispatches',
+                          'https://api.github.com/repos/' + repo + '/actions/workflows/discord_bot.yml/dispatches',
                           '-d', payload
                       ]
                       
@@ -142,18 +149,23 @@ jobs:
           with open('database.json', 'r') as f:
               data = json.load(f)
           
-          bot_id = '${{ github.event.inputs.botId }}'
+          # Get bot ID from GitHub Actions input
+          bot_id = os.environ.get('INPUT_BOTID', '${{ github.event.inputs.botId }}')
+          print(f"Looking for bot ID: {bot_id}")
           
-          if not bot_id:
+          if not bot_id or bot_id == '${{ github.event.inputs.botId }}':
               print("ERROR: No bot ID provided")
               sys.exit(1)
           
           if bot_id not in data.get('bots', {}):
               print(f"ERROR: Bot {bot_id} not found in database")
+              print(f"Available bots: {list(data.get('bots', {}).keys())}")
               sys.exit(1)
           
           bot = data['bots'][bot_id]
+          print(f"Found bot: {bot['title']}")
           
+          # Prevent duplicate sends
           if bot.get('sent', False):
               print(f"INFO: Bot {bot_id} already sent")
               sys.exit(0)
@@ -171,10 +183,19 @@ jobs:
           BOT_TITLE: "${{ github.event.inputs.title }}"
           BOT_MESSAGE: "${{ github.event.inputs.message }}"
         run: |
+          # Debug info
+          echo "=== DISCORD CONFIG ==="
+          echo "Avatar URL: $DISCORD_AVATAR_URL"
+          echo "Username: $DISCORD_USERNAME"
+          echo "Bot Title: $BOT_TITLE"
+          echo "======================"
+          
+          # Escape JSON properly
           ESCAPED_TITLE=$(echo "$BOT_TITLE" | jq -R . 2>/dev/null || echo "\"$BOT_TITLE\"")
           ESCAPED_MESSAGE=$(echo "$BOT_MESSAGE" | jq -R . 2>/dev/null || echo "\"$BOT_MESSAGE\"")
           ESCAPED_USERNAME=$(echo "$DISCORD_USERNAME" | jq -R . 2>/dev/null || echo "\"$DISCORD_USERNAME\"")
           
+          # Discord forum post payload with customizable avatar and username
           PAYLOAD=$(cat <<EOF
           {
             "content": $ESCAPED_MESSAGE,
@@ -185,24 +206,29 @@ jobs:
           EOF
           )
           
-          echo "Sending to Discord..."
+          echo "Sending to Discord webhook..."
           
+          # Send to Discord webhook
           HTTP_CODE=$(curl -s -o /tmp/discord_response.txt -w "%{http_code}" \
             -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
           
           RESPONSE=$(cat /tmp/discord_response.txt)
+          echo "HTTP Code: $HTTP_CODE"
           
           if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ]; then
             echo "status=success" >> $GITHUB_OUTPUT
+            # Extract thread ID if available
             THREAD_ID=$(echo "$RESPONSE" | jq -r '.id // empty' 2>/dev/null || echo "")
             if [ -n "$THREAD_ID" ] && [ "$THREAD_ID" != "null" ]; then
               echo "thread_id=$THREAD_ID" >> $GITHUB_OUTPUT
+              echo "Thread created with ID: $THREAD_ID"
             fi
           else
             echo "status=failed" >> $GITHUB_OUTPUT
             echo "ERROR: Discord API error: $HTTP_CODE"
+            echo "Response: $RESPONSE"
             exit 1
           fi
 
@@ -219,6 +245,7 @@ jobs:
               data = json.load(f)
           
           bot_id = '${{ github.event.inputs.botId }}'
+          print(f"Updating bot: {bot_id}")
           
           if bot_id not in data.get('bots', {}):
               print(f"ERROR: Bot {bot_id} not found in database")
@@ -234,10 +261,12 @@ jobs:
           if thread_id and thread_id != 'null' and thread_id != 'empty':
               bot['threadId'] = thread_id
           
+          # Save to file
           with open('database.json', 'w') as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
           
-          print(f"Database updated for bot {bot_id}")
+          print(f"Database updated successfully for bot {bot_id}")
+          print(f"Bot status: sent at {bot['sentTime']}")
           EOF
 
       - name: Commit and push database changes
@@ -251,6 +280,18 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update bot: ${{ github.event.inputs.botId }} - sent"
+            git commit -m "Update bot: ${{ github.event.inputs.botId }} - sent at $(date -u +'%Y-%m-%d %H:%M:%S')"
             git push
           fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "=== WORKFLOW FAILED ==="
+          echo "Bot ID: ${{ github.event.inputs.botId }}"
+          echo "Title: ${{ github.event.inputs.title }}"
+          echo "Check:"
+          echo "1. Discord webhook URL is set as secret"
+          echo "2. Bot exists in database.json"
+          echo "3. Bot is not already sent or cancelled"
+          echo "========================"
