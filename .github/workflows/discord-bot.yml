@@ -19,13 +19,13 @@ on:
         required: false
         description: 'Is this a scheduled post?'
         default: 'false'
-        type: boolean
-  schedule:
-    - cron: '*/5 * * * *'  # Runs every 5 minutes to check scheduled posts
+        type: string
 
 env:
   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL || 'https://github.com/simplyIeaf.png' }}
+  DISCORD_USERNAME: ${{ secrets.DISCORD_USERNAME || 'Leaf\'s Scripts' }}
 
 jobs:
   check-scheduled-posts:
@@ -43,6 +43,9 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Install Python dependencies
+        run: pip install requests
+
       - name: Check and send scheduled posts
         id: check-scheduled
         run: |
@@ -52,9 +55,7 @@ jobs:
           from datetime import datetime, timezone
           import subprocess
           import sys
-          import requests
           
-          # Load database
           with open('database.json', 'r') as f:
               data = json.load(f)
           
@@ -62,7 +63,6 @@ jobs:
           sent_bots = []
           
           for bot_id, bot in data.get('bots', {}).items():
-              # Check if scheduled, not sent, not cancelled, and time has arrived
               if (bot.get('scheduled') and 
                   not bot.get('sent', False) and 
                   not bot.get('cancelled', False) and
@@ -73,21 +73,15 @@ jobs:
                       scheduled_time_str = scheduled_time_str[:-1] + '+00:00'
                   
                   scheduled_time = datetime.fromisoformat(scheduled_time_str)
-                  
-                  # Check if scheduled time has passed (within 5 minute window)
                   time_diff = (scheduled_time - now).total_seconds()
                   
-                  if -300 <= time_diff <= 0:  # Within 5 minutes after scheduled time
+                  if -300 <= time_diff <= 0:
                       print(f"Triggering bot: {bot_id} - {bot['title']}")
                       
-                      # Trigger the send job via GitHub API
-                      headers = {
-                          'Authorization': f'Bearer {os.environ["GITHUB_TOKEN"]}',
-                          'Accept': 'application/vnd.github.v3+json',
-                          'Content-Type': 'application/json'
-                      }
+                      import subprocess
+                      import json as json_module
                       
-                      payload = {
+                      payload = json_module.dumps({
                           'ref': 'main',
                           'inputs': {
                               'botId': bot_id,
@@ -95,18 +89,24 @@ jobs:
                               'message': bot['message'],
                               'scheduled': 'true'
                           }
-                      }
+                      })
                       
-                      repo = os.environ['GITHUB_REPOSITORY']
-                      url = f'https://api.github.com/repos/{repo}/actions/workflows/discord_bot.yml/dispatches'
+                      curl_cmd = [
+                          'curl', '-X', 'POST',
+                          '-H', 'Authorization: Bearer ' + os.environ['GITHUB_TOKEN'],
+                          '-H', 'Accept: application/vnd.github.v3+json',
+                          '-H', 'Content-Type: application/json',
+                          f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/actions/workflows/discord_bot.yml/dispatches',
+                          '-d', payload
+                      ]
                       
                       try:
-                          response = requests.post(url, headers=headers, json=payload)
-                          if response.status_code == 204:
+                          result = subprocess.run(curl_cmd, capture_output=True, text=True)
+                          if result.returncode == 0:
                               print(f"Successfully triggered bot {bot_id}")
                               sent_bots.append(bot_id)
                           else:
-                              print(f"Failed to trigger bot {bot_id}: {response.status_code} - {response.text}")
+                              print(f"Failed to trigger bot {bot_id}: {result.stderr}")
                       except Exception as e:
                           print(f"Error triggering bot {bot_id}: {e}")
           
@@ -127,7 +127,7 @@ jobs:
       - name: Setup Python and jq
         run: |
           python -m pip install --upgrade pip
-          sudo apt-get update && sudo apt-get install -y jq
+          sudo apt-get update && sudo apt-get install -y jq curl
 
       - name: Load and validate bot data
         id: load-bot
@@ -137,26 +137,29 @@ jobs:
           fi
           
           python3 << 'EOF'
-          import json, sys
+          import json, sys, os
           
           with open('database.json', 'r') as f:
               data = json.load(f)
           
           bot_id = '${{ github.event.inputs.botId }}'
           
+          if not bot_id:
+              print("ERROR: No bot ID provided")
+              sys.exit(1)
+          
           if bot_id not in data.get('bots', {}):
-              print(f"Bot {bot_id} not found")
+              print(f"ERROR: Bot {bot_id} not found in database")
               sys.exit(1)
           
           bot = data['bots'][bot_id]
           
-          # Prevent duplicate sends
           if bot.get('sent', False):
-              print(f"Bot {bot_id} already sent")
+              print(f"INFO: Bot {bot_id} already sent")
               sys.exit(0)
           
           if bot.get('cancelled', False):
-              print(f"Bot {bot_id} is cancelled")
+              print(f"INFO: Bot {bot_id} is cancelled")
               sys.exit(0)
           
           print(f"Processing bot: {bot['title']}")
@@ -168,44 +171,38 @@ jobs:
           BOT_TITLE: "${{ github.event.inputs.title }}"
           BOT_MESSAGE: "${{ github.event.inputs.message }}"
         run: |
-          # Escape JSON properly
-          ESCAPED_TITLE=$(echo "$BOT_TITLE" | jq -R .)
-          ESCAPED_MESSAGE=$(echo "$BOT_MESSAGE" | jq -R .)
+          ESCAPED_TITLE=$(echo "$BOT_TITLE" | jq -R . 2>/dev/null || echo "\"$BOT_TITLE\"")
+          ESCAPED_MESSAGE=$(echo "$BOT_MESSAGE" | jq -R . 2>/dev/null || echo "\"$BOT_MESSAGE\"")
+          ESCAPED_USERNAME=$(echo "$DISCORD_USERNAME" | jq -R . 2>/dev/null || echo "\"$DISCORD_USERNAME\"")
           
-          # Discord forum post payload
-          # For forum channels, webhooks can create posts with thread_name
           PAYLOAD=$(cat <<EOF
           {
             "content": $ESCAPED_MESSAGE,
-            "username": "Leaf's Scripts",
-            "avatar_url": "https://github.com/simplyIeaf.png",
+            "username": $ESCAPED_USERNAME,
+            "avatar_url": "$DISCORD_AVATAR_URL",
             "thread_name": $ESCAPED_TITLE
           }
           EOF
           )
           
-          echo "Sending to Discord webhook..."
+          echo "Sending to Discord..."
           
-          # Send to Discord webhook
           HTTP_CODE=$(curl -s -o /tmp/discord_response.txt -w "%{http_code}" \
             -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
           
           RESPONSE=$(cat /tmp/discord_response.txt)
-          echo "Discord Response: $RESPONSE"
-          echo "HTTP Code: $HTTP_CODE"
           
           if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ]; then
             echo "status=success" >> $GITHUB_OUTPUT
-            # Extract thread ID if available
-            THREAD_ID=$(echo "$RESPONSE" | jq -r '.id // empty')
-            if [ -n "$THREAD_ID" ]; then
+            THREAD_ID=$(echo "$RESPONSE" | jq -r '.id // empty' 2>/dev/null || echo "")
+            if [ -n "$THREAD_ID" ] && [ "$THREAD_ID" != "null" ]; then
               echo "thread_id=$THREAD_ID" >> $GITHUB_OUTPUT
             fi
           else
             echo "status=failed" >> $GITHUB_OUTPUT
-            echo "Discord API error: $HTTP_CODE"
+            echo "ERROR: Discord API error: $HTTP_CODE"
             exit 1
           fi
 
@@ -216,29 +213,31 @@ jobs:
           THREAD_ID="${{ steps.discord-post.outputs.thread_id }}"
           
           python3 << 'EOF'
-          import json, sys
+          import json, sys, os
           
           with open('database.json', 'r') as f:
               data = json.load(f)
           
           bot_id = '${{ github.event.inputs.botId }}'
           
-          if bot_id in data.get('bots', {}):
-              data['bots'][bot_id]['sent'] = True
-              data['bots'][bot_id]['sentTime'] = '$TIMESTAMP'
-              data['bots'][bot_id]['status'] = 'sent'
-              data['bots'][bot_id]['scheduled'] = False
-              thread_id = '$THREAD_ID'
-              if thread_id and thread_id != 'null' and thread_id != 'empty':
-                  data['bots'][bot_id]['threadId'] = thread_id
-              
-              # Save to file
-              with open('database.json', 'w') as f:
-                  json.dump(data, f, indent=2, ensure_ascii=False)
-              print(f"Database updated successfully for bot {bot_id}")
-          else:
-              print(f"Bot {bot_id} not found in database")
+          if bot_id not in data.get('bots', {}):
+              print(f"ERROR: Bot {bot_id} not found in database")
               sys.exit(1)
+          
+          bot = data['bots'][bot_id]
+          bot['sent'] = True
+          bot['sentTime'] = '$TIMESTAMP'
+          bot['status'] = 'sent'
+          bot['scheduled'] = False
+          
+          thread_id = '$THREAD_ID'
+          if thread_id and thread_id != 'null' and thread_id != 'empty':
+              bot['threadId'] = thread_id
+          
+          with open('database.json', 'w') as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+          
+          print(f"Database updated for bot {bot_id}")
           EOF
 
       - name: Commit and push database changes
@@ -252,12 +251,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update bot: ${{ github.event.inputs.botId }} - sent at $(date -u +'%Y-%m-%d %H:%M:%S')"
+            git commit -m "Update bot: ${{ github.event.inputs.botId }} - sent"
             git push
           fi
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "Workflow failed for bot: ${{ github.event.inputs.botId }}"
-          echo "Check Discord webhook URL and permissions"
