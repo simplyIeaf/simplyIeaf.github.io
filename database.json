@@ -799,9 +799,9 @@
       "timezone": "Europe/Paris",
       "created": "2025-12-31T00:08:18.689Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false
+      "cancelled": true
     }
   }
 }
