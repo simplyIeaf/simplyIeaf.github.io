@@ -786,9 +786,9 @@
       "timezone": "Europe/Paris",
       "created": "2025-12-30T23:04:08.940Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false
+      "cancelled": true
     },
     "1767139698689": {
       "id": "1767139698689",
