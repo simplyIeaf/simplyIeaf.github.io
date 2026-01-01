@@ -138,11 +138,17 @@ const app = {
     },
     
     startBotScheduler() {
+        setTimeout(() => this.checkScheduledBots(), 1000);
+        
         setInterval(() => {
             this.checkScheduledBots();
-        }, 60000);
+        }, 30000);
         
-        setTimeout(() => this.checkScheduledBots(), 5000);
+        setInterval(() => {
+            if (this.currentUser) {
+                this.syncBotStatusWithGitHub();
+            }
+        }, 300000);
     },
     
     initEventListeners() {
@@ -415,35 +421,48 @@ const app = {
             delete this.scheduledTimers[botId];
         }
 
-        if (bot.sent || bot.cancelled || bot.isProcessing) return;
-
-        const scheduledDate = new Date(bot.scheduledTime);
-        const delay = scheduledDate.getTime() - Date.now();
-        const MAX_DELAY = 2147483647;
-
-        if (delay > MAX_DELAY) {
+        if (bot.sent || bot.cancelled || bot.isProcessing || !bot.scheduled) {
             return;
         }
 
-        if (delay > 0) {
-            this.scheduledTimers[botId] = setTimeout(async () => {
-                await this.triggerScheduledBot(botId);
-                if (this.scheduledTimers[botId]) delete this.scheduledTimers[botId];
-            }, delay);
-            
-            this.showToast(`Scheduled: "${bot.title}"`, 'success');
-        } else if (delay <= 0 && delay > -300000) {
-            setTimeout(() => this.triggerScheduledBot(botId), 1000);
+        const scheduledDate = new Date(bot.scheduledTime);
+        const delay = scheduledDate.getTime() - Date.now();
+
+        if (delay <= 0) {
+            if (delay > -600000) {
+                console.log(`Bot ${botId} is slightly late, triggering immediately`);
+                this.triggerScheduledBot(botId);
+            } else {
+                console.log(`Bot ${botId} scheduled time too far in the past: ${scheduledDate}`);
+            }
+            return;
         }
+
+        const MAX_BROWSER_DELAY = 2147483647;
+        if (delay > MAX_BROWSER_DELAY) {
+            console.log(`Bot ${botId} scheduled too far in the future for browser timer`);
+            return;
+        }
+
+        this.scheduledTimers[botId] = setTimeout(() => {
+            console.log(`Browser timer triggered for bot: ${botId}`);
+            this.triggerScheduledBot(botId);
+            delete this.scheduledTimers[botId];
+        }, Math.min(delay, MAX_BROWSER_DELAY));
+
+        console.log(`Scheduled browser timer for bot ${botId} in ${Math.round(delay/1000/60)} minutes`);
     },
 
     async triggerScheduledBot(botId) {
         try {
             const bot = this.db.bots[botId];
-            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) return;
+            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) {
+                console.log(`Bot ${botId} not ready for sending`);
+                return;
+            }
 
             bot.isProcessing = true;
-
+            
             const workflowResponse = await fetch(
                 `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
                 {
@@ -466,40 +485,78 @@ const app = {
             );
 
             if (workflowResponse.status === 204) {
-                bot.sent = true;
-                bot.sentTime = new Date().toISOString();
-                bot.status = 'sent';
-                bot.scheduled = false;
+                console.log(`✅ Workflow triggered for bot: ${botId}`);
+                
+                bot.status = 'processing';
+                bot.lastTriggered = new Date().toISOString();
                 bot.isProcessing = false;
                 
-                this.showToast(`Scheduled post "${bot.title}" has been sent!`, 'success');
+                setTimeout(() => this.loadDatabase(), 10000);
+                
             } else {
                 const errorText = await workflowResponse.text();
-                throw new Error(`${workflowResponse.status} - ${errorText}`);
+                console.error(`Failed to trigger workflow: ${workflowResponse.status} - ${errorText}`);
+                
+                bot.isProcessing = false;
+                bot.lastError = `Workflow trigger failed: ${workflowResponse.status}`;
+                
+                this.showToast(`Failed to trigger scheduled bot: ${workflowResponse.status}`, 'error');
             }
 
         } catch (error) {
-            if (this.db.bots[botId]) this.db.bots[botId].isProcessing = false;
             console.error('Error triggering scheduled bot:', error);
-            this.showToast(`Failed to send scheduled bot: ${error.message}`, 'error');
+            if (this.db.bots[botId]) {
+                this.db.bots[botId].isProcessing = false;
+                this.db.bots[botId].lastError = error.message;
+            }
+            this.showToast(`Error: ${error.message}`, 'error');
         }
     },
 
-    async checkScheduledBots() {
+    async syncBotStatusWithGitHub() {
+        try {
+            if (!this.currentUser || !this.token) return;
+            
+            console.log('Syncing bot status with GitHub...');
+            
+            await this.loadDatabase();
+            
+            const now = new Date();
+            Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
+                if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled && !bot.isProcessing) {
+                    const scheduledTime = new Date(bot.scheduledTime);
+                    const timeDiff = scheduledTime.getTime() - now.getTime();
+                    
+                    if (timeDiff < -300000) {
+                        console.log(`Bot ${botId} appears to be stuck, triggering workflow`);
+                        this.triggerScheduledBot(botId);
+                    }
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error syncing bot status:', error);
+        }
+    },
+
+    checkScheduledBots() {
         if (!this.currentUser || !this.db) return;
 
         const now = Date.now();
-        const FIVE_MINUTES = 300000;
-
+        
         Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
             if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled && !bot.isProcessing) {
                 const scheduledTime = new Date(bot.scheduledTime).getTime();
                 const timeDiff = scheduledTime - now;
-
-                if (timeDiff > 0 && timeDiff <= FIVE_MINUTES) {
+                
+                if (timeDiff > 0 && timeDiff <= 600000) {
                     if (!this.scheduledTimers[botId]) {
+                        console.log(`Setting up timer for bot ${botId} in ${Math.round(timeDiff/1000)} seconds`);
                         this.scheduleBotTimer(botId, bot);
                     }
+                } else if (timeDiff <= 0 && timeDiff > -600000 && !this.scheduledTimers[botId]) {
+                    console.log(`Bot ${botId} is due, triggering immediately`);
+                    this.triggerScheduledBot(botId);
                 }
             }
         });
@@ -1425,7 +1482,7 @@ const app = {
         if (typeof NProgress !== 'undefined') NProgress.start();
         
         try {
-            const botId = this.currentBotId || Date.now().toString();
+            const botId = this.currentBotId || `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const now = new Date().toISOString();
             let scheduledTimeUTC = null;
 
@@ -1447,6 +1504,11 @@ const app = {
                 }
 
                 scheduledTimeUTC = localDate.toISOString();
+                
+                const daysInFuture = (localDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+                if (daysInFuture > 24) {
+                    this.showToast('Note: Browser timers only work up to 24 days. GitHub workflow will handle posts beyond that.', 'info');
+                }
             }
 
             const botData = {
@@ -1461,7 +1523,8 @@ const app = {
                 status: schedule ? 'scheduled' : 'pending',
                 sentTime: null,
                 cancelled: false,
-                isProcessing: false
+                isProcessing: false,
+                errorCount: 0
             };
 
             this.db.bots[botId] = botData;
