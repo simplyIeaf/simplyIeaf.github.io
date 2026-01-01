@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,12 +39,9 @@ jobs:
 
           async function sendToDiscord(title, message) {
             return new Promise((resolve) => {
-              // FORUM CHANNEL FIX:
-              // 'thread_name' is required for Forums (becomes the title).
-              // 'content' is the message inside the post.
               const payload = JSON.stringify({
                 content: message,
-                thread_name: title, 
+                thread_name: title,
                 username: "Leaf"
               });
 
@@ -77,65 +76,50 @@ jobs:
           }
 
           async function run() {
-            if (!fs.existsSync('database.json')) return;
+            if (!fs.existsSync('database.json')) {
+              console.error('database.json not found');
+              return;
+            }
             
             const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
             const now = new Date();
             let dirty = false;
 
-            // 1. Handle Manual Trigger
+            // 1. Check for manual trigger via botId
             if (MANUAL_ID && db.bots && db.bots[MANUAL_ID]) {
               const bot = db.bots[MANUAL_ID];
-              console.log(`Processing Manual Bot: ${bot.title}`);
-              
-              const result = await sendToDiscord(bot.title, bot.message);
-              
-              if (result.success) {
-                bot.sent = true;
-                bot.status = 'sent';
-                bot.sentTime = now.toISOString();
-                bot.scheduled = false;
-                bot.isProcessing = false;
-                dirty = true;
-                console.log('✅ Manual Send Success');
-              } else {
-                console.log('❌ Manual Send Failed');
-                process.exit(1); 
+              if (!bot.sent) {
+                console.log(`Manual trigger for: ${bot.title}`);
+                const result = await sendToDiscord(bot.title, bot.message);
+                if (result.success) {
+                  bot.sent = true;
+                  bot.status = 'sent';
+                  bot.sentTime = now.toISOString();
+                  bot.scheduled = false;
+                  dirty = true;
+                }
               }
             }
 
-            // 2. Handle Scheduled Bots
+            // 2. Check for scheduled bots
             if (db.bots) {
               for (const [id, bot] of Object.entries(db.bots)) {
-                // Skip if sent, cancelled, or processing
-                if (bot.sent || bot.cancelled) continue;
+                if (bot.sent || bot.cancelled || bot.isProcessing) continue;
 
-                // Check Schedule
                 if (bot.scheduled && bot.scheduledTime) {
                   const scheduleDate = new Date(bot.scheduledTime);
-                  
-                  // If time has passed
                   if (scheduleDate <= now) {
-                    console.log(`Time match for: ${bot.title}`);
-                    
+                    console.log(`Processing scheduled: ${bot.title}`);
                     const result = await sendToDiscord(bot.title, bot.message);
-                    
                     if (result.success) {
                       bot.sent = true;
                       bot.status = 'sent';
                       bot.sentTime = now.toISOString();
                       bot.scheduled = false;
-                      console.log(`✅ Scheduled Send Success: ${bot.title}`);
+                      dirty = true;
                     } else {
                       bot.lastError = result.error;
-                      bot.errorCount = (bot.errorCount || 0) + 1;
-                      console.log(`❌ Scheduled Send Failed: ${bot.title}`);
-                      // Stop retrying after 3 fails
-                      if (bot.errorCount > 3) bot.scheduled = false;
                     }
-                    
-                    dirty = true;
-                    // Add small delay to prevent rate limits
                     await new Promise(r => setTimeout(r, 1000));
                   }
                 }
@@ -144,9 +128,7 @@ jobs:
 
             if (dirty) {
               fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
-              console.log('Database updated.');
-            } else {
-              console.log('No changes needed.');
+              console.log('Changes saved to database.json');
             }
           }
 
@@ -164,10 +146,10 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add database.json
-          if ! git diff --staged --quiet; then
+          if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Bot: Status Update [skip ci]"
             git pull origin main --rebase
             git push origin main
           else
-            console.log("No changes to commit")
+            echo "No changes to commit"
           fi
