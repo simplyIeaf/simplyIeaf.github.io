@@ -1025,6 +1025,21 @@
       "cancelled": false,
       "isProcessing": false,
       "errorCount": 0
+    },
+    "bot_1767308601940_x06m8sull": {
+      "id": "bot_1767308601940_x06m8sull",
+      "title": "tsdfdfafafdsaffdadasf",
+      "message": "dafdfdafdafadsfsadfadsfds",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-01-01T23:03:21.940Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
