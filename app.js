@@ -143,12 +143,6 @@ const app = {
         setInterval(() => {
             this.checkScheduledBots();
         }, 30000);
-        
-        setInterval(() => {
-            if (this.currentUser) {
-                this.syncBotStatusWithGitHub();
-            }
-        }, 300000);
     },
     
     initEventListeners() {
@@ -429,11 +423,9 @@ const app = {
         const delay = scheduledDate.getTime() - Date.now();
 
         if (delay <= 0) {
-            if (delay > -600000) {
+            if (delay > -300000) {
                 console.log(`Bot ${botId} is slightly late, triggering immediately`);
                 this.triggerScheduledBot(botId);
-            } else {
-                console.log(`Bot ${botId} scheduled time too far in the past: ${scheduledDate}`);
             }
             return;
         }
@@ -448,9 +440,9 @@ const app = {
             console.log(`Browser timer triggered for bot: ${botId}`);
             this.triggerScheduledBot(botId);
             delete this.scheduledTimers[botId];
-        }, Math.min(delay, MAX_BROWSER_DELAY));
+        }, delay);
 
-        console.log(`Scheduled browser timer for bot ${botId} in ${Math.round(delay/1000/60)} minutes`);
+        console.log(`Scheduled browser timer for bot ${botId} at ${scheduledDate.toLocaleString()}`);
     },
 
     async triggerScheduledBot(botId) {
@@ -464,7 +456,7 @@ const app = {
             bot.isProcessing = true;
             
             const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
                 {
                     method: 'POST',
                     headers: {
@@ -491,7 +483,7 @@ const app = {
                 bot.lastTriggered = new Date().toISOString();
                 bot.isProcessing = false;
                 
-                setTimeout(() => this.loadDatabase(), 10000);
+                setTimeout(() => this.loadDatabase(), 5000);
                 
             } else {
                 const errorText = await workflowResponse.text();
@@ -513,32 +505,6 @@ const app = {
         }
     },
 
-    async syncBotStatusWithGitHub() {
-        try {
-            if (!this.currentUser || !this.token) return;
-            
-            console.log('Syncing bot status with GitHub...');
-            
-            await this.loadDatabase();
-            
-            const now = new Date();
-            Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
-                if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled && !bot.isProcessing) {
-                    const scheduledTime = new Date(bot.scheduledTime);
-                    const timeDiff = scheduledTime.getTime() - now.getTime();
-                    
-                    if (timeDiff < -300000) {
-                        console.log(`Bot ${botId} appears to be stuck, triggering workflow`);
-                        this.triggerScheduledBot(botId);
-                    }
-                }
-            });
-            
-        } catch (error) {
-            console.error('Error syncing bot status:', error);
-        }
-    },
-
     checkScheduledBots() {
         if (!this.currentUser || !this.db) return;
 
@@ -549,12 +515,13 @@ const app = {
                 const scheduledTime = new Date(bot.scheduledTime).getTime();
                 const timeDiff = scheduledTime - now;
                 
-                if (timeDiff > 0 && timeDiff <= 600000) {
+                if (timeDiff > 0 && timeDiff <= 300000) {
                     if (!this.scheduledTimers[botId]) {
                         console.log(`Setting up timer for bot ${botId} in ${Math.round(timeDiff/1000)} seconds`);
                         this.scheduleBotTimer(botId, bot);
                     }
-                } else if (timeDiff <= 0 && timeDiff > -600000 && !this.scheduledTimers[botId]) {
+                }
+                else if (timeDiff <= 0 && timeDiff > -300000 && !this.scheduledTimers[botId]) {
                     console.log(`Bot ${botId} is due, triggering immediately`);
                     this.triggerScheduledBot(botId);
                 }
@@ -1377,7 +1344,7 @@ const app = {
 
         try {
             const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
                 {
                     method: 'POST',
                     headers: {
@@ -1504,11 +1471,6 @@ const app = {
                 }
 
                 scheduledTimeUTC = localDate.toISOString();
-                
-                const daysInFuture = (localDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-                if (daysInFuture > 24) {
-                    this.showToast('Note: Browser timers only work up to 24 days. GitHub workflow will handle posts beyond that.', 'info');
-                }
             }
 
             const botData = {
