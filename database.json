@@ -1040,6 +1040,21 @@
       "cancelled": true,
       "isProcessing": false,
       "errorCount": 0
+    },
+    "bot_1767308618723_d4wp00j62": {
+      "id": "bot_1767308618723_d4wp00j62",
+      "title": "assss54354325",
+      "message": "2326232",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-01-01T23:03:38.723Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
