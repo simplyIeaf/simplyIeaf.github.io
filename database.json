@@ -1010,6 +1010,21 @@
       "errorCount": 5,
       "lastError": "Discord API returned 400",
       "lastAttempt": "2026-01-01T22:22:48.038Z"
+    },
+    "bot_1767308576533_i0pa464ap": {
+      "id": "bot_1767308576533_i0pa464ap",
+      "title": "tsdfdfafafdsaffdadasf",
+      "message": "dafdfdafdafadsfsadfadsfds",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-01-01T23:02:56.533Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
