@@ -993,6 +993,21 @@
       "errorCount": 1,
       "lastError": "Discord API returned 400",
       "lastAttempt": "2026-01-01T22:18:02.359Z"
+    },
+    "bot_1767306113462_sgw7dim5a": {
+      "id": "bot_1767306113462_sgw7dim5a",
+      "title": "dssdsds",
+      "message": "dasdsadada",
+      "scheduled": true,
+      "scheduledTime": "2026-01-01T22:22:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T22:21:53.462Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
