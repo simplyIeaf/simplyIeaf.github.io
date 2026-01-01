@@ -998,18 +998,18 @@
       "id": "bot_1767306113462_sgw7dim5a",
       "title": "dssdsds",
       "message": "dasdsadada",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-01-01T22:22:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-01-01T22:21:53.462Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "failed",
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false,
-      "errorCount": 2,
+      "errorCount": 4,
       "lastError": "Discord API returned 400",
-      "lastAttempt": "2026-01-01T22:22:12.925Z"
+      "lastAttempt": "2026-01-01T22:22:36.020Z"
     }
   }
 }
