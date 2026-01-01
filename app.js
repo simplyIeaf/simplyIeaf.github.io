@@ -529,6 +529,163 @@ const app = {
         });
     },
 
+    async sendBotNow(botId) {
+        if (!this.currentUser || !this.db || !this.db.bots[botId]) return false;
+        
+        const bot = this.db.bots[botId];
+        if (bot.isProcessing || bot.sent) return false;
+
+        bot.isProcessing = true;
+
+        try {
+            const workflowResponse = await fetch(
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${this.token}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ref: 'main',
+                        inputs: {
+                            botId: botId
+                        }
+                    })
+                }
+            );
+
+            if (workflowResponse.status === 204) {
+                bot.status = 'processing';
+                bot.isProcessing = false;
+                
+                const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Authorization': `token ${this.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Trigger bot: ${bot.title}`,
+                        content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                        sha: this.dbSha
+                    })
+                });
+
+                if (dbRes.ok) {
+                    const newDbData = await dbRes.json();
+                    this.dbSha = newDbData.content.sha;
+                    this.showToast('Triggered! Checking GitHub...', 'success');
+                    return true;
+                }
+            } else {
+                const errorText = await workflowResponse.text();
+                throw new Error(`GitHub Error: ${workflowResponse.status}`);
+            }
+            return false;
+        } catch (error) {
+            bot.isProcessing = false;
+            console.error('Send bot error:', error);
+            this.showToast(`Error: ${error.message}`, 'error');
+            return false;
+        }
+    },
+
+    async saveBot() {
+        const titleInput = document.getElementById('bot-title');
+        const messageInput = document.getElementById('bot-message');
+        const scheduleInput = document.getElementById('bot-schedule');
+        const scheduleTimeInput = document.getElementById('bot-schedule-time');
+        const timezoneInput = document.getElementById('bot-timezone');
+        const saveBtn = document.querySelector('.bot-actions .btn:last-child');
+        
+        if (!titleInput || !messageInput || !saveBtn) return;
+        
+        const title = titleInput.value.trim();
+        const message = messageInput.value.trim();
+        const schedule = scheduleInput ? scheduleInput.checked : false;
+        const scheduleTime = scheduleTimeInput ? scheduleTimeInput.value : '';
+        const timezone = timezoneInput ? timezoneInput.value : Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+        if (!title || !message) {
+            this.showToast('Title and message are required', 'error');
+            return;
+        }
+        
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        
+        saveBtn.disabled = true;
+        if (typeof NProgress !== 'undefined') NProgress.start();
+        
+        try {
+            const botId = this.currentBotId || `bot_${Date.now()}`;
+            const now = new Date().toISOString();
+            let scheduledTimeUTC = null;
+
+            if (schedule && scheduleTime) {
+                const localDate = new Date(scheduleTime);
+                if (localDate < new Date()) {
+                    this.showToast('Time cannot be in the past', 'error');
+                    this.actionInProgress = false;
+                    saveBtn.disabled = false;
+                    return;
+                }
+                scheduledTimeUTC = localDate.toISOString();
+            }
+
+            const botData = {
+                id: botId,
+                title: title,
+                message: message,
+                scheduled: schedule,
+                scheduledTime: scheduledTimeUTC,
+                timezone: timezone,
+                created: now,
+                sent: false,
+                status: schedule ? 'scheduled' : 'pending',
+                sentTime: null,
+                cancelled: false,
+                isProcessing: false
+            };
+
+            this.db.bots[botId] = botData;
+
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `Update bot: ${title}`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+
+            if (!dbRes.ok) throw new Error('Database update failed');
+
+            const newDbData = await dbRes.json();
+            this.dbSha = newDbData.content.sha;
+
+            if (schedule) {
+                this.showToast(`✅ Scheduled successfully`, 'success');
+                await this.loadDatabase();
+            } else {
+                await this.sendBotNow(botId);
+            }
+
+        } catch(e) {
+            this.showToast(`Error: ${e.message}`, 'error');
+        } finally {
+            saveBtn.disabled = false;
+            this.actionInProgress = false;
+            if (typeof NProgress !== 'undefined') NProgress.done();
+        }
+    },
+
     renderList() {
         const list = document.getElementById('script-list');
         if (!list || !this.db) return;
@@ -1331,204 +1488,6 @@ const app = {
         if (!putRes.ok) {
             const error = await putRes.json();
             throw new Error(`Failed to create/update file ${path}: ${error.message}`);
-        }
-    },
-
-    async sendBotNow(botId) {
-        if (!this.currentUser || !this.db || !this.db.bots[botId]) return false;
-        
-        const bot = this.db.bots[botId];
-        if (bot.isProcessing || bot.sent) return false;
-
-        bot.isProcessing = true;
-
-        try {
-            const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `token ${this.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        ref: 'main',
-                        inputs: {
-                            botId: botId,
-                            title: bot.title,
-                            message: bot.message,
-                            scheduled: 'false'
-                        }
-                    })
-                }
-            );
-
-            if (workflowResponse.status === 204) {
-                this.db.bots[botId].sent = true;
-                this.db.bots[botId].sentTime = new Date().toISOString();
-                this.db.bots[botId].status = 'sent';
-                this.db.bots[botId].scheduled = false;
-                this.db.bots[botId].isProcessing = false;
-
-                if (this.scheduledTimers[botId]) {
-                    clearTimeout(this.scheduledTimers[botId]);
-                    delete this.scheduledTimers[botId];
-                }
-
-                const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Authorization': `token ${this.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Send bot: ${bot.title}`,
-                        content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                        sha: this.dbSha
-                    })
-                });
-
-                if (dbRes.ok) {
-                    const newDbData = await dbRes.json();
-                    this.dbSha = newDbData.content.sha;
-                    this.showToast('Post sent successfully!', 'success');
-                    return true;
-                }
-            } else {
-                const errorData = await workflowResponse.json();
-                throw new Error(errorData.message);
-            }
-
-            return false;
-
-        } catch (error) {
-            this.db.bots[botId].isProcessing = false;
-            console.error('Send bot error:', error);
-            this.showToast(`Error: ${error.message}`, 'error');
-            return false;
-        }
-    },
-
-    async saveBot() {
-        const titleInput = document.getElementById('bot-title');
-        const messageInput = document.getElementById('bot-message');
-        const scheduleInput = document.getElementById('bot-schedule');
-        const scheduleTimeInput = document.getElementById('bot-schedule-time');
-        const timezoneInput = document.getElementById('bot-timezone');
-        const saveBtn = document.querySelector('.bot-actions .btn:last-child');
-        
-        if (!titleInput || !messageInput || !saveBtn) {
-            this.showToast('Form elements not found', 'error');
-            return;
-        }
-        
-        const title = titleInput.value.trim();
-        const message = messageInput.value.trim();
-        const schedule = scheduleInput ? scheduleInput.checked : false;
-        const scheduleTime = scheduleTimeInput ? scheduleTimeInput.value : '';
-        const timezone = timezoneInput ? timezoneInput.value : Intl.DateTimeFormat().resolvedOptions().timeZone;
-        
-        if (!title || !message) {
-            this.showToast('Title and message are required', 'error');
-            return;
-        }
-        
-        if (schedule && !scheduleTime) {
-            this.showToast('Schedule time is required when scheduling', 'error');
-            return;
-        }
-        
-        if (this.actionInProgress) return;
-        this.actionInProgress = true;
-        
-        saveBtn.disabled = true;
-        const originalBtnText = saveBtn.textContent;
-        saveBtn.textContent = schedule ? 'Scheduling...' : 'Sending...';
-        
-        if (typeof NProgress !== 'undefined') NProgress.start();
-        
-        try {
-            const botId = this.currentBotId || `bot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const now = new Date().toISOString();
-            let scheduledTimeUTC = null;
-
-            if (this.currentBotId && this.db.bots[this.currentBotId] && this.db.bots[this.currentBotId].sent) {
-                this.showToast('Cannot edit sent posts', 'error');
-                return;
-            }
-
-            if (schedule && scheduleTime) {
-                const localDate = new Date(scheduleTime);
-                
-                if (isNaN(localDate.getTime())) {
-                    throw new Error('Invalid date format');
-                }
-
-                if (localDate < new Date()) {
-                    this.showToast('Schedule time cannot be in the past', 'error');
-                    return;
-                }
-
-                scheduledTimeUTC = localDate.toISOString();
-            }
-
-            const botData = {
-                id: botId,
-                title: title,
-                message: message,
-                scheduled: schedule,
-                scheduledTime: scheduledTimeUTC,
-                timezone: timezone,
-                created: now,
-                sent: false,
-                status: schedule ? 'scheduled' : 'pending',
-                sentTime: null,
-                cancelled: false,
-                isProcessing: false,
-                errorCount: 0
-            };
-
-            this.db.bots[botId] = botData;
-
-            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `${this.currentBotId ? 'Update' : 'Create'} bot: ${title}`,
-                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha
-                })
-            });
-
-            if (!dbRes.ok) {
-                throw new Error(`Failed to update database`);
-            }
-
-            const newDbData = await dbRes.json();
-            this.dbSha = newDbData.content.sha;
-
-            if (schedule) {
-                this.scheduleBotTimer(botId, botData);
-                const displayTime = utils.formatDisplayTime(scheduledTimeUTC, timezone);
-                this.showToast(`✅ Scheduled for ${displayTime}`, 'success');
-            } else {
-                await this.sendBotNow(botId);
-            }
-
-            await this.loadDatabase();
-
-        } catch(e) {
-            console.error('Bot save error:', e);
-            this.showToast(`Error: ${e.message}`, 'error');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalBtnText;
-            this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
 
