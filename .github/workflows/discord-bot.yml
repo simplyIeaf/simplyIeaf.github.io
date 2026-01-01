@@ -23,25 +23,30 @@ jobs:
     steps:
       - name: Send Webhook to Discord
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          STATUS_MSG="🚀 Manual Trigger"
+          STATUS="🚀 Manual"
           if [ "${{ github.event.inputs.scheduled }}" == "true" ]; then
-            STATUS_MSG="⏰ Scheduled Trigger"
+            STATUS="⏰ Scheduled"
           fi
+          
+          # Escaping quotes for JSON safety
+          CLEAN_MESSAGE=$(echo "${{ github.event.inputs.message }}" | sed 's/"/\\"/g')
+          CLEAN_TITLE=$(echo "${{ github.event.inputs.title }}" | sed 's/"/\\"/g')
           
           curl -H "Content-Type: application/json" \
                -X POST \
-               -d '{
-                 "embeds": [{
-                   "title": "'"${{ github.event.inputs.title }}"'",
-                   "description": "'"${{ github.event.inputs.message }}"'",
-                   "footer": { "text": "'"$STATUS_MSG"'" },
-                   "color": 5814783
+               -d "{
+                 \"thread_name\": \"$CLEAN_TITLE\",
+                 \"embeds\": [{
+                   \"title\": \"$CLEAN_TITLE\",
+                   \"description\": \"$CLEAN_MESSAGE\",
+                   \"footer\": { \"text\": \"$STATUS\" },
+                   \"color\": 5814783
                  }]
-               }' \
-               $DISCORD_WEBHOOK_URL
-
+               }" \
+               "$WEBHOOK_URL"
+               
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
