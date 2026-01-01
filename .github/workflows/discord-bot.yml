@@ -25,12 +25,6 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          STATUS="🚀 Manual"
-          if [ "${{ github.event.inputs.scheduled }}" == "true" ]; then
-            STATUS="⏰ Scheduled"
-          fi
-          
-          # Escaping quotes for JSON safety
           CLEAN_MESSAGE=$(echo "${{ github.event.inputs.message }}" | sed 's/"/\\"/g')
           CLEAN_TITLE=$(echo "${{ github.event.inputs.title }}" | sed 's/"/\\"/g')
           
@@ -38,12 +32,7 @@ jobs:
                -X POST \
                -d "{
                  \"thread_name\": \"$CLEAN_TITLE\",
-                 \"embeds\": [{
-                   \"title\": \"$CLEAN_TITLE\",
-                   \"description\": \"$CLEAN_MESSAGE\",
-                   \"footer\": { \"text\": \"$STATUS\" },
-                   \"color\": 5814783
-                 }]
+                 \"content\": \"$CLEAN_MESSAGE\"
                }" \
                "$WEBHOOK_URL"
                
