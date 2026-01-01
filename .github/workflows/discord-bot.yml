@@ -66,6 +66,14 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          
+          # Check if there are actual changes in database.json
           git add database.json
-          git commit -m "Update bot ${{ github.event.inputs.botId }} status to sent"
-          git push
+          
+          if git diff --cached --quiet; then
+            echo "No changes detected in database.json. Skipping commit."
+          else
+            echo "Changes detected. Committing..."
+            git commit -m "Automated: Bot ${{ github.event.inputs.botId }} marked as sent"
+            git push origin main
+          fi
