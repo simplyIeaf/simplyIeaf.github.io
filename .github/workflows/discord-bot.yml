@@ -42,7 +42,7 @@ jobs:
               const payload = JSON.stringify({
                 content: message,
                 thread_name: title,
-                username: "Bot Scheduler"
+                username: "Leaf"
               });
 
               const url = new URL(WEBHOOK_URL);
