@@ -922,9 +922,9 @@
       "timezone": "Europe/Paris",
       "created": "2026-01-01T18:00:20.849Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false,
       "errorCount": 0
     },
