@@ -62,36 +62,6 @@ const utils = {
         return null;
     },
     
-    // Convert local datetime to UTC ISO string
-    localToUTC(localDateTime, timezone) {
-        const date = new Date(localDateTime);
-        
-        // If timezone is UTC, just return as UTC
-        if (timezone === 'UTC') {
-            return date.toISOString();
-        }
-        
-        // For other timezones, we need to account for the difference
-        // between the user's selected timezone and UTC
-        // Note: This is simplified. For production, use a library like luxon
-        const timezoneOffsets = {
-            'America/New_York': -5, // EST (UTC-5)
-            'America/Chicago': -6,  // CST (UTC-6)
-            'America/Denver': -7,   // MST (UTC-7)
-            'America/Los_Angeles': -8, // PST (UTC-8)
-            'Europe/London': 0,     // GMT (UTC+0)
-            'Europe/Paris': 1,      // CET (UTC+1)
-            'Asia/Tokyo': 9,        // JST (UTC+9)
-            'Australia/Sydney': 10   // AEST (UTC+10)
-        };
-        
-        const offset = timezoneOffsets[timezone] || 0;
-        const utcDate = new Date(date.getTime() - (offset * 60 * 60 * 1000));
-        
-        return utcDate.toISOString();
-    },
-    
-    // Format datetime for display
     formatDisplayTime(isoString, timezone) {
         const date = new Date(isoString);
         return date.toLocaleString('en-US', {
@@ -168,12 +138,10 @@ const app = {
     },
     
     startBotScheduler() {
-        // Check every minute for scheduled bots
         setInterval(() => {
             this.checkScheduledBots();
         }, 60000);
         
-        // Initial check after 5 seconds
         setTimeout(() => this.checkScheduledBots(), 5000);
     },
     
@@ -408,8 +376,10 @@ const app = {
                 this.db = JSON.parse(content);
                 if (!this.db.scripts) this.db.scripts = {};
                 if (!this.db.bots) this.db.bots = {};
-                
-                // Reschedule timers for all pending scheduled bots
+
+                Object.keys(this.scheduledTimers).forEach(id => clearTimeout(this.scheduledTimers[id]));
+                this.scheduledTimers = {};
+
                 Object.entries(this.db.bots).forEach(([botId, bot]) => {
                     if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled) {
                         this.scheduleBotTimer(botId, bot);
@@ -442,70 +412,40 @@ const app = {
     scheduleBotTimer(botId, bot) {
         if (this.scheduledTimers[botId]) {
             clearTimeout(this.scheduledTimers[botId]);
+            delete this.scheduledTimers[botId];
         }
-        
-        try {
-            // Parse the scheduled time from database (already in UTC)
-            const scheduledDate = new Date(bot.scheduledTime);
-            const scheduledTime = scheduledDate.getTime();
-            const now = Date.now();
-            const delay = scheduledTime - now;
+
+        if (bot.sent || bot.cancelled || bot.isProcessing) return;
+
+        const scheduledDate = new Date(bot.scheduledTime);
+        const delay = scheduledDate.getTime() - Date.now();
+        const MAX_DELAY = 2147483647;
+
+        if (delay > MAX_DELAY) {
+            return;
+        }
+
+        if (delay > 0) {
+            this.scheduledTimers[botId] = setTimeout(async () => {
+                await this.triggerScheduledBot(botId);
+                if (this.scheduledTimers[botId]) delete this.scheduledTimers[botId];
+            }, delay);
             
-            console.log(`Scheduling bot ${botId} (${bot.title}):`, {
-                scheduled: bot.scheduledTime,
-                scheduledUTC: scheduledDate.toISOString(),
-                scheduledLocal: scheduledDate.toLocaleString(),
-                nowUTC: new Date().toISOString(),
-                delayMs: delay,
-                delayMinutes: Math.round(delay / 60000)
-            });
-            
-            if (delay > 0) {
-                this.scheduledTimers[botId] = setTimeout(async () => {
-                    console.log(`Timer fired for bot ${botId} at exact time`);
-                    await this.triggerScheduledBot(botId);
-                    delete this.scheduledTimers[botId];
-                }, delay);
-                
-                console.log(`✅ Timer set for bot ${botId} in ${Math.round(delay/1000)} seconds`);
-                this.showToast(`Scheduled: "${bot.title}" for ${utils.formatDisplayTime(bot.scheduledTime, bot.timezone)}`, 'success');
-                
-            } else if (delay <= 0 && delay > -300000) { // Within 5 minutes past scheduled time
-                console.log(`Bot ${botId} scheduled time passed recently, sending now`);
-                setTimeout(() => this.triggerScheduledBot(botId), 1000);
-            } else if (delay <= -300000) {
-                console.log(`Bot ${botId} scheduled time passed more than 5 minutes ago`);
-                // Mark as missed or handle accordingly
-            }
-            
-        } catch (error) {
-            console.error(`Error scheduling timer for bot ${botId}:`, error);
-            this.showToast(`Error scheduling bot: ${error.message}`, 'error');
+            this.showToast(`Scheduled: "${bot.title}"`, 'success');
+        } else if (delay <= 0 && delay > -300000) {
+            setTimeout(() => this.triggerScheduledBot(botId), 1000);
         }
     },
 
     async triggerScheduledBot(botId) {
         try {
             const bot = this.db.bots[botId];
-            if (!bot) {
-                console.error(`Bot ${botId} not found in database`);
-                return;
-            }
-            
-            if (bot.sent) {
-                console.log(`Bot ${botId} already sent`);
-                return;
-            }
-            
-            if (bot.cancelled) {
-                console.log(`Bot ${botId} is cancelled`);
-                return;
-            }
-            
-            console.log(`🚀 Triggering scheduled bot: ${bot.title}`);
-            
+            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) return;
+
+            bot.isProcessing = true;
+
             const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
                 {
                     method: 'POST',
                     headers: {
@@ -524,25 +464,22 @@ const app = {
                     })
                 }
             );
-            
+
             if (workflowResponse.status === 204) {
-                console.log(`✅ Successfully triggered workflow for bot ${botId}`);
-                
-                // Update local database immediately
                 bot.sent = true;
                 bot.sentTime = new Date().toISOString();
                 bot.status = 'sent';
                 bot.scheduled = false;
+                bot.isProcessing = false;
                 
-                // Show user notification
                 this.showToast(`Scheduled post "${bot.title}" has been sent!`, 'success');
-                
             } else {
                 const errorText = await workflowResponse.text();
-                throw new Error(`Failed to trigger workflow: ${workflowResponse.status} - ${errorText}`);
+                throw new Error(`${workflowResponse.status} - ${errorText}`);
             }
-            
+
         } catch (error) {
+            if (this.db.bots[botId]) this.db.bots[botId].isProcessing = false;
             console.error('Error triggering scheduled bot:', error);
             this.showToast(`Failed to send scheduled bot: ${error.message}`, 'error');
         }
@@ -550,36 +487,22 @@ const app = {
 
     async checkScheduledBots() {
         if (!this.currentUser || !this.db) return;
-        
-        console.log('Checking scheduled bots...');
+
         const now = Date.now();
-        let foundScheduled = false;
-        
+        const FIVE_MINUTES = 300000;
+
         Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
-            if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled) {
-                foundScheduled = true;
+            if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled && !bot.isProcessing) {
                 const scheduledTime = new Date(bot.scheduledTime).getTime();
                 const timeDiff = scheduledTime - now;
-                
-                console.log(`Bot ${botId}:`, {
-                    title: bot.title,
-                    scheduled: bot.scheduledTime,
-                    timeDiff: timeDiff,
-                    minutes: Math.round(timeDiff / 60000),
-                    hasTimer: !!this.scheduledTimers[botId]
-                });
-                
-                // If scheduled within next 5 minutes and no timer exists, schedule it
-                if (timeDiff > 0 && timeDiff <= 300000 && !this.scheduledTimers[botId]) {
-                    console.log(`Setting timer for bot ${botId} (within 5 minutes)`);
-                    this.scheduleBotTimer(botId, bot);
+
+                if (timeDiff > 0 && timeDiff <= FIVE_MINUTES) {
+                    if (!this.scheduledTimers[botId]) {
+                        this.scheduleBotTimer(botId, bot);
+                    }
                 }
             }
         });
-        
-        if (!foundScheduled) {
-            console.log('No scheduled bots found');
-        }
     },
 
     renderList() {
@@ -1073,14 +996,7 @@ const app = {
         document.getElementById('bot-title').value = '';
         document.getElementById('bot-message').value = '';
         document.getElementById('bot-schedule').checked = false;
-        
-        // Set default datetime to next hour
-        const now = new Date();
-        const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
-        nextHour.setMinutes(0, 0, 0);
-        const localDateTime = nextHour.toISOString().slice(0, 16);
-        document.getElementById('bot-schedule-time').value = localDateTime;
-        
+        document.getElementById('bot-schedule-time').value = '';
         document.getElementById('bot-timezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const saveBtn = document.querySelector('.bot-actions .btn:last-child');
         if (saveBtn) saveBtn.textContent = 'Send Bot';
@@ -1184,7 +1100,6 @@ const app = {
         document.getElementById('bot-schedule').checked = bot.scheduled || false;
         
         if (bot.scheduledTime) {
-            // Convert UTC time back to local datetime string for input
             const date = new Date(bot.scheduledTime);
             const localDateTime = date.toISOString().slice(0, 16);
             document.getElementById('bot-schedule-time').value = localDateTime;
@@ -1395,160 +1310,17 @@ const app = {
         }
     },
 
-    async saveBot() {
-        if (!this.currentUser || !this.db) {
-            this.showToast('Please login first.', 'error');
-            return;
-        }
-        
-        if (this.actionInProgress) return;
-        this.actionInProgress = true;
-        
-        const titleInput = document.getElementById('bot-title');
-        const messageInput = document.getElementById('bot-message');
-        const scheduleInput = document.getElementById('bot-schedule');
-        const scheduleTimeInput = document.getElementById('bot-schedule-time');
-        const timezoneInput = document.getElementById('bot-timezone');
-        const saveBtn = document.querySelector('.bot-actions .btn:last-child');
-        
-        if (!titleInput || !messageInput || !saveBtn) {
-            this.showToast('Form elements not found', 'error');
-            this.actionInProgress = false;
-            return;
-        }
-        
-        const title = titleInput.value.trim();
-        const message = messageInput.value.trim();
-        const schedule = scheduleInput ? scheduleInput.checked : false;
-        const scheduleTime = scheduleTimeInput ? scheduleTimeInput.value : '';
-        const timezone = timezoneInput ? timezoneInput.value : Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const originalBtnText = saveBtn.textContent;
-        
-        if (!title || !message) {
-            this.showToast('Title and message are required', 'error');
-            this.actionInProgress = false;
-            return;
-        }
-        
-        if (schedule && !scheduleTime) {
-            this.showToast('Schedule time is required when scheduling', 'error');
-            this.actionInProgress = false;
-            return;
-        }
-        
-        saveBtn.disabled = true;
-        saveBtn.textContent = schedule ? 'Scheduling...' : 'Sending...';
-        
-        if (typeof NProgress !== 'undefined') NProgress.start();
-        
-        try {
-            const botId = this.currentBotId || Date.now().toString();
-            const now = new Date().toISOString();
-            
-            if (this.currentBotId && this.db.bots[this.currentBotId] && this.db.bots[this.currentBotId].sent) {
-                this.showToast('Cannot edit sent posts', 'error');
-                return;
-            }
-            
-            // CRITICAL FIX: Proper timezone handling for exact timing
-            let scheduledTimeUTC = null;
-            if (schedule && scheduleTime) {
-                // The datetime-local input gives us a string like "2024-01-15T10:00"
-                // This is in the USER'S LOCAL TIMEZONE
-                const localDate = new Date(scheduleTime);
-                
-                // Validate the date
-                if (isNaN(localDate.getTime())) {
-                    throw new Error('Invalid date format');
-                }
-                
-                // Check if time is in the past
-                if (localDate < new Date()) {
-                    this.showToast('Schedule time cannot be in the past', 'error');
-                    return;
-                }
-                
-                // Convert to UTC ISO string for storage
-                scheduledTimeUTC = localDate.toISOString();
-                
-                console.log('Scheduling bot with:', {
-                    userInput: scheduleTime,
-                    localDate: localDate.toString(),
-                    utcISO: scheduledTimeUTC,
-                    timezone: timezone,
-                    now: new Date().toISOString()
-                });
-            }
-            
-            const botData = {
-                id: botId,
-                title: title,
-                message: message,
-                scheduled: schedule,
-                scheduledTime: scheduledTimeUTC,
-                timezone: timezone,
-                created: now,
-                sent: false,
-                status: schedule ? 'scheduled' : 'pending',
-                sentTime: null,
-                cancelled: false
-            };
-            
-            this.db.bots[botId] = botData;
-            
-            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `token ${this.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `${this.currentBotId ? 'Update' : 'Create'} bot: ${title}`,
-                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha
-                })
-            });
-            
-            if (!dbRes.ok) {
-                const errorData = await dbRes.json();
-                throw new Error(`Failed to update database: ${errorData.message || 'Unknown error'}`);
-            }
-            
-            const newDbData = await dbRes.json();
-            this.dbSha = newDbData.content.sha;
-            
-            if (schedule) {
-                // Schedule the timer for exact time
-                this.scheduleBotTimer(botId, botData);
-                const displayTime = utils.formatDisplayTime(scheduledTimeUTC, timezone);
-                this.showToast(`✅ Scheduled for ${displayTime}`, 'success');
-            } else {
-                await this.sendBotNow(botId);
-            }
-            
-            await this.loadDatabase();
-            
-        } catch(e) {
-            console.error('Bot save error:', e);
-            this.showToast(`Error: ${e.message}`, 'error');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalBtnText;
-            this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
-        }
-    },
-
     async sendBotNow(botId) {
         if (!this.currentUser || !this.db || !this.db.bots[botId]) return false;
         
         const bot = this.db.bots[botId];
-        
+        if (bot.isProcessing || bot.sent) return false;
+
+        bot.isProcessing = true;
+
         try {
-            console.log(`Sending bot immediately: ${bot.title}`);
-            
             const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
                 {
                     method: 'POST',
                     headers: {
@@ -1567,18 +1339,19 @@ const app = {
                     })
                 }
             );
-            
+
             if (workflowResponse.status === 204) {
                 this.db.bots[botId].sent = true;
                 this.db.bots[botId].sentTime = new Date().toISOString();
                 this.db.bots[botId].status = 'sent';
                 this.db.bots[botId].scheduled = false;
-                
+                this.db.bots[botId].isProcessing = false;
+
                 if (this.scheduledTimers[botId]) {
                     clearTimeout(this.scheduledTimers[botId]);
                     delete this.scheduledTimers[botId];
                 }
-                
+
                 const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
                     method: 'PUT',
                     headers: { 
@@ -1591,7 +1364,7 @@ const app = {
                         sha: this.dbSha
                     })
                 });
-                
+
                 if (dbRes.ok) {
                     const newDbData = await dbRes.json();
                     this.dbSha = newDbData.content.sha;
@@ -1600,15 +1373,137 @@ const app = {
                 }
             } else {
                 const errorData = await workflowResponse.json();
-                throw new Error(`Workflow dispatch failed: ${errorData.message}`);
+                throw new Error(errorData.message);
             }
-            
+
             return false;
-            
+
         } catch (error) {
+            this.db.bots[botId].isProcessing = false;
             console.error('Send bot error:', error);
             this.showToast(`Error: ${error.message}`, 'error');
             return false;
+        }
+    },
+
+    async saveBot() {
+        const titleInput = document.getElementById('bot-title');
+        const messageInput = document.getElementById('bot-message');
+        const scheduleInput = document.getElementById('bot-schedule');
+        const scheduleTimeInput = document.getElementById('bot-schedule-time');
+        const timezoneInput = document.getElementById('bot-timezone');
+        const saveBtn = document.querySelector('.bot-actions .btn:last-child');
+        
+        if (!titleInput || !messageInput || !saveBtn) {
+            this.showToast('Form elements not found', 'error');
+            return;
+        }
+        
+        const title = titleInput.value.trim();
+        const message = messageInput.value.trim();
+        const schedule = scheduleInput ? scheduleInput.checked : false;
+        const scheduleTime = scheduleTimeInput ? scheduleTimeInput.value : '';
+        const timezone = timezoneInput ? timezoneInput.value : Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+        if (!title || !message) {
+            this.showToast('Title and message are required', 'error');
+            return;
+        }
+        
+        if (schedule && !scheduleTime) {
+            this.showToast('Schedule time is required when scheduling', 'error');
+            return;
+        }
+        
+        if (this.actionInProgress) return;
+        this.actionInProgress = true;
+        
+        saveBtn.disabled = true;
+        const originalBtnText = saveBtn.textContent;
+        saveBtn.textContent = schedule ? 'Scheduling...' : 'Sending...';
+        
+        if (typeof NProgress !== 'undefined') NProgress.start();
+        
+        try {
+            const botId = this.currentBotId || Date.now().toString();
+            const now = new Date().toISOString();
+            let scheduledTimeUTC = null;
+
+            if (this.currentBotId && this.db.bots[this.currentBotId] && this.db.bots[this.currentBotId].sent) {
+                this.showToast('Cannot edit sent posts', 'error');
+                return;
+            }
+
+            if (schedule && scheduleTime) {
+                const localDate = new Date(scheduleTime);
+                
+                if (isNaN(localDate.getTime())) {
+                    throw new Error('Invalid date format');
+                }
+
+                if (localDate < new Date()) {
+                    this.showToast('Schedule time cannot be in the past', 'error');
+                    return;
+                }
+
+                scheduledTimeUTC = localDate.toISOString();
+            }
+
+            const botData = {
+                id: botId,
+                title: title,
+                message: message,
+                scheduled: schedule,
+                scheduledTime: scheduledTimeUTC,
+                timezone: timezone,
+                created: now,
+                sent: false,
+                status: schedule ? 'scheduled' : 'pending',
+                sentTime: null,
+                cancelled: false,
+                isProcessing: false
+            };
+
+            this.db.bots[botId] = botData;
+
+            const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `token ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `${this.currentBotId ? 'Update' : 'Create'} bot: ${title}`,
+                    content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
+                    sha: this.dbSha
+                })
+            });
+
+            if (!dbRes.ok) {
+                throw new Error(`Failed to update database`);
+            }
+
+            const newDbData = await dbRes.json();
+            this.dbSha = newDbData.content.sha;
+
+            if (schedule) {
+                this.scheduleBotTimer(botId, botData);
+                const displayTime = utils.formatDisplayTime(scheduledTimeUTC, timezone);
+                this.showToast(`✅ Scheduled for ${displayTime}`, 'success');
+            } else {
+                await this.sendBotNow(botId);
+            }
+
+            await this.loadDatabase();
+
+        } catch(e) {
+            console.error('Bot save error:', e);
+            this.showToast(`Error: ${e.message}`, 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalBtnText;
+            this.actionInProgress = false;
+            if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
 
