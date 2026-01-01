@@ -927,6 +927,21 @@
       "cancelled": false,
       "isProcessing": false,
       "errorCount": 0
+    },
+    "bot_1767291502823_4xjdnbwrz": {
+      "id": "bot_1767291502823_4xjdnbwrz",
+      "title": "Vsuvsvushs",
+      "message": "Zjhvjzvbzvhvzj",
+      "scheduled": true,
+      "scheduledTime": "2026-01-01T18:19:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T18:18:22.823Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
