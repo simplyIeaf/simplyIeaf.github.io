@@ -851,9 +851,9 @@
       "scheduledTime": null,
       "timezone": "",
       "created": "2026-01-01T16:11:22.909Z",
-      "sent": false,
-      "status": "pending",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-01-01T16:11:24.985Z",
       "cancelled": false,
       "isProcessing": false
     }
