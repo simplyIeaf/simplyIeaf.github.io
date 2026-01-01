@@ -1,197 +1,71 @@
-name: Discord Bot Manager
+name: Discord Bot Webhook
 
 on:
   workflow_dispatch:
     inputs:
       botId:
+        description: 'ID of the bot'
         required: true
-        description: 'Bot ID'
-        type: string
       title:
+        description: 'Title of the post'
         required: true
-        description: 'Post title'
-        type: string
       message:
-        required: true
         description: 'Message content'
-        type: string
+        required: true
       scheduled:
-        required: false
-        description: 'Is scheduled?'
+        description: 'Whether it was a scheduled post'
+        required: true
         default: 'false'
-        type: string
-  schedule:
-    - cron: '*/5 * * * *'  # Checks every 5 minutes for scheduled posts
-
-env:
-  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  DISCORD_AVATAR_URL: ${{ secrets.DISCORD_AVATAR_URL || 'https://github.com/simplyIeaf.png' }}
-  DISCORD_USERNAME: ${{ secrets.DISCORD_USERNAME || 'Leaf'\''s Scripts' }}
 
 jobs:
-  check-scheduled:
-    if: github.event_name == 'schedule'
+  post-to-discord:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ env.GITHUB_TOKEN }}
-
-      - name: Find scheduled bots
-        id: find-bots
+      - name: Send Webhook to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          echo "Checking for scheduled bots..."
-          python3 << 'EOF'
-          import json
-          import os
-          from datetime import datetime, timezone
-          
-          with open('database.json', 'r') as f:
-              data = json.load(f)
-          
-          now = datetime.now(timezone.utc)
-          bots_to_send = []
-          
-          for bot_id, bot in data.get('bots', {}).items():
-              if (bot.get('scheduled') and 
-                  not bot.get('sent', False) and 
-                  not bot.get('cancelled', False) and
-                  bot.get('scheduledTime')):
-                  
-                  try:
-                      scheduled_time = datetime.fromisoformat(bot['scheduledTime'].replace('Z', '+00:00'))
-                      time_diff = (scheduled_time - now).total_seconds()
-                      
-                      # If scheduled within last 5 minutes
-                      if -300 <= time_diff <= 0:
-                          bots_to_send.append(bot_id)
-                          print(f"Found bot to send: {bot_id} - {bot['title']}")
-                  except Exception as e:
-                      print(f"Error checking bot {bot_id}: {e}")
-          
-          if bots_to_send:
-              print(f"Found {len(bots_to_send)} bots to send")
-              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                  f.write(f"bots={','.join(bots_to_send)}\n")
-          EOF
-
-      - name: Trigger bot sends
-        if: steps.find-bots.outputs.bots != ''
-        run: |
-          echo "Triggering bots..."
-          IFS=',' read -ra BOT_IDS <<< "${{ steps.find-bots.outputs.bots }}"
-          for BOT_ID in "${BOT_IDS[@]}"; do
-            echo "Triggering bot: $BOT_ID"
-            curl -X POST \
-              -H "Authorization: Bearer ${{ env.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/discord-bot.yml/dispatches" \
-              -d "{\"ref\":\"main\",\"inputs\":{\"botId\":\"$BOT_ID\",\"title\":\"temp\",\"message\":\"temp\",\"scheduled\":\"true\"}}"
-          done
-
-  send-discord:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ env.GITHUB_TOKEN }}
-
-      - name: Load bot data
-        id: load-bot
-        run: |
-          echo "Loading bot: ${{ github.event.inputs.botId }}"
-          if [ ! -f "database.json" ]; then
-            echo '{"scripts": {}, "bots": {}}' > database.json
+          STATUS_MSG="🚀 Manual Trigger"
+          if [ "${{ github.event.inputs.scheduled }}" == "true" ]; then
+            STATUS_MSG="⏰ Scheduled Trigger"
           fi
           
-          BOT_ID="${{ github.event.inputs.botId }}"
-          
-          python3 << 'EOF'
-          import json, sys
-          with open('database.json', 'r') as f:
-              data = json.load(f)
-          
-          if '$BOT_ID' not in data.get('bots', {}):
-              print("Bot not found")
-              sys.exit(1)
-          
-          bot = data['bots']['$BOT_ID']
-          
-          if bot.get('sent', False):
-              print("Bot already sent")
-              sys.exit(0)
-          
-          if bot.get('cancelled', False):
-              print("Bot cancelled")
-              sys.exit(0)
-          
-          print(f"Processing: {bot['title']}")
-          EOF
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "embeds": [{
+                   "title": "'"${{ github.event.inputs.title }}"'",
+                   "description": "'"${{ github.event.inputs.message }}"'",
+                   "footer": { "text": "'"$STATUS_MSG"'" },
+                   "color": 5814783
+                 }]
+               }' \
+               $DISCORD_WEBHOOK_URL
 
-      - name: Send to Discord
-        if: steps.load-bot.conclusion == 'success'
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Update Database Status
         run: |
-          echo "Sending to Discord..."
-          
-          # Create JSON payload
-          PAYLOAD=$(cat <<EOF
-          {
-            "content": "${{ github.event.inputs.message }}",
-            "username": "${{ env.DISCORD_USERNAME }}",
-            "avatar_url": "${{ env.DISCORD_AVATAR_URL }}",
-            "thread_name": "${{ github.event.inputs.title }}"
+          # Use node to safely update the JSON file
+          node -e "
+          const fs = require('fs');
+          const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
+          const botId = '${{ github.event.inputs.botId }}';
+          if (db.bots[botId]) {
+            db.bots[botId].sent = true;
+            db.bots[botId].status = 'sent';
+            db.bots[botId].sentTime = new Date().toISOString();
           }
-          EOF
-          )
+          fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
+          "
           
-          # Send webhook
-          curl -X POST "${{ env.DISCORD_WEBHOOK }}" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD"
-          
-          echo "✅ Sent successfully!"
-
-      - name: Update database
-        if: steps.load-bot.conclusion == 'success'
+      - name: Commit and Push Changes
         run: |
-          echo "Updating database..."
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
-          python3 << 'EOF'
-          import json
-          
-          with open('database.json', 'r') as f:
-              data = json.load(f)
-          
-          bot_id = '${{ github.event.inputs.botId }}'
-          
-          if bot_id in data.get('bots', {}):
-              data['bots'][bot_id]['sent'] = True
-              data['bots'][bot_id]['sentTime'] = '$TIMESTAMP'
-              data['bots'][bot_id]['status'] = 'sent'
-              data['bots'][bot_id]['scheduled'] = False
-              
-              with open('database.json', 'w') as f:
-                  json.dump(data, f, indent=2)
-              
-              print(f"Updated bot {bot_id}")
-          EOF
-
-      - name: Commit changes
-        if: steps.load-bot.conclusion == 'success'
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           git add database.json
-          
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update bot: ${{ github.event.inputs.botId }}"
-            git push
-          fi
+          git commit -m "Update bot ${{ github.event.inputs.botId }} status to sent"
+          git push
