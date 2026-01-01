@@ -959,6 +959,21 @@
       "cancelled": false,
       "isProcessing": false,
       "errorCount": 0
+    },
+    "bot_1767291606404_zh0s6d6xj": {
+      "id": "bot_1767291606404_zh0s6d6xj",
+      "title": "Vsuvsvushs",
+      "message": "Zjhvjzvbzvhvzj",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T18:20:06.404Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
