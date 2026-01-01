@@ -1126,6 +1126,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1767309846441": {
+      "id": "bot_1767309846441",
+      "title": "test",
+      "message": "test",
+      "scheduled": true,
+      "scheduledTime": "2026-01-02T11:24:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T23:24:06.441Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
