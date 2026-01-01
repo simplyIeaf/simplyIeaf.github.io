@@ -1070,6 +1070,20 @@
       "cancelled": true,
       "isProcessing": false,
       "errorCount": 0
+    },
+    "bot_1767309750053": {
+      "id": "bot_1767309750053",
+      "title": "test",
+      "message": "test",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-01-01T23:22:30.053Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
