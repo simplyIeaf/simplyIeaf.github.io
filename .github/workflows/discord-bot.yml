@@ -5,16 +5,16 @@ on:
     inputs:
       botId:
         description: 'ID of the bot to send'
-        required: true
+        required: false
       title:
         description: 'Post Title'
-        required: true
+        required: false
       message:
         description: 'Post Message'
-        required: true
+        required: false
       scheduled:
         description: 'Triggered from schedule'
-        required: true
+        required: false
         default: 'false'
   schedule:
     - cron: '*/2 * * * *'
@@ -77,35 +77,49 @@ jobs:
             let hasChanges = false;
             
             const inputBotId = '${{ github.event.inputs.botId }}';
-            const isManual = !!inputBotId;
+            const inputTitle = '${{ github.event.inputs.title }}';
+            const inputMsg = '${{ github.event.inputs.message }}';
 
+            // 1. Manual Override Logic
+            if (inputTitle && inputMsg) {
+              console.log('Manual Trigger: ' + inputTitle);
+              await postToDiscord(inputTitle, inputMsg);
+              if (inputBotId && db.bots[inputBotId]) {
+                db.bots[inputBotId].sent = true;
+                db.bots[inputBotId].status = 'sent';
+                db.bots[inputBotId].sentTime = new Date().toISOString();
+                db.bots[inputBotId].scheduled = false;
+                hasChanges = true;
+              }
+            } 
+            
+            // 2. Scan for all overdue posts (Offline/Cron Mode)
             for (const [id, bot] of Object.entries(db.bots || {})) {
-              const scheduledTime = new Date(bot.scheduledTime);
-              
-              // Logic: Send if matches manual ID OR if cron finds overdue scheduled bot
-              const shouldTrigger = (isManual && id === inputBotId) || 
-                                   (!isManual && bot.scheduled && !bot.sent && !bot.cancelled && scheduledTime <= now);
-
-              if (shouldTrigger && !bot.sent) {
-                console.log('Sending: ' + bot.title);
-                try {
-                  await postToDiscord(bot.title, bot.message);
-                  bot.sent = true;
-                  bot.status = 'sent';
-                  bot.sentTime = new Date().toISOString();
-                  bot.scheduled = false;
-                  hasChanges = true;
-                } catch (err) {
-                  console.error('Failed to send ' + id + ':', err);
+              if (bot.scheduled && !bot.sent && !bot.cancelled) {
+                const scheduledTime = new Date(bot.scheduledTime);
+                if (scheduledTime <= now) {
+                  console.log('Scheduled Trigger found: ' + bot.title);
+                  try {
+                    await postToDiscord(bot.title, bot.message);
+                    bot.sent = true;
+                    bot.status = 'sent';
+                    bot.sentTime = new Date().toISOString();
+                    bot.scheduled = false;
+                    hasChanges = true;
+                    // Small delay to prevent Discord rate limits if sending multiple
+                    await new Promise(r => setTimeout(r, 1000));
+                  } catch (err) {
+                    console.error('Error sending ' + id + ':', err);
+                  }
                 }
               }
             }
 
             if (hasChanges) {
               fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
-              console.log('Database updated.');
+              console.log('Database updated with sent status.');
             } else {
-              console.log('No actions required.');
+              console.log('No posts were due for sending.');
             }
           }
 
@@ -116,11 +130,17 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git pull origin main --rebase
+          
+          # Stage changes first to allow rebase
           git add database.json
-          if git diff --staged --quiet; then
-            echo "Nothing to commit"
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No changes detected."
           else
-            git commit -m "Automated Bot Update: $(date)"
+            # Pull with rebase to handle browser/cron conflicts
+            git pull origin main --rebase -X ours
+            git commit -m "Automated: Bot status sync [$(date)]"
             git push origin main
           fi
+
