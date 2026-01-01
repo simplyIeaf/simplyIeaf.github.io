@@ -42,7 +42,7 @@ jobs:
               const payload = JSON.stringify({
                 content: message,
                 thread_name: title,
-                username: "Leaf"
+                username: "Bot Scheduler"
               });
 
               const url = new URL(WEBHOOK_URL);
@@ -85,7 +85,6 @@ jobs:
             const now = new Date();
             let dirty = false;
 
-            // 1. Check for manual trigger via botId
             if (MANUAL_ID && db.bots && db.bots[MANUAL_ID]) {
               const bot = db.bots[MANUAL_ID];
               if (!bot.sent) {
@@ -101,7 +100,6 @@ jobs:
               }
             }
 
-            // 2. Check for scheduled bots
             if (db.bots) {
               for (const [id, bot] of Object.entries(db.bots)) {
                 if (bot.sent || bot.cancelled || bot.isProcessing) continue;
@@ -117,8 +115,6 @@ jobs:
                       bot.sentTime = now.toISOString();
                       bot.scheduled = false;
                       dirty = true;
-                    } else {
-                      bot.lastError = result.error;
                     }
                     await new Promise(r => setTimeout(r, 1000));
                   }
@@ -145,11 +141,15 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          
+          # Key Fix: Only add database.json, ignore process_bot.mjs
           git add database.json
-          if [ -n "$(git status --porcelain)" ]; then
+          
+          # Check if database.json actually changed
+          if git diff --staged --quiet; then
+            echo "No changes to database.json"
+          else
             git commit -m "Bot: Status Update [skip ci]"
             git pull origin main --rebase
             git push origin main
-          else
-            echo "No changes to commit"
           fi
