@@ -4,70 +4,123 @@ on:
   workflow_dispatch:
     inputs:
       botId:
-        description: 'ID of the bot'
+        description: 'ID of the bot to send'
         required: true
       title:
-        description: 'Title of the post'
+        description: 'Post Title'
         required: true
       message:
-        description: 'Message content'
+        description: 'Post Message'
         required: true
       scheduled:
-        description: 'Whether it was a scheduled post'
+        description: 'Triggered from schedule'
         required: true
         default: 'false'
+  schedule:
+    - cron: '*/5 * * * *'
 
 jobs:
-  post-to-discord:
+  process-bot:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Webhook to Discord
-        env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          CLEAN_MESSAGE=$(echo "${{ github.event.inputs.message }}" | sed 's/"/\\"/g')
-          CLEAN_TITLE=$(echo "${{ github.event.inputs.title }}" | sed 's/"/\\"/g')
-          
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{
-                 \"thread_name\": \"$CLEAN_TITLE\",
-                 \"content\": \"$CLEAN_MESSAGE\"
-               }" \
-               "$WEBHOOK_URL"
-               
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Update Database Status
+      - name: Process and Send Webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          # Use node to safely update the JSON file
           node -e "
           const fs = require('fs');
-          const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
-          const botId = '${{ github.event.inputs.botId }}';
-          if (db.bots[botId]) {
-            db.bots[botId].sent = true;
-            db.bots[botId].status = 'sent';
-            db.bots[botId].sentTime = new Date().toISOString();
+          const https = require('https');
+
+          async function postToDiscord(title, message) {
+            return new Promise((resolve, reject) => {
+              const url = new URL(process.env.WEBHOOK_URL);
+              const data = JSON.stringify({
+                thread_name: title,
+                content: message
+              });
+
+              const options = {
+                hostname: url.hostname,
+                path: url.pathname + url.search,
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(data)
+                }
+              };
+
+              const req = https.request(options, (res) => {
+                res.on('data', () => {});
+                res.on('end', () => resolve());
+              });
+              
+              req.on('error', (e) => reject(e));
+              req.write(data);
+              req.end();
+            });
           }
-          fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
+
+          async function run() {
+            if (!fs.existsSync('database.json')) {
+              console.error('database.json not found');
+              process.exit(1);
+            }
+
+            const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
+            const now = new Date();
+            let hasChanges = false;
+            
+            const inputBotId = '${{ github.event.inputs.botId }}';
+            const isManual = !!inputBotId;
+
+            for (const [id, bot] of Object.entries(db.bots || {})) {
+              const scheduledTime = new Date(bot.scheduledTime);
+              
+              // Logic: Send if matches manual ID OR if cron finds overdue scheduled bot
+              const shouldTrigger = (isManual && id === inputBotId) || 
+                                   (!isManual && bot.scheduled && !bot.sent && !bot.cancelled && scheduledTime <= now);
+
+              if (shouldTrigger && !bot.sent) {
+                console.log('Sending: ' + bot.title);
+                try {
+                  await postToDiscord(bot.title, bot.message);
+                  bot.sent = true;
+                  bot.status = 'sent';
+                  bot.sentTime = new Date().toISOString();
+                  bot.scheduled = false;
+                  hasChanges = true;
+                } catch (err) {
+                  console.error('Failed to send ' + id + ':', err);
+                }
+              }
+            }
+
+            if (hasChanges) {
+              fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
+              console.log('Database updated.');
+            } else {
+              console.log('No actions required.');
+            }
+          }
+
+          run();
           "
-          
+
       - name: Commit and Push Changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
-          # Check if there are actual changes in database.json
+          git pull origin main --rebase
           git add database.json
-          
-          if git diff --cached --quiet; then
-            echo "No changes detected in database.json. Skipping commit."
+          if git diff --staged --quiet; then
+            echo "Nothing to commit"
           else
-            echo "Changes detected. Committing..."
-            git commit -m "Automated: Bot ${{ github.event.inputs.botId }} marked as sent"
+            git commit -m "Automated Bot Update: $(date)"
             git push origin main
           fi
