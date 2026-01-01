@@ -6,163 +6,168 @@ on:
       botId:
         description: 'ID of the bot to send manually'
         required: false
-      title:
-        description: 'Post Title'
-        required: false
-      message:
-        description: 'Post Message'
-        required: false
   schedule:
     - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
 
 jobs:
   process-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Process Bots
-        env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Processor Script
         run: |
-          node -e "
-          const fs = require('fs');
-          const https = require('https');
+          cat << 'EOF' > process_bot.mjs
+          import fs from 'fs';
+          import https from 'https';
 
-          async function postToDiscord(title, message, botId) {
+          const WEBHOOK_URL = process.env.WEBHOOK_URL;
+          const MANUAL_ID = process.env.MANUAL_BOT_ID;
+
+          async function sendToDiscord(title, message) {
             return new Promise((resolve) => {
-              try {
-                const url = new URL(process.env.WEBHOOK_URL);
-                const payload = {
-                  content: \`**\${title}**\\n\\n\${message}\`,
-                  thread_name: title,
-                  allowed_mentions: { parse: [] }
-                };
+              // FORUM CHANNEL FIX:
+              // 'thread_name' is required for Forums (becomes the title).
+              // 'content' is the message inside the post.
+              const payload = JSON.stringify({
+                content: message,
+                thread_name: title, 
+                username: "Leaf"
+              });
 
-                const data = JSON.stringify(payload);
-                const options = {
-                  hostname: url.hostname,
-                  path: url.pathname + url.search,
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(data)
-                  },
-                  timeout: 10000
-                };
+              const url = new URL(WEBHOOK_URL);
+              const options = {
+                hostname: url.hostname,
+                path: url.pathname + url.search,
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payload)
+                }
+              };
 
-                const req = https.request(options, (res) => {
-                  let responseData = '';
-                  res.on('data', (chunk) => responseData += chunk);
-                  res.on('end', () => {
-                    if (res.statusCode >= 200 && res.statusCode < 300) {
-                      console.log(\`✅ Sent: \${title}\`);
-                      resolve({ success: true, botId });
-                    } else {
-                      console.error(\`❌ API Error (\${res.statusCode}): \${responseData}\`);
-                      resolve({ success: false, error: responseData, botId });
-                    }
-                  });
+              const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => {
+                  if (res.statusCode >= 200 && res.statusCode < 300) {
+                    resolve({ success: true });
+                  } else {
+                    console.error(`Discord API Error: ${res.statusCode} - ${data}`);
+                    resolve({ success: false, error: data });
+                  }
                 });
-                
-                req.on('error', (e) => resolve({ success: false, error: e.message, botId }));
-                req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout', botId }); });
-                req.write(data);
-                req.end();
-              } catch (error) {
-                resolve({ success: false, error: error.message, botId });
-              }
+              });
+
+              req.on('error', (e) => resolve({ success: false, error: e.message }));
+              req.write(payload);
+              req.end();
             });
           }
 
           async function run() {
-            try {
-              if (!fs.existsSync('database.json')) return;
+            if (!fs.existsSync('database.json')) return;
+            
+            const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
+            const now = new Date();
+            let dirty = false;
 
-              const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
-              const now = new Date();
-              let hasChanges = false;
+            // 1. Handle Manual Trigger
+            if (MANUAL_ID && db.bots && db.bots[MANUAL_ID]) {
+              const bot = db.bots[MANUAL_ID];
+              console.log(`Processing Manual Bot: ${bot.title}`);
               
-              const manualBotId = '${{ github.event.inputs.botId }}';
+              const result = await sendToDiscord(bot.title, bot.message);
               
-              if (manualBotId && db.bots && db.bots[manualBotId]) {
-                 console.log(\`Manual trigger for: \${manualBotId}\`);
-                 const bot = db.bots[manualBotId];
-                 const result = await postToDiscord(bot.title, bot.message, manualBotId);
-                 if (result.success) {
-                   bot.sent = true;
-                   bot.status = 'sent';
-                   bot.sentTime = now.toISOString();
-                   bot.scheduled = false;
-                   hasChanges = true;
-                 }
+              if (result.success) {
+                bot.sent = true;
+                bot.status = 'sent';
+                bot.sentTime = now.toISOString();
+                bot.scheduled = false;
+                bot.isProcessing = false;
+                dirty = true;
+                console.log('✅ Manual Send Success');
+              } else {
+                console.log('❌ Manual Send Failed');
+                process.exit(1); 
               }
+            }
 
-              if (db.bots) {
-                for (const [botId, bot] of Object.entries(db.bots)) {
-                  if (bot.sent || bot.cancelled || bot.isProcessing) continue;
+            // 2. Handle Scheduled Bots
+            if (db.bots) {
+              for (const [id, bot] of Object.entries(db.bots)) {
+                // Skip if sent, cancelled, or processing
+                if (bot.sent || bot.cancelled) continue;
+
+                // Check Schedule
+                if (bot.scheduled && bot.scheduledTime) {
+                  const scheduleDate = new Date(bot.scheduledTime);
                   
-                  if (bot.scheduled && bot.scheduledTime) {
-                    const scheduledTime = new Date(bot.scheduledTime);
+                  // If time has passed
+                  if (scheduleDate <= now) {
+                    console.log(`Time match for: ${bot.title}`);
                     
-                    if (scheduledTime <= now) {
-                      console.log(\`Processing scheduled bot: \${bot.title}\`);
-                      bot.isProcessing = true;
-                      
-                      const result = await postToDiscord(bot.title, bot.message, botId);
-                      
-                      if (result.success) {
-                        bot.sent = true;
-                        bot.status = 'sent';
-                        bot.sentTime = now.toISOString();
-                        bot.scheduled = false;
-                      } else {
-                        bot.lastError = result.error;
-                        bot.errorCount = (bot.errorCount || 0) + 1;
-                        if (bot.errorCount >= 5) bot.scheduled = false;
-                      }
-                      
-                      bot.isProcessing = false;
-                      bot.lastAttempt = now.toISOString();
-                      hasChanges = true;
-                      
-                      await new Promise(r => setTimeout(r, 1000));
+                    const result = await sendToDiscord(bot.title, bot.message);
+                    
+                    if (result.success) {
+                      bot.sent = true;
+                      bot.status = 'sent';
+                      bot.sentTime = now.toISOString();
+                      bot.scheduled = false;
+                      console.log(`✅ Scheduled Send Success: ${bot.title}`);
+                    } else {
+                      bot.lastError = result.error;
+                      bot.errorCount = (bot.errorCount || 0) + 1;
+                      console.log(`❌ Scheduled Send Failed: ${bot.title}`);
+                      // Stop retrying after 3 fails
+                      if (bot.errorCount > 3) bot.scheduled = false;
                     }
+                    
+                    dirty = true;
+                    // Add small delay to prevent rate limits
+                    await new Promise(r => setTimeout(r, 1000));
                   }
                 }
               }
+            }
 
-              if (hasChanges) {
-                fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
-              }
-            } catch (error) {
-              console.error('Script Error:', error);
-              process.exit(1);
+            if (dirty) {
+              fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
+              console.log('Database updated.');
+            } else {
+              console.log('No changes needed.');
             }
           }
 
           run();
-          "
+          EOF
 
-      - name: Commit Changes
+      - name: Run Processor
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MANUAL_BOT_ID: ${{ github.event.inputs.botId }}
+        run: node process_bot.mjs
+
+      - name: Commit Database Changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add database.json
           if ! git diff --staged --quiet; then
-            git commit -m "Bot: Update status [skip ci]"
+            git commit -m "Bot: Status Update [skip ci]"
             git pull origin main --rebase
             git push origin main
+          else
+            console.log("No changes to commit")
           fi
