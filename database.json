@@ -1055,6 +1055,21 @@
       "cancelled": false,
       "isProcessing": false,
       "errorCount": 0
+    },
+    "bot_1767308631509_bdykbafvy": {
+      "id": "bot_1767308631509_bdykbafvy",
+      "title": "assss54354325",
+      "message": "2326232",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-01-01T23:03:51.509Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
