@@ -903,13 +903,13 @@
       "id": "1767288095039",
       "title": "Hshdhhdhdhfhf",
       "message": "Hdhdhjdhdjfjrjjdj",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-01-01T17:23:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-01-01T17:21:35.039Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-01-01T17:26:38.303Z",
       "cancelled": false,
       "isProcessing": false
     }
