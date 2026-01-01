@@ -828,6 +828,20 @@
       "status": "cancelled",
       "sentTime": null,
       "cancelled": true
+    },
+    "1767281469190": {
+      "id": "1767281469190",
+      "title": "gg",
+      "message": "egg",
+      "scheduled": true,
+      "scheduledTime": "2026-01-01T15:32:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T15:31:09.191Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
