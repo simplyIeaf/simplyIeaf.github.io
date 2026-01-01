@@ -944,6 +944,21 @@
       "errorCount": 4,
       "lastError": "Discord API returned 400",
       "lastAttempt": "2026-01-01T18:19:26.094Z"
+    },
+    "bot_1767291596604_ldxy6r9xz": {
+      "id": "bot_1767291596604_ldxy6r9xz",
+      "title": "Vsuvsvushs",
+      "message": "Zjhvjzvbzvhvzj",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T18:19:56.604Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
