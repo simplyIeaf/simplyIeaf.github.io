@@ -1136,9 +1136,9 @@
       "timezone": "Europe/Paris",
       "created": "2026-01-01T23:24:06.441Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false
     },
     "bot_1767309887444": {
@@ -1153,7 +1153,8 @@
       "status": "scheduled",
       "sentTime": null,
       "cancelled": false,
-      "isProcessing": false
+      "isProcessing": false,
+      "lastError": "Workflow trigger failed: 404"
     }
   }
 }
