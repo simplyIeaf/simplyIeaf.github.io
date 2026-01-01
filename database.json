@@ -912,6 +912,21 @@
       "sentTime": "2026-01-01T17:26:38.303Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1767290420849_nqqfzukk9": {
+      "id": "bot_1767290420849_nqqfzukk9",
+      "title": "Vsuvsvushs",
+      "message": "Zjhvjzvbzvhvzj",
+      "scheduled": true,
+      "scheduledTime": "2026-01-01T18:02:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-01T18:00:20.849Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false,
+      "errorCount": 0
     }
   }
 }
