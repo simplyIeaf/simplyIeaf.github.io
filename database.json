@@ -1035,9 +1035,9 @@
       "timezone": "",
       "created": "2026-01-01T23:03:21.940Z",
       "sent": false,
-      "status": "pending",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false,
       "errorCount": 0
     }
