@@ -1160,13 +1160,13 @@
       "id": "bot_1767310489765",
       "title": "s",
       "message": "s",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-01-01T23:35:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-01-01T23:34:49.765Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-01-01T23:44:36.539Z",
       "cancelled": false,
       "isProcessing": false
     }
