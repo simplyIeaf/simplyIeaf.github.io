@@ -1007,7 +1007,9 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false,
-      "errorCount": 0
+      "errorCount": 2,
+      "lastError": "Discord API returned 400",
+      "lastAttempt": "2026-01-01T22:22:12.925Z"
     }
   }
 }
