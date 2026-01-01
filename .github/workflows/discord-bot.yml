@@ -22,113 +22,226 @@ on:
 jobs:
   process-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Process and Send Webhook
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Process Scheduled Bots
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node -e "
           const fs = require('fs');
           const https = require('https');
 
-          async function postToDiscord(title, message) {
-            return new Promise((resolve, reject) => {
-              const url = new URL(process.env.WEBHOOK_URL);
-              const data = JSON.stringify({
-                thread_name: title,
-                content: message
-              });
+          async function postToDiscord(title, message, botId = null) {
+            return new Promise((resolve) => {
+              try {
+                const url = new URL(process.env.WEBHOOK_URL);
+                
+                const isThreadWebhook = url.pathname.includes('threads');
+                
+                const payload = isThreadWebhook ? {
+                  thread_name: title,
+                  content: message
+                } : {
+                  content: \`**\${title}**\\n\\n\${message}\`,
+                  allowed_mentions: { parse: [] }
+                };
 
-              const options = {
-                hostname: url.hostname,
-                path: url.pathname + url.search,
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(data)
-                }
-              };
+                const data = JSON.stringify(payload);
 
-              const req = https.request(options, (res) => {
-                res.on('data', () => {});
-                res.on('end', () => resolve());
-              });
-              
-              req.on('error', (e) => reject(e));
-              req.write(data);
-              req.end();
+                const options = {
+                  hostname: url.hostname,
+                  path: url.pathname + url.search,
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(data)
+                  },
+                  timeout: 10000
+                };
+
+                const req = https.request(options, (res) => {
+                  let responseData = '';
+                  
+                  res.on('data', (chunk) => {
+                    responseData += chunk;
+                  });
+                  
+                  res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                      console.log(\`✅ Successfully sent: \${title}\`);
+                      resolve({ success: true, botId });
+                    } else {
+                      console.error(\`❌ Discord API Error (\${res.statusCode}): \${responseData}\`);
+                      resolve({ 
+                        success: false, 
+                        error: \`Discord API returned \${res.statusCode}\`,
+                        botId 
+                      });
+                    }
+                  });
+                });
+                
+                req.on('error', (e) => {
+                  console.error(\`❌ Network error: \${e.message}\`);
+                  resolve({ 
+                    success: false, 
+                    error: e.message,
+                    botId 
+                  });
+                });
+                
+                req.on('timeout', () => {
+                  req.destroy();
+                  resolve({ 
+                    success: false, 
+                    error: 'Request timeout',
+                    botId 
+                  });
+                });
+                
+                req.write(data);
+                req.end();
+              } catch (error) {
+                resolve({ 
+                  success: false, 
+                  error: error.message,
+                  botId 
+                });
+              }
             });
           }
 
-          async function run() {
-            if (!fs.existsSync('database.json')) {
-              console.error('database.json not found');
-              process.exit(1);
-            }
-
-            const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
-            const now = new Date();
-            let hasChanges = false;
-            
-            const inputBotId = '${{ github.event.inputs.botId }}';
-            const inputTitle = '${{ github.event.inputs.title }}';
-            const inputMsg = '${{ github.event.inputs.message }}';
-
-            if (inputTitle && inputMsg) {
-              await postToDiscord(inputTitle, inputMsg);
-              if (inputBotId && db.bots[inputBotId]) {
-                db.bots[inputBotId].sent = true;
-                db.bots[inputBotId].status = 'sent';
-                db.bots[inputBotId].sentTime = new Date().toISOString();
-                db.bots[inputBotId].scheduled = false;
-                hasChanges = true;
+          async function processDatabase() {
+            try {
+              if (!fs.existsSync('database.json')) {
+                console.log('No database.json found');
+                return false;
               }
-            } 
-            
-            for (const [id, bot] of Object.entries(db.bots || {})) {
-              if (bot.scheduled && !bot.sent && !bot.cancelled) {
-                const scheduledTime = new Date(bot.scheduledTime);
-                if (scheduledTime <= now) {
-                  try {
-                    await postToDiscord(bot.title, bot.message);
-                    bot.sent = true;
-                    bot.status = 'sent';
-                    bot.sentTime = new Date().toISOString();
-                    bot.scheduled = false;
-                    hasChanges = true;
-                    await new Promise(r => setTimeout(r, 1000));
-                  } catch (err) {
-                    console.error('Error sending ' + id + ':', err);
+
+              const rawData = fs.readFileSync('database.json', 'utf8');
+              const db = JSON.parse(rawData);
+              const now = new Date();
+              let hasChanges = false;
+              
+              const inputBotId = '${{ github.event.inputs.botId }}';
+              const inputTitle = '${{ github.event.inputs.title }}';
+              const inputMsg = '${{ github.event.inputs.message }}';
+
+              if (inputTitle && inputMsg && inputBotId && db.bots && db.bots[inputBotId]) {
+                console.log(\`Processing trigger for bot: \${inputBotId}\`);
+                const result = await postToDiscord(inputTitle, inputMsg, inputBotId);
+                
+                if (result.success) {
+                  db.bots[inputBotId].sent = true;
+                  db.bots[inputBotId].status = 'sent';
+                  db.bots[inputBotId].sentTime = new Date().toISOString();
+                  db.bots[inputBotId].scheduled = false;
+                  db.bots[inputBotId].lastAttempt = now.toISOString();
+                  hasChanges = true;
+                } else {
+                  db.bots[inputBotId].lastError = result.error;
+                  db.bots[inputBotId].lastAttempt = now.toISOString();
+                  db.bots[inputBotId].errorCount = (db.bots[inputBotId].errorCount || 0) + 1;
+                  hasChanges = true;
+                }
+              }
+              
+              if (db.bots) {
+                for (const [botId, bot] of Object.entries(db.bots)) {
+                  if (bot.sent || bot.cancelled || bot.isProcessing) continue;
+                  
+                  if (bot.scheduled && bot.scheduledTime) {
+                    const scheduledTime = new Date(bot.scheduledTime);
+                    const timeDiff = scheduledTime.getTime() - now.getTime();
+                    
+                    if (timeDiff <= 300000) {
+                      console.log(\`Processing scheduled bot: \${botId} - \${bot.title}\`);
+                      
+                      bot.isProcessing = true;
+                      hasChanges = true;
+                      
+                      const result = await postToDiscord(bot.title, bot.message, botId);
+                      
+                      if (result.success) {
+                        bot.sent = true;
+                        bot.status = 'sent';
+                        bot.sentTime = new Date().toISOString();
+                        bot.scheduled = false;
+                        console.log(\`✅ Bot \${botId} sent successfully\`);
+                      } else {
+                        bot.lastError = result.error;
+                        bot.errorCount = (bot.errorCount || 0) + 1;
+                        console.log(\`❌ Bot \${botId} failed: \${result.error}\`);
+                        
+                        if (bot.errorCount >= 3) {
+                          bot.status = 'failed';
+                          bot.scheduled = false;
+                        }
+                      }
+                      
+                      bot.isProcessing = false;
+                      bot.lastAttempt = now.toISOString();
+                      hasChanges = true;
+                      
+                      await new Promise(r => setTimeout(r, 1000));
+                    }
                   }
                 }
               }
-            }
 
-            if (hasChanges) {
-              fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
+              if (hasChanges) {
+                fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
+                console.log('Database updated');
+                return true;
+              }
+              
+              return false;
+              
+            } catch (error) {
+              console.error('Error processing database:', error);
+              return false;
             }
           }
 
-          run();
+          (async () => {
+            try {
+              const updated = await processDatabase();
+              process.exit(updated ? 0 : 1);
+            } catch (error) {
+              console.error('Fatal error:', error);
+              process.exit(1);
+            }
+          })();
           "
 
       - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          git add database.json
-          
-          if git diff --cached --quiet; then
-            echo "No changes detected."
+          if git diff --quiet; then
+            echo "No changes to commit"
           else
-            git commit -m "Automated: Bot status sync [$(date)]"
-            git pull origin main --rebase -X theirs
+            git add database.json
+            
+            git commit -m "Bot: Process scheduled posts [$(date +'%Y-%m-%d %H:%M:%S')]"
+            
+            git pull origin main --rebase
             git push origin main
           fi
