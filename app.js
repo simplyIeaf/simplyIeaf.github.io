@@ -1209,7 +1209,7 @@ const app = {
         this.switchAdminTab('create');
         
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
-        document.getElementById('edit-title').value = s.title;
+        document.getElementById('edit-title').value = s.displayTitle || s.title;
         document.getElementById('edit-visibility').value = s.visibility;
         document.getElementById('edit-expire').value = s.expiration || '';
         
@@ -1354,6 +1354,7 @@ const app = {
             
             const scriptData = {
                 title: title,
+                displayTitle: title,
                 visibility: visibility,
                 description: desc,
                 expiration: expiration || null,
@@ -1416,32 +1417,107 @@ const app = {
         const indexPath = `${scriptDir}/index.html`;
         const rawFilePath = `${rawDir}/${filename}`;
         
-        const scriptViewerHTML = `
-<!DOCTYPE html>
+        const now = new Date();
+        const formattedDate = now.toLocaleDateString('en-US', {
+            month: '2-digit',
+            day: '2-digit',
+            year: 'numeric'
+        });
+        
+        const escapedScriptId = utils.escapeHtml(scriptId);
+        const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        const scriptViewerHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${scriptId} - Leaf's Scripts</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
-    <script>hljs.highlightAll();</script>
-    <style>
-        body { margin: 0; padding: 20px; background: #0a0a0a; color: #fff; font-family: monospace; }
-        pre { background: #1a1a1a; padding: 20px; border-radius: 8px; overflow-x: auto; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        .header { margin-bottom: 20px; }
-        .back-btn { display: inline-block; margin-bottom: 20px; color: #10b981; text-decoration: none; }
-    </style>
+    <title>${escapedScriptId} - Leaf's Scripts</title>
+    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
+    <link rel="stylesheet" href="../../style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <a href="/" class="back-btn">← Back to scripts</a>
-        <div class="header">
-            <h1>${scriptId}</h1>
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="nav-left">
+                <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
+                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
+                    <span class="nav-title">Leaf's Scripts</span>
+                </a>
+            </div>
+            <div class="nav-right">
+                <a href="../../index.html" class="btn btn-secondary btn-sm">Back</a>
+            </div>
         </div>
-        <pre><code class="language-lua">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+    </nav>
+    
+    <div class="container">
+        <div class="script-header-lg">
+            <div>
+                <h1>${escapedScriptId}</h1>
+                <div class="meta-row">
+                    <span class="meta-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        <span>${formattedDate}</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="code-box">
+            <div class="toolbar">
+                <div class="file-info">raw/${filename}</div>
+                <div class="toolbar-right">
+                    <button class="btn btn-sm" onclick="downloadScript()">Download</button>
+                    <button class="btn btn-sm" onclick="copyScript(this)">Copy</button>
+                    <a href="raw/${filename}" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
+                </div>
+            </div>
+            <pre><code id="code-display" class="language-lua">Loading...</code></pre>
+        </div>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script>
+        const filename = '${filename}';
+        const scriptId = '${scriptId}';
+        
+        async function loadScript() {
+            try {
+                const res = await fetch(\`raw/\${filename}\`);
+                const code = await res.text();
+                document.getElementById('code-display').textContent = code;
+                Prism.highlightAll();
+            } catch(e) {
+                document.getElementById('code-display').textContent = '-- Error loading source';
+            }
+        }
+        
+        function copyScript(btn) {
+            const code = document.getElementById('code-display').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const original = btn.innerText;
+                btn.innerText = 'Copied!';
+                setTimeout(() => btn.innerText = original, 2000);
+            });
+        }
+        
+        function downloadScript() {
+            const code = document.getElementById('code-display').textContent;
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(code));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+        
+        loadScript();
+    </script>
 </body>
 </html>`;
         
