@@ -597,9 +597,9 @@
       "description": "",
       "expiration": null,
       "filename": "better-admin-panel-localscript.lua",
-      "size": 24,
-      "created": "2026-01-02T13:40:00.166Z",
-      "updated": "2026-01-02T13:40:00.166Z"
+      "size": 15115,
+      "created": "2026-01-02T20:12:01.333Z",
+      "updated": "2026-01-02T20:12:01.333Z"
     },
     "Better Admin Panel ServerScript": {
       "title": "Better Admin Panel ServerScript",
