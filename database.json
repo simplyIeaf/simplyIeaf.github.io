@@ -1091,9 +1091,9 @@
       "timezone": "",
       "created": "2026-01-01T23:22:30.053Z",
       "sent": false,
-      "status": "pending",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false
     },
     "bot_1767309797587": {
