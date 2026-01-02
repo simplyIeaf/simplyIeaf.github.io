@@ -619,16 +619,6 @@
       "size": 14,
       "created": "2026-01-02T12:47:47.045Z",
       "updated": "2026-01-02T12:47:47.045Z"
-    },
-    "dsadsdsd": {
-      "title": "dsadsdsd",
-      "visibility": "PRIVATE",
-      "description": "",
-      "expiration": null,
-      "filename": "dsadsdsd.lua",
-      "size": 29,
-      "created": "2026-01-02T12:55:35.017Z",
-      "updated": "2026-01-02T12:55:35.017Z"
     }
   },
   "bots": {
