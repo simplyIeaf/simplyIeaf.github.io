@@ -609,17 +609,6 @@
       "size": 51065,
       "created": "2025-12-30T14:14:56.553Z",
       "updated": "2025-12-30T14:14:56.553Z"
-    },
-    "ddddd": {
-      "title": "ddddd",
-      "displayTitle": "ddddd",
-      "visibility": "PUBLIC",
-      "description": "",
-      "expiration": null,
-      "filename": "ddddd.lua",
-      "size": 10,
-      "created": "2026-01-02T13:15:43.003Z",
-      "updated": "2026-01-02T13:15:43.003Z"
     }
   },
   "bots": {
