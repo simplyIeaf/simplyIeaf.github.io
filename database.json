@@ -1210,6 +1210,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1767396164006": {
+      "id": "bot_1767396164006",
+      "title": "Owner has joined the game!",
+      "message": "StarterPlayerScripts Script Link:\nhttps://simplyieaf.github.io/scripts/owner-has-joined-the-game/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-01-03T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-02T23:22:44.006Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
