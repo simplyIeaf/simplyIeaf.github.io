@@ -602,13 +602,14 @@
     },
     "Better Admin Panel ServerScript": {
       "title": "Better Admin Panel ServerScript",
-      "visibility": "UNLISTED",
+      "displayTitle": "Better Admin Panel ServerScript",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "better-admin-panel-serverscript.lua",
-      "size": 51065,
-      "created": "2025-12-30T14:14:56.553Z",
-      "updated": "2025-12-30T14:14:56.553Z"
+      "size": 24,
+      "created": "2026-01-02T13:39:22.091Z",
+      "updated": "2026-01-02T13:39:22.091Z"
     },
     "Owner has joined the game!": {
       "title": "Owner has joined the game!",
