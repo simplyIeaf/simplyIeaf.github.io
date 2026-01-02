@@ -609,6 +609,16 @@
       "size": 51065,
       "created": "2025-12-30T14:14:56.553Z",
       "updated": "2025-12-30T14:14:56.553Z"
+    },
+    "Owner has joined the game!": {
+      "title": "Owner has joined the game!",
+      "visibility": "UNLISTED",
+      "description": "<p><br></p>",
+      "expiration": null,
+      "filename": "owner-has-joined-the-game.lua",
+      "size": 1455,
+      "created": "2026-01-02T12:42:32.063Z",
+      "updated": "2026-01-02T12:42:32.063Z"
     }
   },
   "bots": {
