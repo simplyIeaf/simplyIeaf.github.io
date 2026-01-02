@@ -592,13 +592,14 @@
     },
     "Better Admin Panel LocalScript": {
       "title": "Better Admin Panel LocalScript",
-      "visibility": "UNLISTED",
+      "displayTitle": "Better Admin Panel LocalScript",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "better-admin-panel-localscript.lua",
-      "size": 15115,
-      "created": "2025-12-30T14:14:05.764Z",
-      "updated": "2025-12-30T14:14:05.765Z"
+      "size": 24,
+      "created": "2026-01-02T13:40:00.166Z",
+      "updated": "2026-01-02T13:40:00.166Z"
     },
     "Better Admin Panel ServerScript": {
       "title": "Better Admin Panel ServerScript",
