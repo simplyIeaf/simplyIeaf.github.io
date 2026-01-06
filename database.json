@@ -633,6 +633,17 @@
       "size": 11449,
       "created": "2026-01-06T11:18:46.670Z",
       "updated": "2026-01-06T11:18:46.670Z"
+    },
+    "Trading System ServerScript": {
+      "title": "Trading System ServerScript",
+      "displayTitle": "Trading System ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "trading-system-serverscript.lua",
+      "size": 9580,
+      "created": "2026-01-06T11:19:56.785Z",
+      "updated": "2026-01-06T11:19:56.785Z"
     }
   },
   "bots": {
