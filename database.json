@@ -622,6 +622,17 @@
       "size": 1455,
       "created": "2026-01-02T13:18:10.645Z",
       "updated": "2026-01-02T13:18:10.645Z"
+    },
+    "Trading System LocalScript": {
+      "title": "Trading System LocalScript",
+      "displayTitle": "Trading System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "trading-system-localscript.lua",
+      "size": 11449,
+      "created": "2026-01-06T11:18:46.670Z",
+      "updated": "2026-01-06T11:18:46.670Z"
     }
   },
   "bots": {
