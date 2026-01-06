@@ -1246,6 +1246,20 @@
       "sentTime": null,
       "cancelled": true,
       "isProcessing": false
+    },
+    "bot_1767722644028": {
+      "id": "bot_1767722644028",
+      "title": "Trading System",
+      "message": "StarterPlayerScripts Script Link: \nhttps://simplyieaf.github.io/scripts/trading-system-localscript/index.html \nServerScriptService Script Link: \nhttps://simplyieaf.github.io/scripts/trading-system-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-01-08T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-06T18:04:04.028Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
