@@ -1200,9 +1200,9 @@
       "timezone": "Europe/Paris",
       "created": "2026-01-01T23:34:49.765Z",
       "sent": true,
-      "status": "sent",
+      "status": "cancelled",
       "sentTime": "2026-01-01T23:44:36.539Z",
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false
     },
     "bot_1767359994392": {
