@@ -1282,6 +1282,20 @@
       "sentTime": "2026-01-08T09:14:26.923Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1768371198684": {
+      "id": "bot_1768371198684",
+      "title": "Global Chat Announcements System",
+      "message": "ServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/global-chat-announcements-serverscript/index.html\nStarterPlayerScripts Script Link:\nhttps://simplyieaf.github.io/scripts/global-chat-announcements-localscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-01-14T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-14T06:13:18.684Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
