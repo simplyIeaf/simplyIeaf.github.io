@@ -644,6 +644,17 @@
       "size": 9580,
       "created": "2026-01-06T11:19:56.785Z",
       "updated": "2026-01-06T11:19:56.785Z"
+    },
+    "Global Chat Announcements ServerScript": {
+      "title": "Global Chat Announcements ServerScript",
+      "displayTitle": "Global Chat Announcements ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "global-chat-announcements-serverscript.lua",
+      "size": 1652,
+      "created": "2026-01-14T06:09:51.226Z",
+      "updated": "2026-01-14T06:09:51.226Z"
     }
   },
   "bots": {
