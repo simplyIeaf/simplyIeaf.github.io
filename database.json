@@ -615,13 +615,13 @@
     "Owner has joined the game!": {
       "title": "Owner has joined the game!",
       "displayTitle": "Owner has joined the game!",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "owner-has-joined-the-game.lua",
       "size": 1455,
-      "created": "2026-01-02T13:18:10.645Z",
-      "updated": "2026-01-02T13:18:10.645Z"
+      "created": "2026-01-18T16:31:21.105Z",
+      "updated": "2026-01-18T16:31:21.105Z"
     },
     "Trading System LocalScript": {
       "title": "Trading System LocalScript",
