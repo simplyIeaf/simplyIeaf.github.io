@@ -648,13 +648,13 @@
     "Global Chat Announcements ServerScript": {
       "title": "Global Chat Announcements ServerScript",
       "displayTitle": "Global Chat Announcements ServerScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "global-chat-announcements-serverscript.lua",
       "size": 1652,
-      "created": "2026-01-14T06:09:51.226Z",
-      "updated": "2026-01-14T06:09:51.226Z"
+      "created": "2026-01-18T16:29:29.812Z",
+      "updated": "2026-01-18T16:29:29.812Z"
     },
     "Global Chat Announcements LocalScript": {
       "title": "Global Chat Announcements LocalScript",
