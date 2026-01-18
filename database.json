@@ -626,13 +626,13 @@
     "Trading System LocalScript": {
       "title": "Trading System LocalScript",
       "displayTitle": "Trading System LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "trading-system-localscript.lua",
       "size": 11449,
-      "created": "2026-01-06T11:18:46.670Z",
-      "updated": "2026-01-06T11:18:46.670Z"
+      "created": "2026-01-18T16:30:51.060Z",
+      "updated": "2026-01-18T16:30:51.060Z"
     },
     "Trading System ServerScript": {
       "title": "Trading System ServerScript",
