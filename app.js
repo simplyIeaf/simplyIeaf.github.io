@@ -1222,7 +1222,7 @@ const app = {
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
             
-            const res = await fetch(`/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`);
+            const res = await fetch(`https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/refs/heads/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`);
             
             if (res.ok) {
                 const code = await res.text();
