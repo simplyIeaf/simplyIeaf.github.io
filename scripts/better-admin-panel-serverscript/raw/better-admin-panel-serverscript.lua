@@ -10,57 +10,66 @@ local Remote = ReplicatedStorage:FindFirstChild(RemoteName) or Instance.new("Rem
 Remote.Name = RemoteName
 Remote.Parent = ReplicatedStorage
 
+local CheckAdminName = "CheckAdmin"
+local CheckAdminRemote = ReplicatedStorage:FindFirstChild(CheckAdminName) or Instance.new("RemoteFunction")
+CheckAdminRemote.Name = CheckAdminName
+CheckAdminRemote.Parent = ReplicatedStorage
+
 local AdminUsernames = {"YourUsernameHere","AnotherAdminUser"}
 
 local function IsAdmin(player)
-	for _, adminName in pairs(AdminUsernames) do
-		if player.Name:lower() == adminName:lower() then return true end
-	end
-	return false
+    for _, adminName in pairs(AdminUsernames) do
+        if player.Name:lower() == adminName:lower() then return true end
+    end
+    return false
+end
+
+CheckAdminRemote.OnServerInvoke = function(player)
+    return IsAdmin(player)
 end
 
 local function GetPlayer(String, Speaker)
-	if not String then return nil end
-	if String == "me" then return {Speaker} end
-	if String == "all" then return Players:GetPlayers() end
-	if String == "others" then
-		local p = {}
-		for _, v in pairs(Players:GetPlayers()) do
-			if v ~= Speaker then table.insert(p, v) end
-		end
-		return p
-	end
-	if String == "random" then
-		local plrs = Players:GetPlayers()
-		return {plrs[math.random(1, #plrs)]}
-	end
-	if String == "admins" then
-		local p = {}
-		for _, v in pairs(Players:GetPlayers()) do
-			if IsAdmin(v) then table.insert(p, v) end
-		end
-		return p
-	end
-	if String == "nonadmins" then
-		local p = {}
-		for _, v in pairs(Players:GetPlayers()) do
-			if not IsAdmin(v) then table.insert(p, v) end
-		end
-		return p
-	end
-	if String == "friends" and Speaker then
-		local p = {}
-		for _, v in pairs(Players:GetPlayers()) do
-			if v ~= Speaker and v:IsFriendsWith(Speaker.UserId) then table.insert(p, v) end
-		end
-		return p
-	end
-	for _, v in pairs(Players:GetPlayers()) do
-		if v.Name:lower():sub(1, #String) == String:lower() or v.DisplayName:lower():sub(1, #String) == String:lower() then
-			return {v}
-		end
-	end
-	return nil
+    if not String then return nil end
+    if String == "me" then return {Speaker} end
+    if String == "all" then return Players:GetPlayers() end
+    if String == "others" then
+        local p = {}
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= Speaker then table.insert(p, v) end
+        end
+        return p
+    end
+    if String == "random" then
+        local plrs = Players:GetPlayers()
+        return {plrs[math.random(1, #plrs)]}
+    end
+    if String == "admins" then
+        local p = {}
+        for _, v in pairs(Players:GetPlayers()) do
+            if IsAdmin(v) then table.insert(p, v) end
+        end
+        return p
+    end
+    if String == "nonadmins" then
+        local p = {}
+        for _, v in pairs(Players:GetPlayers()) do
+            if not IsAdmin(v) then table.insert(p, v) end
+        end
+        return p
+    end
+    if String == "friends" and Speaker then
+        local p = {}
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= Speaker and v:IsFriendsWith(Speaker.UserId) then table.insert(p, v) end
+        end
+        return p
+    end
+    for _, v in pairs(Players:GetPlayers()) do
+        if v.Name:lower():sub(1, #String) == String:lower() or v.DisplayName:lower():sub(1, #String) == String:lower() then
+            return {v}
+        end
+    end
+    return nil
 end
 
 local Commands = {}
@@ -74,17 +83,17 @@ Commands.freeze = function(p) if p.Character and p.Character:FindFirstChild("Hum
 Commands.thaw = function(p) if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then p.Character.HumanoidRootPart.Anchored = false end end
 Commands.unfreeze = Commands.thaw
 Commands.jail = function(p)
-	if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-		local cf = p.Character.HumanoidRootPart.CFrame
-		local m = Instance.new("Model", workspace) m.Name = "Jail_"..p.Name
-		for i=1,4 do
-			local w = Instance.new("Part", m) w.Size = Vector3.new(6,10,1) w.Anchored = true w.Transparency = 0.5
-			w.CFrame = cf * CFrame.Angles(0, math.rad(i*90), 0) * CFrame.new(0,0,3)
-		end
-		local t = Instance.new("Part", m) t.Size = Vector3.new(6,1,6) t.Anchored = true t.Transparency = 0.5 t.CFrame = cf * CFrame.new(0,5,0)
-		local b = t:Clone() b.Parent = m b.CFrame = cf * CFrame.new(0,-4,0)
-		p.Character.HumanoidRootPart.CFrame = cf
-	end
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local cf = p.Character.HumanoidRootPart.CFrame
+        local m = Instance.new("Model", workspace) m.Name = "Jail_"..p.Name
+        for i=1,4 do
+            local w = Instance.new("Part", m) w.Size = Vector3.new(6,10,1) w.Anchored = true w.Transparency = 0.5
+            w.CFrame = cf * CFrame.Angles(0, math.rad(i*90), 0) * CFrame.new(0,0,3)
+        end
+        local t = Instance.new("Part", m) t.Size = Vector3.new(6,1,6) t.Anchored = true t.Transparency = 0.5 t.CFrame = cf * CFrame.new(0,5,0)
+        local b = t:Clone() b.Parent = m b.CFrame = cf * CFrame.new(0,-4,0)
+        p.Character.HumanoidRootPart.CFrame = cf
+    end
 end
 Commands.unjail = function(p) if workspace:FindFirstChild("Jail_"..p.Name) then workspace["Jail_"..p.Name]:Destroy() end end
 Commands.respawn = function(p) p:LoadCharacter() end
@@ -105,32 +114,32 @@ Commands.unjump = function(p) if p.Character and p.Character:FindFirstChild("Hum
 Commands.jp = Commands.jump
 Commands.unjp = Commands.unjump
 Commands.fly = function(p)
-	if p.Character and p.Character:FindFirstChild("Humanoid") then
-		local bg = Instance.new("BodyGyro", p.Character.HumanoidRootPart)
-		local bv = Instance.new("BodyVelocity", p.Character.HumanoidRootPart)
-		bg.MaxTorque = Vector3.new(9e9,9e9,9e9) bv.MaxForce = Vector3.new(9e9,9e9,9e9) bg.CFrame = p.Character.HumanoidRootPart.CFrame
-		local ft = Instance.new("BoolValue") ft.Name = "Flying" ft.Parent = p
-		p.Character.Humanoid.PlatformStand = true
-	end
+    if p.Character and p.Character:FindFirstChild("Humanoid") then
+        local bg = Instance.new("BodyGyro", p.Character.HumanoidRootPart)
+        local bv = Instance.new("BodyVelocity", p.Character.HumanoidRootPart)
+        bg.MaxTorque = Vector3.new(9e9,9e9,9e9) bv.MaxForce = Vector3.new(9e9,9e9,9e9) bg.CFrame = p.Character.HumanoidRootPart.CFrame
+        local ft = Instance.new("BoolValue") ft.Name = "Flying" ft.Parent = p
+        p.Character.Humanoid.PlatformStand = true
+    end
 end
 Commands.unfly = function(p)
-	if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-		for _, v in pairs(p.Character.HumanoidRootPart:GetChildren()) do if v:IsA("BodyGyro") or v:IsA("BodyVelocity") then v:Destroy() end end
-		if p:FindFirstChild("Flying") then p.Flying:Destroy() end
-		p.Character.Humanoid.PlatformStand = false
-	end
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        for _, v in pairs(p.Character.HumanoidRootPart:GetChildren()) do if v:IsA("BodyGyro") or v:IsA("BodyVelocity") then v:Destroy() end end
+        if p:FindFirstChild("Flying") then p.Flying:Destroy() end
+        p.Character.Humanoid.PlatformStand = false
+    end
 end
 Commands.noclip = function(p)
-	if p.Character then
-		for _, v in pairs(p.Character:GetDescendants()) do if v:IsA("BasePart") and v.CanCollide then v.CanCollide = false end end
-		local t = Instance.new("BoolValue") t.Name = "Noclip" t.Parent = p
-	end
+    if p.Character then
+        for _, v in pairs(p.Character:GetDescendants()) do if v:IsA("BasePart") and v.CanCollide then v.CanCollide = false end end
+        local t = Instance.new("BoolValue") t.Name = "Noclip" t.Parent = p
+    end
 end
 Commands.unnoclip = function(p)
-	if p.Character then
-		for _, v in pairs(p.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = true end end
-		if p:FindFirstChild("Noclip") then p.Noclip:Destroy() end
-	end
+    if p.Character then
+        for _, v in pairs(p.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = true end end
+        if p:FindFirstChild("Noclip") then p.Noclip:Destroy() end
+    end
 end
 Commands.sit = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.Sit = true end end
 Commands.unsit = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.Sit = false end end
@@ -149,9 +158,9 @@ Commands.unghost = function(p) if p.Character then for _,v in pairs(p.Character:
 Commands.lock = function(p) if p.Character then for _,v in pairs(p.Character:GetDescendants()) do if v:IsA("BasePart") then v.Locked = true end end end end
 Commands.unlock = function(p) if p.Character then for _,v in pairs(p.Character:GetDescendants()) do if v:IsA("BasePart") then v.Locked = false end end end end
 Commands.btools = function(p)
-	local a = Instance.new("HopperBin", p.Backpack) a.BinType = "Hammer"
-	local b = Instance.new("HopperBin", p.Backpack) b.BinType = "Clone"
-	local c = Instance.new("HopperBin", p.Backpack) c.BinType = "Grab"
+    local a = Instance.new("HopperBin", p.Backpack) a.BinType = "Hammer"
+    local b = Instance.new("HopperBin", p.Backpack) b.BinType = "Clone"
+    local c = Instance.new("HopperBin", p.Backpack) c.BinType = "Grab"
 end
 Commands.unbtools = function(p) for _,v in pairs(p.Backpack:GetChildren()) do if v:IsA("HopperBin") then v:Destroy() end end end
 Commands.sword = function(p) local s = Instance.new("Tool", p.Backpack) s.Name = "IronSword" local h = Instance.new("Part", s) h.Name = "Handle" h.Size = Vector3.new(1,4,1) end
@@ -173,22 +182,22 @@ Commands.unbighead = function(p) if p.Character and p.Character:FindFirstChild("
 Commands.smallhead = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.HeadScale.Value = 0.5 end end
 Commands.unsmallhead = Commands.unbighead
 Commands.giant = function(p)
-	if p.Character and p.Character:FindFirstChild("Humanoid") then
-		local h = p.Character.Humanoid
-		h.BodyDepthScale.Value = 4 h.BodyHeightScale.Value = 4 h.BodyWidthScale.Value = 4 h.HeadScale.Value = 4
-	end
+    if p.Character and p.Character:FindFirstChild("Humanoid") then
+        local h = p.Character.Humanoid
+        h.BodyDepthScale.Value = 4 h.BodyHeightScale.Value = 4 h.BodyWidthScale.Value = 4 h.HeadScale.Value = 4
+    end
 end
 Commands.ungiant = function(p)
-	if p.Character and p.Character:FindFirstChild("Humanoid") then
-		local h = p.Character.Humanoid
-		h.BodyDepthScale.Value = 1 h.BodyHeightScale.Value = 1 h.BodyWidthScale.Value = 1 h.HeadScale.Value = 1
-	end
+    if p.Character and p.Character:FindFirstChild("Humanoid") then
+        local h = p.Character.Humanoid
+        h.BodyDepthScale.Value = 1 h.BodyHeightScale.Value = 1 h.BodyWidthScale.Value = 1 h.HeadScale.Value = 1
+    end
 end
 Commands.tiny = function(p)
-	if p.Character and p.Character:FindFirstChild("Humanoid") then
-		local h = p.Character.Humanoid
-		h.BodyDepthScale.Value = 0.5 h.BodyHeightScale.Value = 0.5 h.BodyWidthScale.Value = 0.5 h.HeadScale.Value = 0.5
-	end
+    if p.Character and p.Character:FindFirstChild("Humanoid") then
+        local h = p.Character.Humanoid
+        h.BodyDepthScale.Value = 0.5 h.BodyHeightScale.Value = 0.5 h.BodyWidthScale.Value = 0.5 h.HeadScale.Value = 0.5
+    end
 end
 Commands.untiny = Commands.ungiant
 Commands.fat = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.BodyWidthScale.Value = 3 p.Character.Humanoid.BodyDepthScale.Value = 3 end end
@@ -218,13 +227,13 @@ Commands.unice = Commands.respawn
 Commands.char = function(p, a) if p.Character then p.CharacterAppearanceId = tonumber(a[2]) or p.UserId p:LoadCharacter() end end
 Commands.unchar = function(p) p.CharacterAppearanceId = p.UserId p:LoadCharacter() end
 Commands.creeper = function(p)
-	if p.Character then
-		p.Character.HumanoidRootPart.Transparency = 1
-		for _,v in pairs(p.Character:GetChildren()) do
-			if v:IsA("Accessory") then v:Destroy() end
-			if v:IsA("BasePart") then v.BrickColor = BrickColor.new("Bright green") v.Material = "Grass" end
-		end
-	end
+    if p.Character then
+        p.Character.HumanoidRootPart.Transparency = 1
+        for _,v in pairs(p.Character:GetChildren()) do
+            if v:IsA("Accessory") then v:Destroy() end
+            if v:IsA("BasePart") then v.BrickColor = BrickColor.new("Bright green") v.Material = "Grass" end
+        end
+    end
 end
 Commands.uncreeper = Commands.respawn
 Commands.name = function(p, a) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.DisplayName = a[2] or "Admin" end end
@@ -235,18 +244,18 @@ Commands.fling = function(p) if p.Character and p.Character:FindFirstChild("Huma
 Commands.spin = function(p) if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local v = Instance.new("BodyAngularVelocity", p.Character.HumanoidRootPart) v.AngularVelocity = Vector3.new(0,50,0) v.MaxForce = Vector3.new(0,math.huge,0) v.Name = "AdminSpin" end end
 Commands.unspin = function(p) if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.HumanoidRootPart:FindFirstChild("AdminSpin") then p.Character.HumanoidRootPart.AdminSpin:Destroy() end end
 Commands.seizure = function(p)
-	if p.Character then
-		p.Character.Humanoid.PlatformStand = true
-		local v = Instance.new("BodyAngularVelocity", p.Character.HumanoidRootPart)
-		v.AngularVelocity = Vector3.new(math.random(-50,50),math.random(-50,50),math.random(-50,50))
-		v.Name = "Seizure"
-	end
+    if p.Character then
+        p.Character.Humanoid.PlatformStand = true
+        local v = Instance.new("BodyAngularVelocity", p.Character.HumanoidRootPart)
+        v.AngularVelocity = Vector3.new(math.random(-50,50),math.random(-50,50),math.random(-50,50))
+        v.Name = "Seizure"
+    end
 end
 Commands.unseizure = function(p)
-	if p.Character then
-		p.Character.Humanoid.PlatformStand = false
-		if p.Character.HumanoidRootPart:FindFirstChild("Seizure") then p.Character.HumanoidRootPart.Seizure:Destroy() end
-	end
+    if p.Character then
+        p.Character.Humanoid.PlatformStand = false
+        if p.Character.HumanoidRootPart:FindFirstChild("Seizure") then p.Character.HumanoidRootPart.Seizure:Destroy() end
+    end
 end
 Commands.blind = function(p) local g = Instance.new("ScreenGui", p.PlayerGui) g.Name = "BlindGui" local f = Instance.new("Frame", g) f.Size = UDim2.new(1,0,1,0) f.BackgroundColor3 = Color3.new(0,0,0) end
 Commands.unblind = function(p) if p.PlayerGui:FindFirstChild("BlindGui") then p.PlayerGui.BlindGui:Destroy() end end
@@ -270,10 +279,10 @@ Commands.unambient = function() Lighting.Ambient = Color3.fromRGB(0,0,0) end
 Commands.shutdown = function() for _,v in pairs(Players:GetPlayers()) do v:Kick("Server Shutdown") end end
 Commands.clean = function() for _,v in pairs(workspace:GetChildren()) do if not Players:GetPlayerFromCharacter(v) and not v:IsA("Terrain") and not v:IsA("Camera") then v:Destroy() end end end
 Commands.loopkill = function(p)
-	local b = Instance.new("BoolValue", p) b.Name = "LoopKill"
-	task.spawn(function()
-		while b.Parent do if p.Character then p.Character:BreakJoints() end task.wait(3) end
-	end)
+    local b = Instance.new("BoolValue", p) b.Name = "LoopKill"
+    task.spawn(function()
+        while b.Parent do if p.Character then p.Character:BreakJoints() end task.wait(3) end
+    end)
 end
 Commands.unloopkill = function(p) if p:FindFirstChild("LoopKill") then p.LoopKill:Destroy() end end
 Commands.message = function(p, a) local m = Instance.new("Message", workspace) m.Text = table.concat(a, " ", 2) Debris:AddItem(m,4) end
@@ -323,43 +332,43 @@ Commands.unblockhead = Commands.respawn
 Commands.r6 = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.RigType = Enum.HumanoidRigType.R6 p:LoadCharacter() end end
 Commands.r15 = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.RigType = Enum.HumanoidRigType.R15 p:LoadCharacter() end end
 Commands.control = function(p, a, s)
-	if p.Character and s.Character then
-		local humanoid = p.Character:FindFirstChild("Humanoid")
-		if humanoid then
-			humanoid.PlatformStand = true
-			local bp = Instance.new("BodyPosition", p.Character.HumanoidRootPart)
-			bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-			local bg = Instance.new("BodyGyro", p.Character.HumanoidRootPart)
-			bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-			local t = Instance.new("BoolValue") t.Name = "Controlled" t.Parent = p
-		end
-	end
+    if p.Character and s.Character then
+        local humanoid = p.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = true
+            local bp = Instance.new("BodyPosition", p.Character.HumanoidRootPart)
+            bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            local bg = Instance.new("BodyGyro", p.Character.HumanoidRootPart)
+            bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            local t = Instance.new("BoolValue") t.Name = "Controlled" t.Parent = p
+        end
+    end
 end
 Commands.uncontrol = function(p)
-	if p:FindFirstChild("Controlled") then p.Controlled:Destroy() end
-	if p.Character and p.Character:FindFirstChild("Humanoid") then
-		p.Character.Humanoid.PlatformStand = false
-		for _, v in pairs(p.Character.HumanoidRootPart:GetChildren()) do
-			if v:IsA("BodyPosition") or v:IsA("BodyGyro") then v:Destroy() end
-		end
-	end
+    if p:FindFirstChild("Controlled") then p.Controlled:Destroy() end
+    if p.Character and p.Character:FindFirstChild("Humanoid") then
+        p.Character.Humanoid.PlatformStand = false
+        for _, v in pairs(p.Character.HumanoidRootPart:GetChildren()) do
+            if v:IsA("BodyPosition") or v:IsA("BodyGyro") then v:Destroy() end
+        end
+    end
 end
 Commands.punish = function(p) if p.Character then p.Character.Parent = ServerStorage end end
 Commands.unpunish = function(p) if ServerStorage:FindFirstChild(p.Name) then ServerStorage[p.Name].Parent = workspace end end
 Commands.crash = function(p) for i=1,100 do local s = Instance.new("Sound", workspace) s.SoundId = "rbxassetid://" s:Play() Debris:AddItem(s,0.1) end end
 Commands.lag = function(p) for i=1,100 do local part = Instance.new("Part", workspace) part.Size = Vector3.new(100,100,100) part.Position = Vector3.new(0,1000,0) Debris:AddItem(part,10) end end
 Commands.rainbow = function(p)
-	if p.Character then
-		local t = Instance.new("BoolValue") t.Name = "Rainbow" t.Parent = p
-		task.spawn(function()
-			while t.Parent do
-				for _, v in pairs(p.Character:GetChildren()) do
-					if v:IsA("BasePart") then v.Color = Color3.fromHSV(tick()%5/5,1,1) end
-				end
-				task.wait(0.1)
-			end
-		end)
-	end
+    if p.Character then
+        local t = Instance.new("BoolValue") t.Name = "Rainbow" t.Parent = p
+        task.spawn(function()
+            while t.Parent do
+                for _, v in pairs(p.Character:GetChildren()) do
+                    if v:IsA("BasePart") then v.Color = Color3.fromHSV(tick()%5/5,1,1) end
+                end
+                task.wait(0.1)
+            end
+        end)
+    end
 end
 Commands.unrainbow = function(p) if p:FindFirstChild("Rainbow") then p.Rainbow:Destroy() end end
 Commands.walkspeed = Commands.speed
@@ -368,40 +377,40 @@ Commands.hipheight = function(p, a) if p.Character and p.Character:FindFirstChil
 Commands.maxhealth = function(p, a) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.MaxHealth = tonumber(a[2]) or 100 end end
 Commands.health = function(p, a) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid.Health = tonumber(a[2]) or 100 end end
 Commands.creeperloop = function(p)
-	local t = Instance.new("BoolValue") t.Name = "CreeperLoop" t.Parent = p
-	task.spawn(function()
-		while t.Parent do Commands.creeper(p) task.wait(0.5) end
-	end)
+    local t = Instance.new("BoolValue") t.Name = "CreeperLoop" t.Parent = p
+    task.spawn(function()
+        while t.Parent do Commands.creeper(p) task.wait(0.5) end
+    end)
 end
 Commands.uncreeperloop = function(p) if p:FindFirstChild("CreeperLoop") then p.CreeperLoop:Destroy() end Commands.uncreeper(p) end
 Commands.drophats = function(p)
-	if p.Character then
-		for _, v in pairs(p.Character:GetChildren()) do
-			if v:IsA("Accessory") then
-				v.Parent = workspace
-				v.Handle.CFrame = p.Character.HumanoidRootPart.CFrame
-				local bv = Instance.new("BodyVelocity", v.Handle)
-				bv.Velocity = Vector3.new(math.random(-10,10),20,math.random(-10,10))
-				Debris:AddItem(bv,1)
-			end
-		end
-	end
+    if p.Character then
+        for _, v in pairs(p.Character:GetChildren()) do
+            if v:IsA("Accessory") then
+                v.Parent = workspace
+                v.Handle.CFrame = p.Character.HumanoidRootPart.CFrame
+                local bv = Instance.new("BodyVelocity", v.Handle)
+                bv.Velocity = Vector3.new(math.random(-10,10),20,math.random(-10,10))
+                Debris:AddItem(bv,1)
+            end
+        end
+    end
 end
 Commands.orbit = function(p, a, s)
-	if p.Character and s.Character and s.Character:FindFirstChild("HumanoidRootPart") then
-		local t = Instance.new("BoolValue") t.Name = "Orbiting" t.Parent = p
-		local d = tonumber(a[3]) or 10
-		local sp = tonumber(a[4]) or 5
-		task.spawn(function()
-			local angle = 0
-			while t.Parent and p.Character and p.Character:FindFirstChild("HumanoidRootPart") do
-				angle = angle + sp/100
-				local o = Vector3.new(math.cos(angle)*d,0,math.sin(angle)*d)
-				p.Character.HumanoidRootPart.CFrame = s.Character.HumanoidRootPart.CFrame + o
-				task.wait()
-			end
-		end)
-	end
+    if p.Character and s.Character and s.Character:FindFirstChild("HumanoidRootPart") then
+        local t = Instance.new("BoolValue") t.Name = "Orbiting" t.Parent = p
+        local d = tonumber(a[3]) or 10
+        local sp = tonumber(a[4]) or 5
+        task.spawn(function()
+            local angle = 0
+            while t.Parent and p.Character and p.Character:FindFirstChild("HumanoidRootPart") do
+                angle = angle + sp/100
+                local o = Vector3.new(math.cos(angle)*d,0,math.sin(angle)*d)
+                p.Character.HumanoidRootPart.CFrame = s.Character.HumanoidRootPart.CFrame + o
+                task.wait()
+            end
+        end)
+    end
 end
 Commands.unorbit = function(p) if p:FindFirstChild("Orbiting") then p.Orbiting:Destroy() end end
 Commands.float = function(p) if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then local bf = Instance.new("BodyForce", p.Character.HumanoidRootPart) bf.Force = Vector3.new(0,workspace.Gravity*p.Character.HumanoidRootPart:GetMass(),0) bf.Name = "FloatForce" end end
@@ -415,42 +424,42 @@ Commands.unclone = function(p) for _, v in pairs(workspace:GetChildren()) do if 
 Commands.pet = function(p, a, s) if s.Character and s.Character:FindFirstChild("HumanoidRootPart") then local pet = Instance.new("Part", workspace) pet.Name = "Pet_"..p.Name pet.Size = Vector3.new(2,2,2) pet.BrickColor = BrickColor.new("Bright blue") pet.Material = Enum.Material.Neon local w = Instance.new("Weld", pet) w.Part0 = s.Character.HumanoidRootPart w.Part1 = pet w.C0 = CFrame.new(0,0,-5) end end
 Commands.unpet = function(p) for _, v in pairs(workspace:GetChildren()) do if v.Name:match("Pet_") then v:Destroy() end end end
 Commands.cage = function(p)
-	if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-		local cf = p.Character.HumanoidRootPart.CFrame
-		local cage = Instance.new("Model", workspace) cage.Name = "Cage_"..p.Name
-		for i=1,6 do
-			local side = Instance.new("Part", cage) side.Anchored = true side.Transparency = 0.3 side.Color = Color3.new(1,0,0)
-			if i==1 then side.Size = Vector3.new(10,10,1) side.CFrame = cf + Vector3.new(0,0,5)
-			elseif i==2 then side.Size = Vector3.new(10,10,1) side.CFrame = cf + Vector3.new(0,0,-5)
-			elseif i==3 then side.Size = Vector3.new(1,10,10) side.CFrame = cf + Vector3.new(5,0,0)
-			elseif i==4 then side.Size = Vector3.new(1,10,10) side.CFrame = cf + Vector3.new(-5,0,0)
-			elseif i==5 then side.Size = Vector3.new(10,1,10) side.CFrame = cf + Vector3.new(0,5,0)
-			elseif i==6 then side.Size = Vector3.new(10,1,10) side.CFrame = cf + Vector3.new(0,-5,0) end
-		end
-	end
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local cf = p.Character.HumanoidRootPart.CFrame
+        local cage = Instance.new("Model", workspace) cage.Name = "Cage_"..p.Name
+        for i=1,6 do
+            local side = Instance.new("Part", cage) side.Anchored = true side.Transparency = 0.3 side.Color = Color3.new(1,0,0)
+            if i==1 then side.Size = Vector3.new(10,10,1) side.CFrame = cf + Vector3.new(0,0,5)
+            elseif i==2 then side.Size = Vector3.new(10,10,1) side.CFrame = cf + Vector3.new(0,0,-5)
+            elseif i==3 then side.Size = Vector3.new(1,10,10) side.CFrame = cf + Vector3.new(5,0,0)
+            elseif i==4 then side.Size = Vector3.new(1,10,10) side.CFrame = cf + Vector3.new(-5,0,0)
+            elseif i==5 then side.Size = Vector3.new(10,1,10) side.CFrame = cf + Vector3.new(0,5,0)
+            elseif i==6 then side.Size = Vector3.new(10,1,10) side.CFrame = cf + Vector3.new(0,-5,0) end
+        end
+    end
 end
 Commands.uncage = function(p) for _, v in pairs(workspace:GetChildren()) do if v.Name:match("Cage_") then v:Destroy() end end end
 Commands.firework = function(p)
-	if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-		local pos = p.Character.HumanoidRootPart.Position
-		for i=1,20 do
-			local part = Instance.new("Part", workspace) part.Size = Vector3.new(0.5,0.5,0.5)
-			part.Position = pos + Vector3.new(math.random(-5,5),math.random(10,20),math.random(-5,5))
-			part.Color = Color3.new(math.random(),math.random(),math.random()) part.Material = Enum.Material.Neon
-			local bv = Instance.new("BodyVelocity", part) bv.Velocity = Vector3.new(math.random(-10,10),math.random(20,50),math.random(-10,10))
-			Debris:AddItem(bv,0.5) Debris:AddItem(part,3)
-		end
-	end
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = p.Character.HumanoidRootPart.Position
+        for i=1,20 do
+            local part = Instance.new("Part", workspace) part.Size = Vector3.new(0.5,0.5,0.5)
+            part.Position = pos + Vector3.new(math.random(-5,5),math.random(10,20),math.random(-5,5))
+            part.Color = Color3.new(math.random(),math.random(),math.random()) part.Material = Enum.Material.Neon
+            local bv = Instance.new("BodyVelocity", part) bv.Velocity = Vector3.new(math.random(-10,10),math.random(20,50),math.random(-10,10))
+            Debris:AddItem(bv,0.5) Debris:AddItem(part,3)
+        end
+    end
 end
 Commands.dance = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid:LoadAnimation(Instance.new("Animation")):Play() end end
 Commands.undance = function(p) if p.Character and p.Character:FindFirstChild("Humanoid") then p.Character.Humanoid:LoadAnimation(Instance.new("Animation")):Stop() end end
 Commands.slay = Commands.kill
 Commands.smite = function(p)
-	if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-		local l = Instance.new("Part", workspace) l.Size = Vector3.new(1,50,1) l.Position = p.Character.HumanoidRootPart.Position + Vector3.new(0,25,0)
-		l.Color = Color3.new(1,1,0) l.Material = Enum.Material.Neon l.Anchored = true Debris:AddItem(l,0.5)
-		local e = Instance.new("Explosion", workspace) e.Position = p.Character.HumanoidRootPart.Position e.BlastPressure = 0 e.BlastRadius = 10
-	end
+    if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+        local l = Instance.new("Part", workspace) l.Size = Vector3.new(1,50,1) l.Position = p.Character.HumanoidRootPart.Position + Vector3.new(0,25,0)
+        l.Color = Color3.new(1,1,0) l.Material = Enum.Material.Neon l.Anchored = true Debris:AddItem(l,0.5)
+        local e = Instance.new("Explosion", workspace) e.Position = p.Character.HumanoidRootPart.Position e.BlastPressure = 0 e.BlastRadius = 10
+    end
 end
 Commands.lagserver = function() for i=1,1000 do local p = Instance.new("Part", workspace) p.Size = Vector3.new(1000,1000,1000) p.Position = Vector3.new(0,10000,0) Debris:AddItem(p,30) end end
 Commands.unjailall = function() for _, v in pairs(workspace:GetChildren()) do if v.Name:match("Jail_") then v:Destroy() end end end
@@ -598,34 +607,46 @@ Commands.uncontrolall = function() for _, v in pairs(Players:GetPlayers()) do Co
 
 local AllCommandsList = {}
 for name, _ in pairs(Commands) do
-	table.insert(AllCommandsList, name)
+    table.insert(AllCommandsList, name)
 end
 
 Remote.OnServerEvent:Connect(function(player, action, data)
-	if action == "RequestCommands" then
-		Remote:FireClient(player, "UpdateCommands", AllCommandsList)
-	elseif action == "Execute" then
-		if not IsAdmin(player) then return end
-		local args = data:split(" ")
-		local cmdName = args[1]:lower()
-		if Commands[cmdName] then
-			local targetStr = args[2] or "me"
-			local targets = GetPlayer(targetStr, player)
-			if targets then
-				for _, t in pairs(targets) do
-					pcall(function() Commands[cmdName](t, args, player) end)
-				end
-			else
-				local globalCmds = {}
-				for k,_ in pairs(Commands) do
-					if k:match("all$") or k=="clean" or k=="shutdown" or k=="stopmusic" or k=="day" or k=="night" or k=="noon" or k=="midnight" or k=="fog" or k=="unfog" or k=="shadows" or k=="unshadows" or k=="unplatform" or k=="undummy" or k=="unblur" or k=="unsky" or k=="time" or k=="brightness" or k=="unbrightness" or k=="ambient" or k=="unambient" or k=="highgravity" or k=="lowgravity" or k=="normalgravity" or k=="ungravity" or k=="zerogravity" or k=="moon" or k=="sky" then
-						table.insert(globalCmds, k)
-					end
-				end
-				if table.find(globalCmds, cmdName) then
-					Commands[cmdName](player, args, player)
-				end
-			end
-		end
-	end
+    if not IsAdmin(player) then return end
+    
+    if action == "RequestCommands" then
+        Remote:FireClient(player, "UpdateCommands", AllCommandsList)
+    elseif action == "Execute" then
+        local args = data:split(" ")
+        local cmdName = args[1]:lower()
+        if Commands[cmdName] then
+            local targetStr = args[2] or "me"
+            local targets = GetPlayer(targetStr, player)
+            if targets then
+                for _, t in pairs(targets) do
+                    pcall(function() Commands[cmdName](t, args, player) end)
+                end
+            else
+                local globalCmds = {}
+                for k,_ in pairs(Commands) do
+                    if k:match("all$") or k=="clean" or k=="shutdown" or k=="stopmusic" or k=="day" or k=="night" or k=="noon" or k=="midnight" or k=="fog" or k=="unfog" or k=="shadows" or k=="unshadows" or k=="unplatform" or k=="undummy" or k=="unblur" or k=="unsky" or k=="time" or k=="brightness" or k=="unbrightness" or k=="ambient" or k=="unambient" or k=="highgravity" or k=="lowgravity" or k=="normalgravity" or k=="ungravity" or k=="zerogravity" or k=="moon" or k=="sky" then
+                        table.insert(globalCmds, k)
+                    end
+                end
+                if table.find(globalCmds, cmdName) then
+                    Commands[cmdName](player, args, player)
+                end
+            end
+        end
+    end
+end)
+
+Remote.OnClientEvent:Connect(function(player, action, data)
+    if action == "UpdateCommands" then
+        for _, v in pairs(Players:GetPlayers()) do
+            if v == player then
+                Remote:FireClient(v, "UpdateCommands", data)
+                break
+            end
+        end
+    end
 end)
