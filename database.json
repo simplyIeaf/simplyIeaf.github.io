@@ -637,13 +637,13 @@
     "Trading System ServerScript": {
       "title": "Trading System ServerScript",
       "displayTitle": "Trading System ServerScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "trading-system-serverscript.lua",
       "size": 9580,
-      "created": "2026-01-06T11:19:56.785Z",
-      "updated": "2026-01-06T11:19:56.785Z"
+      "created": "2026-01-18T16:30:21.236Z",
+      "updated": "2026-01-18T16:30:21.236Z"
     },
     "Global Chat Announcements ServerScript": {
       "title": "Global Chat Announcements ServerScript",
