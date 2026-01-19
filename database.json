@@ -1332,6 +1332,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1768810960110": {
+      "id": "bot_1768810960110",
+      "title": "Dash System",
+      "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/dash-system/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-01-21T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-19T08:22:40.110Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
