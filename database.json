@@ -666,6 +666,17 @@
       "size": 472,
       "created": "2026-01-18T16:44:39.381Z",
       "updated": "2026-01-18T16:44:39.381Z"
+    },
+    "Better Freecam System": {
+      "title": "Better Freecam System",
+      "displayTitle": "Better Freecam System",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-freecam-system.lua",
+      "size": 17815,
+      "created": "2026-01-19T07:27:31.333Z",
+      "updated": "2026-01-19T07:27:31.333Z"
     }
   },
   "bots": {
