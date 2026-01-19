@@ -1307,6 +1307,20 @@
       "sentTime": "2026-01-14T09:14:56.169Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1768807915215": {
+      "id": "bot_1768807915215",
+      "title": "Better Freecam System",
+      "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/better-freecam-system/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-01-19T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-01-19T07:31:55.215Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
