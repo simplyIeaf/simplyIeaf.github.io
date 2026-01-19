@@ -677,6 +677,17 @@
       "size": 17815,
       "created": "2026-01-19T07:27:31.333Z",
       "updated": "2026-01-19T07:27:31.333Z"
+    },
+    "Dash System": {
+      "title": "Dash System",
+      "displayTitle": "Dash System",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "dash-system.lua",
+      "size": 2992,
+      "created": "2026-01-19T07:51:54.634Z",
+      "updated": "2026-01-19T07:51:54.634Z"
     }
   },
   "bots": {
