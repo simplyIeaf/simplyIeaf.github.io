@@ -688,17 +688,6 @@
       "size": 2992,
       "created": "2026-01-19T07:51:54.634Z",
       "updated": "2026-01-19T07:51:54.634Z"
-    },
-    "Test": {
-      "title": "Test",
-      "displayTitle": "Test",
-      "visibility": "PUBLIC",
-      "description": "",
-      "expiration": null,
-      "filename": "test.lua",
-      "size": 11044,
-      "created": "2026-01-21T12:55:32.409Z",
-      "updated": "2026-01-21T12:55:32.409Z"
     }
   },
   "bots": {
