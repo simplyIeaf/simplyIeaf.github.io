@@ -681,13 +681,13 @@
     "Dash System": {
       "title": "Dash System",
       "displayTitle": "Dash System",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "dash-system.lua",
-      "size": 2992,
-      "created": "2026-01-19T07:51:54.634Z",
-      "updated": "2026-01-19T07:51:54.634Z"
+      "size": 7075,
+      "created": "2026-01-22T07:15:49.628Z",
+      "updated": "2026-01-22T07:15:49.628Z"
     }
   },
   "bots": {
