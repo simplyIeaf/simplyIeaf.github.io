@@ -639,14 +639,3 @@ Remote.OnServerEvent:Connect(function(player, action, data)
         end
     end
 end)
-
-Remote.OnClientEvent:Connect(function(player, action, data)
-    if action == "UpdateCommands" then
-        for _, v in pairs(Players:GetPlayers()) do
-            if v == player then
-                Remote:FireClient(v, "UpdateCommands", data)
-                break
-            end
-        end
-    end
-end)
