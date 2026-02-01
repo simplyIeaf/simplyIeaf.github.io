@@ -355,6 +355,12 @@ local function CreateAdminPanel()
         end
     end)
     
+    Remote.OnClientEvent:Connect(function(action, data)
+        if action == "UpdateCommands" then
+            UpdateCommandsList(data)
+        end
+    end)
+    
     Remote:FireServer("RequestCommands")
 end
 
