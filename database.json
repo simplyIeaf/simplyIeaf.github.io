@@ -688,6 +688,17 @@
       "size": 7075,
       "created": "2026-01-22T07:15:49.628Z",
       "updated": "2026-01-22T07:15:49.628Z"
+    },
+    "Safe Chat System LocalScript": {
+      "title": "Safe Chat System LocalScript",
+      "displayTitle": "Safe Chat System LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "safe-chat-system-localscript.lua",
+      "size": 3947,
+      "created": "2026-02-07T10:46:37.219Z",
+      "updated": "2026-02-07T10:46:37.219Z"
     }
   },
   "bots": {
