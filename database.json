@@ -699,6 +699,17 @@
       "size": 3947,
       "created": "2026-02-07T10:46:37.219Z",
       "updated": "2026-02-07T10:46:37.219Z"
+    },
+    "Safe Chat System ServerScript": {
+      "title": "Safe Chat System ServerScript",
+      "displayTitle": "Safe Chat System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "safe-chat-system-serverscript.lua",
+      "size": 1013,
+      "created": "2026-02-07T10:47:17.652Z",
+      "updated": "2026-02-07T10:47:17.652Z"
     }
   },
   "bots": {
