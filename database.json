@@ -1368,6 +1368,20 @@
       "sentTime": "2026-01-21T09:33:23.426Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1770461452391": {
+      "id": "bot_1770461452391",
+      "title": "Safe Chat System",
+      "message": "StarterPlayerScripts Script Link:\nhttps://simplyieaf.github.io/scripts/safe-chat-system-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/safe-chat-system-serverscript/index.html",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-02-07T10:50:52.391Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
