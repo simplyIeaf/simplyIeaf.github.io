@@ -670,13 +670,13 @@
     "Better Freecam System": {
       "title": "Better Freecam System",
       "displayTitle": "Better Freecam System",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "better-freecam-system.lua",
       "size": 17815,
-      "created": "2026-01-19T07:27:31.333Z",
-      "updated": "2026-01-19T07:27:31.333Z"
+      "created": "2026-02-07T10:45:45.281Z",
+      "updated": "2026-02-07T10:45:45.281Z"
     },
     "Dash System": {
       "title": "Dash System",
