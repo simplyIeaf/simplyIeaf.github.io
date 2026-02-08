@@ -710,6 +710,17 @@
       "size": 1013,
       "created": "2026-02-07T10:47:17.652Z",
       "updated": "2026-02-07T10:47:17.652Z"
+    },
+    "Inventory Save System": {
+      "title": "Inventory Save System",
+      "displayTitle": "Inventory Save System",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "inventory-save-system.lua",
+      "size": 2439,
+      "created": "2026-02-08T18:53:59.548Z",
+      "updated": "2026-02-08T18:53:59.548Z"
     }
   },
   "bots": {
