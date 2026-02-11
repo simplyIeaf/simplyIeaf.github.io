@@ -714,13 +714,13 @@
     "Inventory Save System": {
       "title": "Inventory Save System",
       "displayTitle": "Inventory Save System",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "inventory-save-system.lua",
       "size": 2439,
-      "created": "2026-02-08T18:53:59.548Z",
-      "updated": "2026-02-08T18:53:59.548Z"
+      "created": "2026-02-11T22:45:51.368Z",
+      "updated": "2026-02-11T22:45:51.368Z"
     }
   },
   "bots": {
