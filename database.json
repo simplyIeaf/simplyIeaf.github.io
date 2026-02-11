@@ -721,6 +721,17 @@
       "size": 2439,
       "created": "2026-02-11T22:45:51.368Z",
       "updated": "2026-02-11T22:45:51.368Z"
+    },
+    "Troll Panel System LocalScript": {
+      "title": "Troll Panel System LocalScript",
+      "displayTitle": "Troll Panel System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "troll-panel-system-localscript.lua",
+      "size": 15322,
+      "created": "2026-02-11T22:46:41.945Z",
+      "updated": "2026-02-11T22:46:41.945Z"
     }
   },
   "bots": {
