@@ -1398,13 +1398,13 @@
       "id": "bot_1770677662829",
       "title": "Inventory Save System",
       "message": "ServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/inventory-save-system/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-02-11T09:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-02-09T22:54:22.829Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-02-11T09:03:14.004Z",
       "cancelled": false,
       "isProcessing": false
     }
