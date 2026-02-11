@@ -732,6 +732,17 @@
       "size": 15322,
       "created": "2026-02-11T22:46:41.945Z",
       "updated": "2026-02-11T22:46:41.945Z"
+    },
+    "Troll Panel ServerScript": {
+      "title": "Troll Panel ServerScript",
+      "displayTitle": "Troll Panel ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "troll-panel-serverscript.lua",
+      "size": 4737,
+      "created": "2026-02-11T22:47:14.519Z",
+      "updated": "2026-02-11T22:47:14.519Z"
     }
   },
   "bots": {
