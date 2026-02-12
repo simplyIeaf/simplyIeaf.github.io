@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ContentProvider = game:GetService("ContentProvider")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local TextChatService = game:GetService("TextChatService")
 
 local Remotes = ReplicatedStorage:WaitForChild("TrollRemotes")
 local ActionRemote = Remotes:WaitForChild("ActionRemote")
@@ -14,11 +15,37 @@ local Scroll
 local isGuiOpen = false
 local AssetData = nil
 local lastExecuteTime = 0
-local executeCooldown = 2
+local executeCooldown = 1
 
-local function createInputBox(parent, placeholder)
+local activeEffects = {
+	Night = nil,
+	Invert = nil,
+	Flip = nil,
+	AntiJump = nil,
+	FakeLag = nil
+}
+
+local function handleDeath()
+	local gui = LocalPlayer.PlayerGui:FindFirstChild("TrollPanelGui")
+	if gui then
+		gui:Destroy()
+		isGuiOpen = false
+	end
+end
+
+if LocalPlayer.Character then
+	local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+	if hum then hum.Died:Connect(handleDeath) end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	hum.Died:Connect(handleDeath)
+end)
+
+local function createInputBox(parent, placeholder, sizeY)
 	local Holder = Instance.new("Frame")
-	Holder.Size = UDim2.new(1, 0, 0, 36)
+	Holder.Size = UDim2.new(1, 0, 0, sizeY or 36)
 	Holder.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
 	Holder.BorderSizePixel = 0
 	Holder.LayoutOrder = 2
@@ -94,13 +121,6 @@ local function createDropdown(parent, options)
 	ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	ListLayout.Parent = ListFrame
 
-	local ListPadding = Instance.new("UIPadding")
-	ListPadding.PaddingTop = UDim.new(0, 4)
-	ListPadding.PaddingBottom = UDim.new(0, 4)
-	ListPadding.PaddingLeft = UDim.new(0, 4)
-	ListPadding.PaddingRight = UDim.new(0, 4)
-	ListPadding.Parent = ListFrame
-
 	local selectedValue = nil
 	local isOpen = false
 
@@ -143,7 +163,7 @@ local function createDropdown(parent, options)
 	return function() return selectedValue end
 end
 
-local function createWidget(titleText, dropdownOptions)
+local function createWidget(titleText, dropdownOptions, extraInputPlaceholder, hasTimeInput)
 	local Widget = Instance.new("Frame")
 	Widget.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 	Widget.Parent = Scroll
@@ -183,18 +203,31 @@ local function createWidget(titleText, dropdownOptions)
 
 	local UsernameBox = createInputBox(Widget, "Username")
 
-	local getDropdown
-	if dropdownOptions then
-		Widget.Size = UDim2.new(0, 260, 0, 200)
-		getDropdown = createDropdown(Widget, dropdownOptions)
-	else
-		Widget.Size = UDim2.new(0, 260, 0, 136)
+	local ExtraBox
+	if extraInputPlaceholder then
+		ExtraBox = createInputBox(Widget, extraInputPlaceholder)
 	end
+
+	local TimeBox
+	if hasTimeInput then
+		TimeBox = createInputBox(Widget, "Duration (Seconds)")
+	end
+
+	local getDropdown
+	local height = 136
+	if dropdownOptions then
+		height = height + 40
+		getDropdown = createDropdown(Widget, dropdownOptions)
+	end
+	if extraInputPlaceholder then height = height + 40 end
+	if hasTimeInput then height = height + 40 end
+
+	Widget.Size = UDim2.new(0, 260, 0, height)
 
 	local ButtonContainer = Instance.new("Frame")
 	ButtonContainer.Size = UDim2.new(1, 0, 0, 36)
 	ButtonContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	ButtonContainer.LayoutOrder = 4
+	ButtonContainer.LayoutOrder = 10
 	ButtonContainer.Parent = Widget
 
 	local BtnCorner = Instance.new("UICorner")
@@ -238,9 +271,11 @@ local function createWidget(titleText, dropdownOptions)
 		end
 
 		local selectedOption = getDropdown and getDropdown() or nil
+		local extraData = ExtraBox and ExtraBox.Text or nil
+		local timeData = TimeBox and TimeBox.Text or nil
 
 		ExecuteBtn.Text = "..."
-		local success = ActionRemote:InvokeServer(titleText, selectedOption, target)
+		local success = ActionRemote:InvokeServer(titleText, selectedOption, target, extraData, timeData)
 		lastExecuteTime = tick()
 		task.wait(0.3)
 		ExecuteBtn.Text = success and "Success" or "Failed"
@@ -265,13 +300,19 @@ local function createPanel()
 	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 	local Main = Instance.new("Frame")
-	Main.Size = UDim2.new(0, 850, 0, 550)
-	Main.Position = UDim2.new(0.5, -425, 0.5, -275)
+	Main.AnchorPoint = Vector2.new(0.5, 0.5)
+	Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+	Main.Size = UDim2.new(0.9, 0, 0.8, 0)
 	Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 	Main.BorderSizePixel = 0
 	Main.Active = true
 	Main.ClipsDescendants = true
 	Main.Parent = ScreenGui
+
+	local MainConstraints = Instance.new("UISizeConstraint")
+	MainConstraints.MaxSize = Vector2.new(850, 600)
+	MainConstraints.MinSize = Vector2.new(300, 400)
+	MainConstraints.Parent = Main
 
 	Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 	local MainStroke = Instance.new("UIStroke", Main)
@@ -344,18 +385,41 @@ local function createPanel()
 		createWidget("Audio", audioOptions)
 	end
 
-	createWidget("Fake Lag")
-	createWidget("Invert Controls")
-	createWidget("Flip Camera")
-	createWidget("Anti-Jump")
-	createWidget("Night")
+	createWidget("Reset")
+	createWidget("Explode")
 	createWidget("Fling")
+	createWidget("Fake Lag", nil, nil, true)
+	createWidget("Freeze", nil, nil, true)
+	createWidget("Speed", nil, "WalkSpeed Amount")
+	createWidget("Morph", nil, "Morph To Username")
+	createWidget("Model", nil, "Model ID")
+	createWidget("Clone", nil, "Amount")
+	createWidget("Fake Admin")
+	createWidget("Invert Controls", nil, nil, true)
+	createWidget("Flip Camera", nil, nil, true)
+	createWidget("Anti-Jump", nil, nil, true)
+	createWidget("Night", nil, nil, true)
 	createWidget("Sword")
-	
+
 	isGuiOpen = true
 end
 
 EffectEvent.OnClientEvent:Connect(function(data)
+	if data.Type == "Reset" then
+		for key, conn in pairs(activeEffects) do
+			if conn then
+				pcall(function() conn:Disconnect() end)
+				activeEffects[key] = nil
+			end
+		end
+		Lighting.ClockTime = 14
+		Lighting.Brightness = 2
+		workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame
+		local control = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
+		control:Enable()
+		return
+	end
+
 	if data.Type == "Jumpscare" then
 		local Gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
 		Gui.IgnoreGuiInset = true
@@ -365,167 +429,132 @@ EffectEvent.OnClientEvent:Connect(function(data)
 		Img.ScaleType = Enum.ScaleType.Stretch
 		local Snd = Instance.new("Sound", Gui)
 		Snd.SoundId = data.Sound
-		Snd.Volume = 130
+		Snd.Volume = 10
 		Snd:Play()
 		Snd.Ended:Wait()
 		Gui:Destroy()
 	elseif data.Type == "Audio" then
 		local Snd = Instance.new("Sound", LocalPlayer.Character or workspace)
 		Snd.SoundId = data.Sound
-		Snd.Volume = 130
+		Snd.Volume = 10
 		Snd:Play()
 		Snd.Ended:Wait()
 		Snd:Destroy()
 	elseif data.Type == "FakeLag" then
-		local FakeLag = true
-		local waitTime = 0.05
-		local delayTime = 0.4
-
-		local connection
-		connection = LocalPlayer.CharacterAdded:Connect(function()
-			FakeLag = false
-			if connection then
-				connection:Disconnect()
-			end
-		end)
-
-		task.spawn(function()
-			while wait(waitTime) do
-				if not FakeLag then break end
-				local character = LocalPlayer.Character
-				if character and character:FindFirstChild("HumanoidRootPart") then
-					character.HumanoidRootPart.Anchored = true
-					wait(delayTime)
-					character.HumanoidRootPart.Anchored = false
+		if activeEffects.FakeLag then activeEffects.FakeLag:Disconnect() end
+		local endTime = os.time() + (data.Duration or 5)
+		activeEffects.FakeLag = RunService.Heartbeat:Connect(function()
+			if os.time() > endTime then
+				activeEffects.FakeLag:Disconnect()
+				activeEffects.FakeLag = nil
+			else
+				local char = LocalPlayer.Character
+				if char and char:FindFirstChild("HumanoidRootPart") then
+					char.HumanoidRootPart.Anchored = true
+					task.wait(math.random(1,3)/10)
+					char.HumanoidRootPart.Anchored = false
 				end
 			end
 		end)
+	elseif data.Type == "FakeAdmin" then
+		local channels = TextChatService:WaitForChild("TextChannels", 5)
+		if channels then
+			local general = channels:FindFirstChild("RBXGeneral")
+			if general then
+				general:DisplaySystemMessage("<font color='#FFA500'>[SERVER]: " .. data.TargetName .. " is now admin!</font>")
+			end
+		end
 	elseif data.Type == "InvertControls" then
-		local inverted = true
-		local controlModule = nil
-		local originalMove = nil
-
-		local connection
-		connection = LocalPlayer.CharacterAdded:Connect(function()
-			inverted = false
-			if controlModule and originalMove then
-				controlModule.moveFunction = originalMove
+		if activeEffects.Invert then return end
+		local endTime = os.time() + (data.Duration or 10)
+		local controlModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
+		local oldMove = controlModule.moveFunction
+		controlModule.moveFunction = function(self, direction, relative)
+			if os.time() > endTime then
+				controlModule.moveFunction = oldMove
+				activeEffects.Invert = nil
+			else
+				oldMove(self, -direction, relative)
 			end
-			if connection then
-				connection:Disconnect()
-			end
-		end)
-
-		task.spawn(function()
-			pcall(function()
-				controlModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
-				originalMove = controlModule.moveFunction
-
-				controlModule.moveFunction = function(self, direction, relative)
-					if inverted then
-						originalMove(self, -direction, relative)
-					else
-						originalMove(self, direction, relative)
-					end
-				end
-			end)
-		end)
+		end
+		activeEffects.Invert = true 
 	elseif data.Type == "FlipCamera" then
-		local flipped = true
-		local camera = workspace.CurrentCamera
-
-		local connection
-		local renderConnection
-
-		connection = LocalPlayer.CharacterAdded:Connect(function()
-			flipped = false
-			if renderConnection then
-				renderConnection:Disconnect()
-			end
-			if connection then
-				connection:Disconnect()
-			end
-		end)
-
-		renderConnection = RunService.RenderStepped:Connect(function()
-			if flipped then
-				camera.CFrame = camera.CFrame * CFrame.Angles(0, 0, math.rad(180))
+		if activeEffects.Flip then activeEffects.Flip:Disconnect() end
+		local endTime = os.time() + (data.Duration or 10)
+		activeEffects.Flip = RunService.RenderStepped:Connect(function()
+			if os.time() > endTime then
+				activeEffects.Flip:Disconnect()
+				activeEffects.Flip = nil
+			else
+				workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame * CFrame.Angles(0, 0, math.rad(180))
 			end
 		end)
 	elseif data.Type == "AntiJump" then
-		local antiJump = true
-		local originalJumpPower = 50
-
-		local connection
-		connection = LocalPlayer.CharacterAdded:Connect(function(char)
-			antiJump = false
-			local humanoid = char:WaitForChild("Humanoid")
-			humanoid.JumpPower = originalJumpPower
-			if connection then
-				connection:Disconnect()
-			end
-		end)
-
-		task.spawn(function()
-			local character = LocalPlayer.Character
-			if character then
-				local humanoid = character:FindFirstChild("Humanoid")
-				if humanoid then
-					originalJumpPower = humanoid.JumpPower
-					humanoid.JumpPower = 0
+		local endTime = os.time() + (data.Duration or 10)
+		if activeEffects.AntiJump then activeEffects.AntiJump:Disconnect() end
+		activeEffects.AntiJump = RunService.Heartbeat:Connect(function()
+			if os.time() > endTime then
+				if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+					LocalPlayer.Character.Humanoid.JumpPower = 50
+				end
+				activeEffects.AntiJump:Disconnect()
+				activeEffects.AntiJump = nil
+			else
+				if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+					LocalPlayer.Character.Humanoid.JumpPower = 0
 				end
 			end
 		end)
 	elseif data.Type == "Night" then
-		local originalClockTime = Lighting.ClockTime
-		local originalBrightness = Lighting.Brightness
+		local endTime = os.time() + (data.Duration or 60)
+		if activeEffects.Night then activeEffects.Night:Disconnect() end
 
-		local TweenService = game:GetService("TweenService")
-		local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
+		Lighting.ClockTime = 0
+		Lighting.Brightness = 0
 
-		local tween1 = TweenService:Create(Lighting, tweenInfo, {ClockTime = 0})
-		local tween2 = TweenService:Create(Lighting, tweenInfo, {Brightness = 0.001})
-
-		tween1:Play()
-		tween2:Play()
-
-		task.wait(60)
-
-		local revertTween1 = TweenService:Create(Lighting, tweenInfo, {ClockTime = originalClockTime})
-		local revertTween2 = TweenService:Create(Lighting, tweenInfo, {Brightness = originalBrightness})
-
-		revertTween1:Play()
-		revertTween2:Play()
+		activeEffects.Night = RunService.Heartbeat:Connect(function()
+			if os.time() > endTime then
+				Lighting.ClockTime = 14
+				Lighting.Brightness = 2
+				activeEffects.Night:Disconnect()
+				activeEffects.Night = nil
+			else
+				Lighting.ClockTime = 0
+				Lighting.Brightness = 0
+			end
+		end)
 	end
 end)
 
-LocalPlayer.CharacterAdded:Connect(function()
-	local existingGui = LocalPlayer.PlayerGui:FindFirstChild("TrollPanelGui")
-	if existingGui then
-		existingGui:Destroy()
-	end
+local TrollCommand = Instance.new("TextChatCommand")
+TrollCommand.Name = "TrollPanelCommand"
+TrollCommand.PrimaryAlias = "/trollpanel"
+TrollCommand.Parent = TextChatService
 
-	if isGuiOpen then
-		task.wait(0.5)
-		createPanel()
-	end
-end)
-
-LocalPlayer.Chatted:Connect(function(message)
-	if message == "/trollpanel" then
+TrollCommand.Triggered:Connect(function()
+	local success, data = pcall(function()
+		return GetAssetsRemote:InvokeServer()
+	end)
+	if success and data then
+		AssetData = data
 		createPanel()
 	end
 end)
 
 task.spawn(function()
-	AssetData = GetAssetsRemote:InvokeServer()
-	if AssetData and AssetData.Jumpscare then
-		local preloadList = {}
-		for _, data in pairs(AssetData.Jumpscare) do
-			local img = Instance.new("ImageLabel")
-			img.Image = data.Image
-			table.insert(preloadList, img)
+	local success, data = pcall(function()
+		return GetAssetsRemote:InvokeServer()
+	end)
+	if success and data then
+		AssetData = data
+		if AssetData.Jumpscare then
+			local preloadList = {}
+			for _, d in pairs(AssetData.Jumpscare) do
+				local img = Instance.new("ImageLabel")
+				img.Image = d.Image
+				table.insert(preloadList, img)
+			end
+			ContentProvider:PreloadAsync(preloadList)
 		end
-		ContentProvider:PreloadAsync(preloadList)
 	end
 end)
