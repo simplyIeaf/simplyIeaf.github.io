@@ -1434,13 +1434,13 @@
       "id": "bot_1770850287983",
       "title": "Troll Panel System",
       "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/troll-panel-system-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/troll-panel-serverscript/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-02-13T09:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-02-11T22:51:27.983Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-02-13T09:36:36.625Z",
       "cancelled": false,
       "isProcessing": false
     }
