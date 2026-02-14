@@ -1,12 +1,8 @@
--- PLACE IN STARTERPLAYERSCRIPTS
-
---// Services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
---// LOADING UI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "LoadingUI"
 screenGui.IgnoreGuiInset = true
@@ -30,9 +26,9 @@ titleText.BackgroundTransparency = 1
 titleText.TextTransparency = 1
 titleText.Parent = screenGui
 
-wait(0.3)
+task.wait(0.3)
 TweenService:Create(titleText, TweenInfo.new(1), {TextTransparency = 0}):Play()
-wait(1)
+task.wait(1)
 
 local typingSound = Instance.new("Sound")
 typingSound.SoundId = "rbxassetid://9120299506"
@@ -43,18 +39,20 @@ local fullText = "Leaf Games"
 for i = 1, #fullText do
     titleText.Text = fullText:sub(1, i) .. "_"
     typingSound:Play()
-    wait(0.11)
+    task.wait(0.11)
 end
 titleText.Text = fullText
 
--- Progress UI
 local progressBarBg = Instance.new("Frame")
 progressBarBg.Size = UDim2.new(0.4, 0, 0.025, 0)
 progressBarBg.Position = UDim2.new(0.3, 0, 0.6, 0)
 progressBarBg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 progressBarBg.BackgroundTransparency = 1
 progressBarBg.Parent = screenGui
-Instance.new("UICorner", progressBarBg).CornerRadius = UDim.new(0.5, 0)
+
+local bgCorner = Instance.new("UICorner")
+bgCorner.CornerRadius = UDim.new(0.5, 0)
+bgCorner.Parent = progressBarBg
 
 local progressBarFill = Instance.new("Frame")
 progressBarFill.Size = UDim2.new(0, 0, 1, 0)
@@ -62,7 +60,10 @@ progressBarFill.BackgroundColor3 = Color3.fromRGB(0, 183, 235)
 progressBarFill.BorderSizePixel = 0
 progressBarFill.BackgroundTransparency = 0
 progressBarFill.Parent = progressBarBg
-Instance.new("UICorner", progressBarFill).CornerRadius = UDim.new(0.5, 0)
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.CornerRadius = UDim.new(0.5, 0)
+fillCorner.Parent = progressBarFill
 
 local counterLabel = Instance.new("TextLabel")
 counterLabel.Size = UDim2.new(0, 120, 0, 20)
@@ -77,9 +78,8 @@ counterLabel.Parent = screenGui
 
 TweenService:Create(progressBarBg, TweenInfo.new(1), {BackgroundTransparency = 0}):Play()
 TweenService:Create(counterLabel, TweenInfo.new(1), {TextTransparency = 0}):Play()
-wait(1.5)
+task.wait(1.5)
 
--- Skip logic
 local skipButtonCreated = false
 local loadingSkipped = false
 
@@ -95,14 +95,16 @@ skipButton.BackgroundTransparency = 1
 skipButton.TextTransparency = 1
 skipButton.Visible = false
 skipButton.Parent = screenGui
-Instance.new("UICorner", skipButton).CornerRadius = UDim.new(0.25, 0)
+
+local skipCorner = Instance.new("UICorner")
+skipCorner.CornerRadius = UDim.new(0.25, 0)
+skipCorner.Parent = skipButton
 
 skipButton.MouseButton1Click:Connect(function()
     if loadingSkipped then return end
     loadingSkipped = true
 end)
 
--- Load objects
 local allObjects = {}
 for _, service in ipairs({workspace, game:GetService("ReplicatedStorage"), game:GetService("Lighting")}) do
     for _, obj in ipairs(service:GetDescendants()) do
@@ -113,13 +115,17 @@ end
 local total = #allObjects
 local processed = 0
 
-for _, obj in ipairs(allObjects) do
-    if loadingSkipped then break end
+for i, _ in ipairs(allObjects) do
+    if loadingSkipped then 
+        progressBarFill.Size = UDim2.new(1, 0, 1, 0)
+        counterLabel.Text = string.format("(%d/%d)", total, total)
+        break 
+    end
+    
     processed += 1
     local progress = processed / total
-    TweenService:Create(progressBarFill, TweenInfo.new(0.05), {
-        Size = UDim2.new(progress, 0, 1, 0)
-    }):Play()
+    
+    progressBarFill.Size = UDim2.new(progress, 0, 1, 0)
     counterLabel.Text = string.format("(%d/%d)", processed, total)
 
     if not skipButtonCreated and processed >= 100 then
@@ -131,12 +137,13 @@ for _, obj in ipairs(allObjects) do
         }):Play()
     end
 
-    RunService.RenderStepped:Wait()
+    if i % 25 == 0 then
+        RunService.RenderStepped:Wait()
+    end
 end
 
-if not loadingSkipped then wait(1) end
+if not loadingSkipped then task.wait(1) end
 
--- Fade out UI
 local fadeOutTime = 1.5
 TweenService:Create(progressBarBg, TweenInfo.new(fadeOutTime), {BackgroundTransparency = 1}):Play()
 TweenService:Create(progressBarFill, TweenInfo.new(fadeOutTime), {BackgroundTransparency = 1}):Play()
@@ -146,8 +153,9 @@ TweenService:Create(skipButton, TweenInfo.new(fadeOutTime), {
     BackgroundTransparency = 1,
     TextTransparency = 1
 }):Play()
-wait(fadeOutTime)
+
+task.wait(fadeOutTime)
 
 TweenService:Create(blackFrame, TweenInfo.new(1.5), {BackgroundTransparency = 1}):Play()
-wait(1.5)
+task.wait(1.5)
 screenGui:Destroy()
