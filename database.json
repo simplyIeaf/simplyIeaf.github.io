@@ -2,13 +2,14 @@
   "scripts": {
     "Animated Loading Screen": {
       "title": "Animated Loading Screen",
+      "displayTitle": "Animated Loading Screen",
       "visibility": "PUBLIC",
       "description": "",
-      "expiration": "",
+      "expiration": null,
       "filename": "animated-loading-screen.lua",
-      "size": 5117,
-      "created": "2025-12-27T17:41:29.311Z",
-      "updated": "2025-12-27T17:41:29.311Z"
+      "size": 5285,
+      "created": "2026-02-14T13:19:51.562Z",
+      "updated": "2026-02-14T13:19:51.562Z"
     },
     "System Messages": {
       "title": "System Messages",
