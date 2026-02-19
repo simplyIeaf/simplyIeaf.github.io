@@ -1468,6 +1468,20 @@
       "sentTime": "2026-02-13T09:36:36.625Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1771526665405": {
+      "id": "bot_1771526665405",
+      "title": "Global Poll System",
+      "message": "StarterPlayerScripts Script Link:\nhttps://simplyieaf.github.io/scripts/global-poll-system-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/global-poll-system-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-02-20T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-02-19T18:44:25.405Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
