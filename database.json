@@ -746,6 +746,17 @@
       "size": 9550,
       "created": "2026-02-12T13:57:54.699Z",
       "updated": "2026-02-12T13:57:54.699Z"
+    },
+    "Global Poll System ServerScript": {
+      "title": "Global Poll System ServerScript",
+      "displayTitle": "Global Poll System ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "global-poll-system-serverscript.lua",
+      "size": 13066,
+      "created": "2026-02-19T18:39:30.591Z",
+      "updated": "2026-02-19T18:39:30.591Z"
     }
   },
   "bots": {
