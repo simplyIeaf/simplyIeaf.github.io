@@ -757,6 +757,17 @@
       "size": 13066,
       "created": "2026-02-19T18:39:30.591Z",
       "updated": "2026-02-19T18:39:30.591Z"
+    },
+    "Global Poll System LocalScript": {
+      "title": "Global Poll System LocalScript",
+      "displayTitle": "Global Poll System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "global-poll-system-localscript.lua",
+      "size": 42030,
+      "created": "2026-02-19T18:40:19.815Z",
+      "updated": "2026-02-19T18:40:19.815Z"
     }
   },
   "bots": {
