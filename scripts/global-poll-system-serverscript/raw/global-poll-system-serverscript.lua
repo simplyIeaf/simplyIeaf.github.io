@@ -76,7 +76,6 @@ local function endPoll(pollId)
     if not poll then return end
     poll.active = false
     
-    -- Safely cancel the timer thread
     if poll.thread then
         pcall(task.cancel, poll.thread)
         poll.thread = nil
