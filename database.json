@@ -728,13 +728,13 @@
     "Troll Panel System LocalScript": {
       "title": "Troll Panel System LocalScript",
       "displayTitle": "Troll Panel System LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "troll-panel-system-localscript.lua",
       "size": 17089,
-      "created": "2026-02-12T13:58:25.035Z",
-      "updated": "2026-02-12T13:58:25.035Z"
+      "created": "2026-02-20T12:23:34.975Z",
+      "updated": "2026-02-20T12:23:34.975Z"
     },
     "Troll Panel ServerScript": {
       "title": "Troll Panel ServerScript",
