@@ -754,9 +754,9 @@
       "description": "",
       "expiration": null,
       "filename": "global-poll-system-serverscript.lua",
-      "size": 12232,
-      "created": "2026-02-20T12:50:56.680Z",
-      "updated": "2026-02-20T12:50:56.680Z"
+      "size": 10185,
+      "created": "2026-02-20T18:39:57.714Z",
+      "updated": "2026-02-20T18:39:57.714Z"
     },
     "Global Poll System LocalScript": {
       "title": "Global Poll System LocalScript",
