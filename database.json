@@ -761,13 +761,13 @@
     "Global Poll System LocalScript": {
       "title": "Global Poll System LocalScript",
       "displayTitle": "Global Poll System LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "global-poll-system-localscript.lua",
-      "size": 42030,
-      "created": "2026-02-19T18:40:19.815Z",
-      "updated": "2026-02-19T18:40:19.815Z"
+      "size": 41351,
+      "created": "2026-02-20T12:26:46.345Z",
+      "updated": "2026-02-20T12:26:46.345Z"
     }
   },
   "bots": {
