@@ -435,7 +435,6 @@ local function buildAdminPanel()
     end
     adminPanelOpen = true
     
-    -- ── Constants ────────────────────────────────────────────────
     local PW, PH   = 400, 440   -- panel pixel size
     local TOP_H    = 44         -- title bar height
     local TAB_H    = 34         -- tab bar height
@@ -445,7 +444,6 @@ local function buildAdminPanel()
     local CONTENT_Y = TOP_H + GAP + TAB_H + GAP2
     local CONTENT_H = PH - CONTENT_Y - 10
     
-    -- ── ScreenGui + Panel ────────────────────────────────────────
     local sg = Instance.new("ScreenGui")
     sg.Name            = "PollAdminPanel"
     sg.ResetOnSpawn    = false
@@ -466,7 +464,6 @@ local function buildAdminPanel()
     corner(panel, 10)
     stroke(panel, 1.5, Color3.fromRGB(40, 40, 40))
     
-    -- ── Title bar ────────────────────────────────────────────────
     local topBar = Instance.new("Frame")
     topBar.Size             = UDim2.new(1, 0, 0, TOP_H)
     topBar.Position         = UDim2.fromOffset(0, 0)
@@ -546,8 +543,6 @@ local function buildAdminPanel()
         end
     end)
     
-    -- ── Tab bar ──────────────────────────────────────────────────
-    -- Plain frame, no layout — two buttons manually at 0% and 50%
     local tabBar = Instance.new("Frame")
     tabBar.Size             = UDim2.new(1, -(PAD * 2), 0, TAB_H)
     tabBar.Position         = UDim2.fromOffset(PAD, TOP_H + GAP)
@@ -587,7 +582,6 @@ local function buildAdminPanel()
     indicator.Parent           = tabBar
     corner(indicator, 2)
     
-    -- ── Content area ─────────────────────────────────────────────
     local contentArea = Instance.new("Frame")
     contentArea.Size             = UDim2.new(1, -(PAD * 2), 0, CONTENT_H)
     contentArea.Position         = UDim2.fromOffset(PAD, CONTENT_Y)
@@ -644,7 +638,6 @@ local function buildAdminPanel()
             
             adminRefs.titleLabel = titleLabel
             
-            -- ── CREATE PAGE ───────────────────────────────────────────────
             secLabel(createPage, "QUESTION", 0)
             local questionInput = makeInput(createPage, "Poll question...", 1)
             
@@ -731,7 +724,6 @@ local function buildAdminPanel()
                 task.delay(2, function() if adminPanelGui then titleLabel.Text = "Poll Manager" end end)
                 end)
                     
-                    -- ── SCHEDULE PAGE ─────────────────────────────────────────────
                     secLabel(schedulePage, "QUESTION", 0)
                     local schQInput = makeInput(schedulePage, "Poll question...", 1)
                     
@@ -825,7 +817,7 @@ local function buildAdminPanel()
                 p.Parent      = tzDisplay
             end
             
-            -- tz dropdown — parented to panel (overlay), not to the scroll list
+            -- tz dropdown, parented to panel (overlay), not to the scroll list
             local tzDropdown = Instance.new("Frame")
             tzDropdown.Size             = UDim2.new(1, -(PAD * 2), 0, 150)
             tzDropdown.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -991,7 +983,6 @@ local function buildAdminPanel()
                         switchTab(1)
                     end
                     
-                    -- ── CLIENT EVENTS ─────────────────────────────────────────────────────────────
                     PollEvent.OnClientEvent:Connect(function(action, data)
                         if action == "showPoll" then
                             showPollGui(data)
