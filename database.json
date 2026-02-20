@@ -739,13 +739,13 @@
     "Troll Panel ServerScript": {
       "title": "Troll Panel ServerScript",
       "displayTitle": "Troll Panel ServerScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "troll-panel-serverscript.lua",
       "size": 9550,
-      "created": "2026-02-12T13:57:54.699Z",
-      "updated": "2026-02-12T13:57:54.699Z"
+      "created": "2026-02-20T12:22:58.681Z",
+      "updated": "2026-02-20T12:22:58.681Z"
     },
     "Global Poll System ServerScript": {
       "title": "Global Poll System ServerScript",
