@@ -817,7 +817,7 @@ local function buildAdminPanel()
                 p.Parent      = tzDisplay
             end
             
-            -- tz dropdown, parented to panel (overlay), not to the scroll list
+            -- tz dropdown — parented to panel (overlay), not to the scroll list
             local tzDropdown = Instance.new("Frame")
             tzDropdown.Size             = UDim2.new(1, -(PAD * 2), 0, 150)
             tzDropdown.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
