@@ -768,6 +768,17 @@
       "size": 41352,
       "created": "2026-02-20T12:32:57.898Z",
       "updated": "2026-02-20T12:32:57.899Z"
+    },
+    "Global Leaderboard System Script": {
+      "title": "Global Leaderboard System Script",
+      "displayTitle": "Global Leaderboard System Script",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "global-leaderboard-system-script.lua",
+      "size": 8369,
+      "created": "2026-02-21T21:25:02.950Z",
+      "updated": "2026-02-21T21:25:02.950Z"
     }
   },
   "bots": {
