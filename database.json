@@ -1498,13 +1498,13 @@
       "id": "bot_1771710356363",
       "title": "Global Leaderboard System",
       "message": "Script Link:\nhttps://simplyieaf.github.io/scripts/global-leaderboard-system-script/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-02-22T09:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-02-21T21:45:56.363Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-02-22T09:17:41.222Z",
       "cancelled": false,
       "isProcessing": false
     }
