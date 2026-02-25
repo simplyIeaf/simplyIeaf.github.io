@@ -1507,6 +1507,20 @@
       "sentTime": "2026-02-22T09:17:41.222Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1772060595852": {
+      "id": "bot_1772060595852",
+      "title": "Emote System",
+      "message": "StarterGui Script Link:\nhttps://pastebin.com/raw/0R7sGgwi\nServerScriptService Script Link:\nhttps://pastebin.com/raw/GG0bPKgx",
+      "scheduled": true,
+      "scheduledTime": "2026-02-26T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-02-25T23:03:15.852Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
