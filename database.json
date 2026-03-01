@@ -1564,9 +1564,9 @@
       "timezone": "Europe/Paris",
       "created": "2026-03-01T23:45:55.515Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false
     },
     "bot_1772408771273": {
