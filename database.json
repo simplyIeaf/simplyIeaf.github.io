@@ -790,6 +790,17 @@
       "size": 3428,
       "created": "2026-03-01T23:34:03.078Z",
       "updated": "2026-03-01T23:34:03.078Z"
+    },
+    "Custom Button Animation LocalScript": {
+      "title": "Custom Button Animation LocalScript",
+      "displayTitle": "Custom Button Animation LocalScript",
+      "visibility": "UNLISTED",
+      "description": "<p><br></p>",
+      "expiration": null,
+      "filename": "custom-button-animation-localscript.lua",
+      "size": 13537,
+      "created": "2026-03-01T23:34:53.990Z",
+      "updated": "2026-03-01T23:34:53.990Z"
     }
   },
   "bots": {
