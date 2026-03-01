@@ -801,6 +801,17 @@
       "size": 13537,
       "created": "2026-03-01T23:34:53.990Z",
       "updated": "2026-03-01T23:34:53.990Z"
+    },
+    "Custom Button Animation Button Script": {
+      "title": "Custom Button Animation Button Script",
+      "displayTitle": "Custom Button Animation Button Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "custom-button-animation-button-script.lua",
+      "size": 1776,
+      "created": "2026-03-01T23:37:08.177Z",
+      "updated": "2026-03-01T23:37:08.177Z"
     }
   },
   "bots": {
