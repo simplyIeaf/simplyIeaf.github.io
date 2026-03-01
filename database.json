@@ -1554,6 +1554,20 @@
       "sentTime": "2026-02-26T09:32:50.369Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1772408755515": {
+      "id": "bot_1772408755515",
+      "title": "Custom Button Animation",
+      "message": "StarterCharacterScripts Script Link:\nhttps://simplyieaf.github.io/scripts/custom-button-animation-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/custom-button-animation-serverscript/index.html\nButton Script Link:\nhttps://simplyieaf.github.io/scripts/custom-button-animation-button-script/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-03-03T09:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-03-01T23:45:55.515Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
