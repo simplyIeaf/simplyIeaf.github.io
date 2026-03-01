@@ -779,6 +779,17 @@
       "size": 8369,
       "created": "2026-02-21T21:25:02.950Z",
       "updated": "2026-02-21T21:25:02.950Z"
+    },
+    "Custom Button Animation ServerScript": {
+      "title": "Custom Button Animation ServerScript",
+      "displayTitle": "Custom Button Animation ServerScript",
+      "visibility": "UNLISTED",
+      "description": "<p><br></p>",
+      "expiration": null,
+      "filename": "custom-button-animation-serverscript.lua",
+      "size": 3428,
+      "created": "2026-03-01T23:34:03.078Z",
+      "updated": "2026-03-01T23:34:03.078Z"
     }
   },
   "bots": {
