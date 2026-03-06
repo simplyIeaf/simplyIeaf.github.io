@@ -772,13 +772,13 @@
     "Global Leaderboard System Script": {
       "title": "Global Leaderboard System Script",
       "displayTitle": "Global Leaderboard System Script",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "global-leaderboard-system-script.lua",
       "size": 8369,
-      "created": "2026-02-21T21:25:02.950Z",
-      "updated": "2026-02-21T21:25:02.950Z"
+      "created": "2026-03-06T07:21:51.454Z",
+      "updated": "2026-03-06T07:21:51.454Z"
     },
     "Custom Button Animation ServerScript": {
       "title": "Custom Button Animation ServerScript",
