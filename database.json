@@ -812,6 +812,17 @@
       "size": 1776,
       "created": "2026-03-01T23:38:04.829Z",
       "updated": "2026-03-01T23:38:04.829Z"
+    },
+    "Like Game Counter": {
+      "title": "Like Game Counter",
+      "displayTitle": "Like Game Counter",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "like-game-counter.lua",
+      "size": 5618,
+      "created": "2026-03-12T17:18:51.229Z",
+      "updated": "2026-03-12T17:18:51.229Z"
     }
   },
   "bots": {
