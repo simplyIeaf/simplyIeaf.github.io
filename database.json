@@ -1598,13 +1598,13 @@
       "id": "bot_1773335999718",
       "title": "Like Game Counter",
       "message": "SurfaceGui Script Link:\nhttps://simplyieaf.github.io/scripts/like-game-counter/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-03-13T09:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-03-12T17:19:59.718Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-03-13T09:01:08.971Z",
       "cancelled": false,
       "isProcessing": false
     }
