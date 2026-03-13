@@ -823,6 +823,17 @@
       "size": 5618,
       "created": "2026-03-12T17:18:51.229Z",
       "updated": "2026-03-12T17:18:51.229Z"
+    },
+    "Like Goal Counter": {
+      "title": "Like Goal Counter",
+      "displayTitle": "Like Goal Counter",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "like-goal-counter.lua",
+      "size": 5618,
+      "created": "2026-03-13T13:25:06.490Z",
+      "updated": "2026-03-13T13:25:06.490Z"
     }
   },
   "bots": {
