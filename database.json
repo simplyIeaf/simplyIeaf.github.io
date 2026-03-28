@@ -834,6 +834,17 @@
       "size": 5618,
       "created": "2026-03-13T13:25:06.490Z",
       "updated": "2026-03-13T13:25:06.490Z"
+    },
+    "Better Trading System ServerScript": {
+      "title": "Better Trading System ServerScript",
+      "displayTitle": "Better Trading System ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-trading-system-serverscript.lua",
+      "size": 13646,
+      "created": "2026-03-28T12:01:28.286Z",
+      "updated": "2026-03-28T12:01:28.286Z"
     }
   },
   "bots": {
