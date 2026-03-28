@@ -1640,6 +1640,20 @@
       "sentTime": "2026-03-13T09:01:08.971Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1774699455573": {
+      "id": "bot_1774699455573",
+      "title": "Better Trading System",
+      "message": "ServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/better-trading-system-serverscript/index.html\nStarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/better-trading-system-localscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-03-29T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-03-28T12:04:15.573Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
