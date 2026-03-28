@@ -845,6 +845,17 @@
       "size": 13646,
       "created": "2026-03-28T12:01:28.286Z",
       "updated": "2026-03-28T12:01:28.286Z"
+    },
+    "Better Trading System LocalScript": {
+      "title": "Better Trading System LocalScript",
+      "displayTitle": "Better Trading System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-trading-system-localscript.lua",
+      "size": 33623,
+      "created": "2026-03-28T12:02:29.607Z",
+      "updated": "2026-03-28T12:02:29.608Z"
     }
   },
   "bots": {
