@@ -856,6 +856,17 @@
       "size": 33623,
       "created": "2026-03-28T12:02:29.607Z",
       "updated": "2026-03-28T12:02:29.608Z"
+    },
+    "Vote Kick System ServerScript": {
+      "title": "Vote Kick System ServerScript",
+      "displayTitle": "Vote Kick System ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "vote-kick-system-serverscript.lua",
+      "size": 8628,
+      "created": "2026-04-01T16:20:39.413Z",
+      "updated": "2026-04-01T16:20:39.414Z"
     }
   },
   "bots": {
