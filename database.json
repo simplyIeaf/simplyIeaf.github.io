@@ -1676,6 +1676,20 @@
       "sentTime": "2026-03-29T08:02:55.160Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1775060997756": {
+      "id": "bot_1775060997756",
+      "title": "Vote Kick System",
+      "message": "StarterPlayerScripts Script Link:\nhttps://simplyieaf.github.io/scripts/vote-kick-system-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/vote-kick-system-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-04-02T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-04-01T16:29:57.756Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
