@@ -867,6 +867,17 @@
       "size": 8628,
       "created": "2026-04-01T16:20:39.413Z",
       "updated": "2026-04-01T16:20:39.414Z"
+    },
+    "Vote Kick System LocalScript": {
+      "title": "Vote Kick System LocalScript",
+      "displayTitle": "Vote Kick System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "vote-kick-system-localscript.lua",
+      "size": 12037,
+      "created": "2026-04-01T16:21:22.937Z",
+      "updated": "2026-04-01T16:21:22.937Z"
     }
   },
   "bots": {
