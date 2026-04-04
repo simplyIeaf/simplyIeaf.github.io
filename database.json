@@ -856,6 +856,17 @@
       "size": 12037,
       "created": "2026-04-01T16:21:22.937Z",
       "updated": "2026-04-01T16:21:22.937Z"
+    },
+    "Better Admin Panel ServerScript": {
+      "title": "Better Admin Panel ServerScript",
+      "displayTitle": "Better Admin Panel ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-admin-panel-serverscript.lua",
+      "size": 32432,
+      "created": "2026-04-04T20:46:12.570Z",
+      "updated": "2026-04-04T20:46:12.570Z"
     }
   },
   "bots": {
