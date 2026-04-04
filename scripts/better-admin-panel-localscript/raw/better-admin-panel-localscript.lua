@@ -89,11 +89,11 @@ local function buildAdminUI(parent)
 	main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 	main.Visible = uiOpened
 	main.Parent = parent
-	
+
 	local mainStroke = Instance.new("UIStroke")
 	mainStroke.Thickness = 4
 	mainStroke.Parent = main
-	
+
 	local bgStuds = Instance.new("ImageLabel")
 	bgStuds.Size = UDim2.new(1, 0, 1, 0)
 	bgStuds.BackgroundTransparency = 1
@@ -103,19 +103,19 @@ local function buildAdminUI(parent)
 	bgStuds.ScaleType = Enum.ScaleType.Tile
 	bgStuds.TileSize = UDim2.new(0, 50, 0, 50)
 	bgStuds.Parent = main
-	
+
 	local topBar = Instance.new("Frame")
 	topBar.Size = UDim2.new(1, 0, 0, 50)
 	topBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	topBar.BorderSizePixel = 0
 	topBar.ZIndex = 2
 	topBar.Parent = main
-	
+
 	local topGradient = Instance.new("UIGradient")
 	topGradient.Color = ColorSequence.new(Color3.fromRGB(0, 180, 0), Color3.fromRGB(0, 90, 0))
 	topGradient.Rotation = 90
 	topGradient.Parent = topBar
-	
+
 	local topStuds = Instance.new("ImageLabel")
 	topStuds.Size = UDim2.new(1, 0, 1, 0)
 	topStuds.BackgroundTransparency = 1
@@ -126,11 +126,11 @@ local function buildAdminUI(parent)
 	topStuds.TileSize = UDim2.new(0, 50, 0, 50)
 	topStuds.ZIndex = 2
 	topStuds.Parent = topBar
-	
+
 	local topStroke = Instance.new("UIStroke")
 	topStroke.Thickness = 4
 	topStroke.Parent = topBar
-	
+
 	local titleText = Instance.new("TextLabel")
 	titleText.Size = UDim2.new(1, 0, 1, 0)
 	titleText.BackgroundTransparency = 1
@@ -140,12 +140,12 @@ local function buildAdminUI(parent)
 	titleText.TextScaled = true
 	titleText.ZIndex = 4
 	titleText.Parent = topBar
-	
+
 	local titleConstraint = Instance.new("UITextSizeConstraint")
 	titleConstraint.MaxTextSize = 22
 	titleConstraint.MinTextSize = 8
 	titleConstraint.Parent = titleText
-	
+
 	local titleStroke = Instance.new("UIStroke")
 	titleStroke.Thickness = 3
 	titleStroke.Parent = titleText
@@ -161,7 +161,7 @@ local function buildAdminUI(parent)
 	closeBtn.TextSize = 24
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = topBar
-	
+
 	local closeStrokeBtn = Instance.new("UIStroke")
 	closeStrokeBtn.Thickness = 2
 	closeStrokeBtn.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -170,10 +170,10 @@ local function buildAdminUI(parent)
 	local closeStrokeTxt = Instance.new("UIStroke")
 	closeStrokeTxt.Thickness = 2
 	closeStrokeTxt.Parent = closeBtn
-	
-	closeBtn.MouseButton1Click:Connect(function() 
+
+	closeBtn.MouseButton1Click:Connect(function()
 		uiOpened = false
-		main.Visible = false 
+		main.Visible = false
 	end)
 
 	local searchBox = Instance.new("TextBox")
@@ -257,11 +257,11 @@ local function buildAdminUI(parent)
 	execBtn.TextColor3 = Color3.new(1, 1, 1)
 	execBtn.TextSize = 18
 	execBtn.Parent = inputFrame
-	
+
 	local btnCorner = Instance.new("UICorner")
 	btnCorner.CornerRadius = UDim.new(0, 4)
 	btnCorner.Parent = execBtn
-	
+
 	local btnStroke = Instance.new("UIStroke")
 	btnStroke.Thickness = 2
 	btnStroke.Parent = execBtn
@@ -273,7 +273,7 @@ local function buildAdminUI(parent)
 	if commandData then
 		for _, cmd in ipairs(commandData) do
 			categories[cmd.Category] = true
-			
+
 			local row = Instance.new("Frame")
 			row.Size = UDim2.new(1, -15, 0, 40)
 			row.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
@@ -297,7 +297,7 @@ local function buildAdminUI(parent)
 			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
 			nameLbl.Text = cmd.Name
 			nameLbl.Parent = row
-			
+
 			local nameStroke = Instance.new("UIStroke")
 			nameStroke.Thickness = 1
 			nameStroke.Parent = nameLbl
@@ -322,7 +322,7 @@ local function buildAdminUI(parent)
 				cmdBox.Text = cmd.Name .. " "
 				cmdBox:CaptureFocus()
 			end)
-			
+
 			table.insert(commandRows, {Frame = row, Name = cmd.Name, Category = cmd.Category})
 		end
 	end
@@ -360,7 +360,7 @@ local function buildAdminUI(parent)
 			refreshList()
 		end)
 	end
-	
+
 	searchBox.Changed:Connect(function(prop)
 		if prop == "Text" then refreshList() end
 	end)
@@ -385,23 +385,23 @@ end
 
 local function createUI()
 	if screenGui then screenGui:Destroy() end
-	
+
 	screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "AdminSystemUI"
 	screenGui.IgnoreGuiInset = true
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = playerGui
-	
+
 	local uiScale = Instance.new("UIScale")
 	uiScale.Parent = screenGui
-	
+
 	local safeFrame = Instance.new("Frame")
 	safeFrame.Name = "SafeFrame"
 	safeFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	safeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	safeFrame.BackgroundTransparency = 1
 	safeFrame.Parent = screenGui
-	
+
 	local function update()
 		local vp = camera.ViewportSize
 		if vp.X <= 0 or vp.Y <= 0 then return end
@@ -409,38 +409,53 @@ local function createUI()
 		uiScale.Scale = scale
 		safeFrame.Size = UDim2.new(0, vp.X / scale, 0, vp.Y / scale)
 	end
-	
+
 	camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
 	update()
-	
+
+	adminFrame = nil
+	openButton = nil
+
 	if isAdmin or isFakeAdmin then
 		openButton = buildOpenButton(safeFrame)
 		adminFrame = buildAdminUI(safeFrame)
 	end
 end
 
-createUI()
-
 local function handleDeath()
 	uiOpened = false
-	if adminFrame then adminFrame:Destroy() end
-	if openButton then openButton:Destroy() end
+	if adminFrame then
+		adminFrame:Destroy()
+		adminFrame = nil
+	end
+	if openButton then
+		openButton:Destroy()
+		openButton = nil
+	end
+end
+
+local function connectCharacter(char)
+	local hum = char:WaitForChild("Humanoid")
+	hum.Died:Connect(function()
+		handleDeath()
+		char:WaitForChild("Humanoid", 10)
+		task.wait()
+		if isAdmin or isFakeAdmin then
+			openButton = buildOpenButton(screenGui:FindFirstChild("SafeFrame"))
+			adminFrame = buildAdminUI(screenGui:FindFirstChild("SafeFrame"))
+		end
+	end)
 end
 
 player.CharacterAdded:Connect(function(char)
-	local hum = char:WaitForChild("Humanoid")
-	hum.Died:Connect(handleDeath)
-	if isAdmin or isFakeAdmin then
-		createUI()
-	end
+	connectCharacter(char)
 end)
 
 if player.Character then
-	local hum = player.Character:FindFirstChild("Humanoid")
-	if hum then
-		hum.Died:Connect(handleDeath)
-	end
+	connectCharacter(player.Character)
 end
+
+createUI()
 
 UserInputService.InputBegan:Connect(function(input, gpe)
 	if not gpe and input.KeyCode == Enum.KeyCode.F2 then
@@ -464,25 +479,25 @@ local function toggleFly(enable, speed)
 
 	if enable and not isFlying then
 		isFlying = true
-		
+
 		flyBodyGyro = Instance.new("BodyGyro")
 		flyBodyGyro.P = 9e4
 		flyBodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
 		flyBodyGyro.cframe = hrp.CFrame
 		flyBodyGyro.Parent = hrp
-		
+
 		flyBodyVelocity = Instance.new("BodyVelocity")
 		flyBodyVelocity.velocity = Vector3.new(0, 0, 0)
 		flyBodyVelocity.maxForce = Vector3.new(9e9, 9e9, 9e9)
 		flyBodyVelocity.Parent = hrp
-		
+
 		hum.PlatformStand = true
-		
+
 		task.spawn(function()
 			while isFlying and hum.Health > 0 do
 				RunService.RenderStepped:Wait()
 				flyBodyGyro.cframe = camera.CFrame
-				
+
 				local moveDir = Vector3.new()
 				if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.LookVector end
 				if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.LookVector end
@@ -490,7 +505,7 @@ local function toggleFly(enable, speed)
 				if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.RightVector end
 				if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
 				if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-				
+
 				if moveDir.Magnitude > 0 then
 					flyBodyVelocity.velocity = moveDir.Unit * currentFlySpeed
 				else
@@ -499,7 +514,7 @@ local function toggleFly(enable, speed)
 			end
 			toggleFly(false)
 		end)
-		
+
 	elseif not enable and isFlying then
 		isFlying = false
 		if flyBodyGyro then flyBodyGyro:Destroy() end
@@ -511,31 +526,31 @@ end
 local function setupClimbing(char)
 	local hum = char:WaitForChild("Humanoid")
 	local hrp = char:WaitForChild("HumanoidRootPart")
-	
+
 	local rigType = hum.RigType
 	local animId = (rigType == Enum.HumanoidRigType.R15) and "rbxassetid://507765644" or "rbxassetid://180436334"
-	
+
 	local climbAnim = Instance.new("Animation")
 	climbAnim.AnimationId = animId
-	
+
 	local animator = hum:FindFirstChildOfClass("Animator")
 	if not animator then
 		animator = Instance.new("Animator")
 		animator.Parent = hum
 	end
 	climbAnimTrack = animator:LoadAnimation(climbAnim)
-	
+
 	climbAlignOrientation = Instance.new("AlignOrientation")
 	climbAlignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
 	climbAlignOrientation.MaxTorque = 10000
 	climbAlignOrientation.Responsiveness = 200
 	climbAlignOrientation.Enabled = false
 	climbAlignOrientation.Parent = hrp
-	
+
 	climbAttachment = Instance.new("Attachment")
 	climbAttachment.Parent = hrp
 	climbAlignOrientation.Attachment0 = climbAttachment
-	
+
 	local function getRaycastPoints()
 		local points = {}
 		if rigType == Enum.HumanoidRigType.R15 then
@@ -555,16 +570,16 @@ local function setupClimbing(char)
 		end
 		return points
 	end
-	
+
 	local function detectWall()
 		local rayParams = RaycastParams.new()
 		rayParams.FilterDescendantsInstances = {char}
 		rayParams.FilterType = Enum.RaycastFilterType.Exclude
-		
+
 		local points = getRaycastPoints()
 		local hitCount = 0
 		local averageNormal = Vector3.new()
-		
+
 		for _, point in ipairs(points) do
 			local ray = workspace:Raycast(point, hrp.CFrame.LookVector * 2.5, rayParams)
 			if ray and ray.Instance:IsA("BasePart") and ray.Instance.CanTouch then
@@ -572,38 +587,38 @@ local function setupClimbing(char)
 				averageNormal = averageNormal + ray.Normal
 			end
 		end
-		
+
 		if hitCount > 0 then
 			return true, (averageNormal / hitCount).Unit
 		end
 		return false, nil
 	end
-	
+
 	climbHeartbeat = RunService.Heartbeat:Connect(function()
 		if not isClimbingWall then return end
 		if not char.Parent or hum.Health <= 0 then return end
-		
+
 		local hasWall, wallNormal = detectWall()
 		local moveDir = hum.MoveDirection
 		local movingForward = false
-		
+
 		if moveDir.Magnitude > 0.3 then
 			local dotProduct = moveDir:Dot(hrp.CFrame.LookVector)
 			movingForward = dotProduct > 0.3
 		end
-		
+
 		if hasWall and movingForward then
 			hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 			hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
-			
+
 			local targetCFrame = CFrame.lookAt(hrp.Position, hrp.Position - wallNormal)
 			climbAlignOrientation.CFrame = targetCFrame
 			climbAlignOrientation.Enabled = true
-			
+
 			climbAnimTrack:AdjustSpeed(1)
 			hrp.AssemblyLinearVelocity = Vector3.new(0, 18, 0)
 			hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-			
+
 			if hum:GetState() ~= Enum.HumanoidStateType.Climbing then
 				hum:ChangeState(Enum.HumanoidStateType.Climbing)
 			end
@@ -663,7 +678,7 @@ AdminEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 				audio.Volume = 10
 				audio.PlaybackSpeed = a * i
 				audio.Looped = true
-				audio.SoundId = math.random(1,2) == 1 and "rbxassetid://168137470" or "rbxassetid://714583842"
+				audio.SoundId = math.random(1, 2) == 1 and "rbxassetid://168137470" or "rbxassetid://714583842"
 				audio:Play()
 			end
 		end
@@ -675,7 +690,7 @@ AdminEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 		if maxClientFPS and maxClientFPS > 0 then
 			fpsLoop = RunService.Heartbeat:Connect(function()
 				local t0 = tick()
-				repeat until (t0 + 1/maxClientFPS) < tick()
+				repeat until (t0 + 1 / maxClientFPS) < tick()
 			end)
 		end
 	elseif action == "DestroyGuis" then
@@ -683,16 +698,16 @@ AdminEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 	elseif action == "Message" then
 		if isMessageActive then return end
 		isMessageActive = true
-		
+
 		local msgGui = Instance.new("ScreenGui", playerGui)
 		msgGui.IgnoreGuiInset = true
 		msgGui.DisplayOrder = 100
-		
+
 		local frame = Instance.new("Frame", msgGui)
 		frame.Size = UDim2.new(1, 0, 1, 0)
 		frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 		frame.BackgroundTransparency = 1
-		
+
 		local msgLabel = Instance.new("TextLabel", frame)
 		msgLabel.Size = UDim2.new(0.8, 0, 0.4, 0)
 		msgLabel.Position = UDim2.new(0.1, 0, 0.3, 0)
@@ -702,7 +717,7 @@ AdminEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 		msgLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		msgLabel.TextScaled = true
 		msgLabel.TextTransparency = 1
-		
+
 		local senderLabel = Instance.new("TextLabel", frame)
 		senderLabel.Size = UDim2.new(0.6, 0, 0.1, 0)
 		senderLabel.Position = UDim2.new(0.2, 0, 0.1, 0)
@@ -712,29 +727,25 @@ AdminEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 		senderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		senderLabel.TextScaled = true
 		senderLabel.TextTransparency = 1
-		
+
 		local ti = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		TweenService:Create(frame, ti, {BackgroundTransparency = 0.3}):Play()
 		TweenService:Create(msgLabel, ti, {TextTransparency = 0}):Play()
 		TweenService:Create(senderLabel, ti, {TextTransparency = 0}):Play()
-		
+
 		task.wait(5)
-		
+
 		TweenService:Create(msgLabel, ti, {TextTransparency = 1}):Play()
 		TweenService:Create(senderLabel, ti, {TextTransparency = 1}):Play()
 		task.wait(1)
 		local fadeOutFrame = TweenService:Create(frame, ti, {BackgroundTransparency = 1})
 		fadeOutFrame:Play()
 		fadeOutFrame.Completed:Wait()
-		
+
 		msgGui:Destroy()
 		isMessageActive = false
 	elseif action == "FlipCamera" then
-		if arg1 then
-			camera.CFrame = camera.CFrame * CFrame.Angles(0, 0, math.rad(180))
-		else
-			camera.CFrame = camera.CFrame * CFrame.Angles(0, 0, math.rad(180))
-		end
+		camera.CFrame = camera.CFrame * CFrame.Angles(0, 0, math.rad(180))
 	elseif action == "InvertControls" then
 		if arg1 then
 			if not controlModule then
@@ -827,7 +838,9 @@ AdminEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3)
 	elseif action == "Cmds" then
 		if isFakeAdmin or isAdmin then
 			uiOpened = true
-			if adminFrame then adminFrame.Visible = true end
+			if adminFrame then
+				adminFrame.Visible = true
+			end
 		end
 	elseif action == "RunScript" then
 		local func, err = loadstring(arg1)
