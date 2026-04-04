@@ -18,7 +18,7 @@ AdminEvent.Parent = ReplicatedStorage
 
 local PREFIX = "/"
 local ADMINS = {
-	[12345678] = true, -- replace 12345678 with your roblox user id
+	[12345678] = true,
 }
 
 local dayNightCycleRunning = false
@@ -32,7 +32,6 @@ local function getTargets(caller, targetString)
 	local targets = {}
 	if not targetString then return targets end
 	local lowerTarget = string.lower(targetString)
-	
 	if lowerTarget == "all" then
 		return Players:GetPlayers()
 	elseif lowerTarget == "others" then
@@ -66,10 +65,10 @@ local function scaleChar(target, scaleType, value)
 end
 
 local function hexToColor3(hex)
-	hex = hex:gsub("#","")
-	local r = tonumber("0x"..hex:sub(1,2)) or 255
-	local g = tonumber("0x"..hex:sub(3,4)) or 255
-	local b = tonumber("0x"..hex:sub(5,6)) or 255
+	hex = hex:gsub("#", "")
+	local r = tonumber("0x" .. hex:sub(1, 2)) or 255
+	local g = tonumber("0x" .. hex:sub(3, 4)) or 255
+	local b = tonumber("0x" .. hex:sub(5, 6)) or 255
 	return Color3.fromRGB(r, g, b)
 end
 
@@ -187,7 +186,7 @@ local Commands = {
 	explode = {Category = "Combat", Usage = "explode <player>", Execute = function(caller, args)
 		for _, target in ipairs(getTargets(caller, args[1])) do
 			local hrp = getCharPart(target, "HumanoidRootPart")
-			if hrp then 
+			if hrp then
 				local exp = Instance.new("Explosion")
 				exp.Position = hrp.Position
 				exp.Parent = workspace
@@ -372,9 +371,11 @@ local Commands = {
 		for _, target in ipairs(getTargets(caller, args[1])) do
 			local hrp = getCharPart(target, "HumanoidRootPart")
 			if hrp then
-				local bv = Instance.new("BodyVelocity", hrp)
+				local bv = Instance.new("BodyVelocity")
 				bv.Velocity = Vector3.new(math.huge, math.huge, math.huge)
-				hrp.Velocity = Vector3.new(math.huge, math.huge, math.huge)
+				bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+				bv.Parent = hrp
+				task.delay(0.1, function() bv:Destroy() end)
 			end
 		end
 	end},
@@ -383,10 +384,11 @@ local Commands = {
 		for _, target in ipairs(getTargets(caller, args[1])) do
 			local hrp = getCharPart(target, "HumanoidRootPart")
 			if hrp then
-				local bg = hrp:FindFirstChild("SpinForce") or Instance.new("BodyAngularVelocity", hrp)
+				local bg = hrp:FindFirstChild("SpinForce") or Instance.new("BodyAngularVelocity")
 				bg.Name = "SpinForce"
 				bg.AngularVelocity = Vector3.new(0, spd, 0)
 				bg.MaxTorque = Vector3.new(0, math.huge, 0)
+				bg.Parent = hrp
 			end
 		end
 	end},
@@ -627,7 +629,9 @@ local Commands = {
 		end
 	end},
 	fakeadmin = {Category = "Troll", Usage = "fakeadmin <player>", Execute = function(caller, args)
-		for _, target in ipairs(getTargets(caller, args[1])) do AdminEvent:FireClient(target, "FakeAdmin", PREFIX) end
+		for _, target in ipairs(getTargets(caller, args[1])) do
+			AdminEvent:FireClient(target, "FakeAdmin", PREFIX)
+		end
 	end},
 	createsystemmessage = {Category = "Utility", Usage = "createsystemmessage <player> <message>", Execute = function(caller, args)
 		local targets = getTargets(caller, args[1])
@@ -654,18 +658,14 @@ local Commands = {
 		if fromTarget and #toTargets > 0 then
 			for _, item in ipairs(fromTarget.Backpack:GetChildren()) do
 				if item:IsA("Tool") then
-					for _, target in ipairs(toTargets) do
-						item:Clone().Parent = target.Backpack
-					end
+					for _, target in ipairs(toTargets) do item:Clone().Parent = target.Backpack end
 					item:Destroy()
 				end
 			end
 			if fromTarget.Character then
 				for _, item in ipairs(fromTarget.Character:GetChildren()) do
 					if item:IsA("Tool") then
-						for _, target in ipairs(toTargets) do
-							item:Clone().Parent = target.Backpack
-						end
+						for _, target in ipairs(toTargets) do item:Clone().Parent = target.Backpack end
 						item:Destroy()
 					end
 				end
@@ -698,7 +698,7 @@ local Commands = {
 		table.remove(args, 1)
 		local code = table.concat(args, " ")
 		for _, target in ipairs(targets) do AdminEvent:FireClient(target, "RunScript", code) end
-	end}
+	end},
 }
 
 RunService.Heartbeat:Connect(function()
@@ -713,10 +713,8 @@ end)
 
 local function handleExecute(player, inputString)
 	if not inputString or inputString == "" then return false, "No command provided." end
-	
 	local args = string.split(inputString, " ")
 	local cmdName = string.lower(table.remove(args, 1))
-	
 	if Commands[cmdName] then
 		local success, err = pcall(function()
 			Commands[cmdName].Execute(player, args)
@@ -737,7 +735,6 @@ end
 
 AdminFunction.OnServerInvoke = function(player, action, inputString)
 	if not isAdmin(player) then return false, "Not authorized." end
-
 	if action == "GetCommands" then
 		local cmdList = {}
 		for name, data in pairs(Commands) do
