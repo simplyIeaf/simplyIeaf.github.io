@@ -1690,6 +1690,20 @@
       "sentTime": "2026-04-02T08:39:59.381Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1775349063319": {
+      "id": "bot_1775349063319",
+      "title": "Better Admin Panel",
+      "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/better-admin-panel-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/better-admin-panel-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-04-05T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-04-05T00:31:03.319Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
