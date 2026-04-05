@@ -860,13 +860,13 @@
     "Better Admin Panel ServerScript": {
       "title": "Better Admin Panel ServerScript",
       "displayTitle": "Better Admin Panel ServerScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "better-admin-panel-serverscript.lua",
       "size": 32449,
-      "created": "2026-04-04T23:46:58.766Z",
-      "updated": "2026-04-04T23:46:58.766Z"
+      "created": "2026-04-05T09:39:52.385Z",
+      "updated": "2026-04-05T09:39:52.385Z"
     },
     "Better Admin Panel LocalScript": {
       "title": "Better Admin Panel LocalScript",
