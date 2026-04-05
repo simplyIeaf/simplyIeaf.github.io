@@ -81,12 +81,17 @@ local function buildOpenButton(parent)
 end
 
 local function buildAdminUI(parent)
+	local CMDS_PER_PAGE = 37
+	local ROW_H = 40
+	local ROW_GAP = 5
+
 	local main = Instance.new("Frame")
 	main.Name = "AdminFrame"
 	main.Size = UDim2.new(0, 600, 0, 500)
 	main.AnchorPoint = Vector2.new(0.5, 0.5)
 	main.Position = UDim2.new(0.5, 0, 0.5, 0)
 	main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	main.ClipsDescendants = true
 	main.Visible = uiOpened
 	main.Parent = parent
 
@@ -112,7 +117,7 @@ local function buildAdminUI(parent)
 	topBar.Parent = main
 
 	local topGradient = Instance.new("UIGradient")
-	topGradient.Color = ColorSequence.new(Color3.fromRGB(0, 180, 0), Color3.fromRGB(0, 90, 0))
+	topGradient.Color = ColorSequence.new(Color3.fromRGB(0, 220, 0), Color3.fromRGB(0, 130, 0))
 	topGradient.Rotation = 90
 	topGradient.Parent = topBar
 
@@ -137,14 +142,10 @@ local function buildAdminUI(parent)
 	titleText.Text = "Admin Panel"
 	titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 	titleText.Font = Enum.Font.FredokaOne
-	titleText.TextScaled = true
+	titleText.TextScaled = false
+	titleText.TextSize = 28
 	titleText.ZIndex = 4
 	titleText.Parent = topBar
-
-	local titleConstraint = Instance.new("UITextSizeConstraint")
-	titleConstraint.MaxTextSize = 22
-	titleConstraint.MinTextSize = 8
-	titleConstraint.Parent = titleText
 
 	local titleStroke = Instance.new("UIStroke")
 	titleStroke.Thickness = 3
@@ -199,27 +200,42 @@ local function buildAdminUI(parent)
 	tabsFrame.Size = UDim2.new(1, -20, 0, 30)
 	tabsFrame.Position = UDim2.new(0, 10, 0, 100)
 	tabsFrame.BackgroundTransparency = 1
-	tabsFrame.ScrollBarThickness = 0
-	tabsFrame.CanvasSize = UDim2.new(2, 0, 0, 0)
+	tabsFrame.ScrollBarThickness = 2
+	tabsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	tabsFrame.ScrollingDirection = Enum.ScrollingDirection.XY
 	tabsFrame.Parent = main
 
 	local tabsLayout = Instance.new("UIListLayout")
 	tabsLayout.FillDirection = Enum.FillDirection.Horizontal
 	tabsLayout.Padding = UDim.new(0, 5)
+	tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	tabsLayout.Parent = tabsFrame
 
-	local scrollFrame = Instance.new("ScrollingFrame")
-	scrollFrame.Size = UDim2.new(1, -20, 1, -190)
-	scrollFrame.Position = UDim2.new(0, 10, 0, 140)
-	scrollFrame.BackgroundTransparency = 1
-	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = 8
-	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 0, 0)
-	scrollFrame.Parent = main
+	tabsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		tabsFrame.CanvasSize = UDim2.new(0, tabsLayout.AbsoluteContentSize.X + 10, 0, 0)
+	end)
 
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0, 5)
-	listLayout.Parent = scrollFrame
+	local pageBar = Instance.new("Frame")
+	pageBar.Name = "PageBar"
+	pageBar.BackgroundTransparency = 1
+	pageBar.Size = UDim2.new(1, -20, 0, 30)
+	pageBar.Position = UDim2.new(0, 10, 1, -85)
+	pageBar.Parent = main
+
+	local pageBarLayout = Instance.new("UIListLayout")
+	pageBarLayout.FillDirection = Enum.FillDirection.Horizontal
+	pageBarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	pageBarLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	pageBarLayout.Padding = UDim.new(0, 4)
+	pageBarLayout.Parent = pageBar
+
+	local listContainer = Instance.new("Frame")
+	listContainer.Name = "ListContainer"
+	listContainer.Size = UDim2.new(1, -20, 1, -240)
+	listContainer.Position = UDim2.new(0, 10, 0, 140)
+	listContainer.BackgroundTransparency = 1
+	listContainer.ClipsDescendants = true
+	listContainer.Parent = main
 
 	local inputFrame = Instance.new("Frame")
 	inputFrame.Size = UDim2.new(1, -20, 0, 40)
@@ -266,18 +282,81 @@ local function buildAdminUI(parent)
 	btnStroke.Thickness = 2
 	btnStroke.Parent = execBtn
 
-	local commandRows = {}
-	local currentCategory = "All"
-	local categories = {All = true}
+	local allCommands = {}
+	local categories = {"All"}
+	local categorySet = {All = true}
 
 	if commandData then
 		for _, cmd in ipairs(commandData) do
-			categories[cmd.Category] = true
+			if not categorySet[cmd.Category] then
+				categorySet[cmd.Category] = true
+				table.insert(categories, cmd.Category)
+			end
+			table.insert(allCommands, {Name = cmd.Name, Usage = cmd.Usage, Category = cmd.Category})
+		end
+	end
+	table.sort(categories, function(a, b)
+		if a == "All" then return true end
+		if b == "All" then return false end
+		return a < b
+	end)
+	table.sort(allCommands, function(a, b) return a.Name < b.Name end)
+
+	local currentCategory = "All"
+	local currentPage = 1
+	local filteredList = {}
+	local pageButtonFrames = {}
+	local rowCache = {}
+
+	local rowsContainer = Instance.new("ScrollingFrame")
+	rowsContainer.Name = "RowsContainer"
+	rowsContainer.BackgroundTransparency = 1
+	rowsContainer.Size = UDim2.new(1, 0, 1, 0)
+	rowsContainer.Position = UDim2.new(0, 0, 0, 0)
+	rowsContainer.ClipsDescendants = true
+	rowsContainer.ScrollBarThickness = 5
+	rowsContainer.BorderSizePixel = 0
+	rowsContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+	rowsContainer.Parent = listContainer
+
+	local function makePageButton(labelText, isNum)
+		local pb = Instance.new("TextButton")
+		pb.Size = UDim2.new(0, 30, 0, 26)
+		pb.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		pb.Font = Enum.Font.FredokaOne
+		pb.TextColor3 = Color3.fromRGB(255, 255, 255)
+		pb.TextSize = 14
+		pb.Text = labelText
+		pb.Parent = pageBar
+
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 4)
+		c.Parent = pb
+
+		local s = Instance.new("UIStroke")
+		s.Thickness = 2
+		s.Parent = pb
+
+		return pb
+	end
+
+	local function renderPage()
+		for _, r in ipairs(rowCache) do r:Destroy() end
+		rowCache = {}
+
+		local startI = (currentPage - 1) * CMDS_PER_PAGE + 1
+		local endI = math.min(currentPage * CMDS_PER_PAGE, #filteredList)
+
+		for i = startI, endI do
+			local cmd = filteredList[i]
+			local yPos = (i - startI) * (ROW_H + ROW_GAP)
 
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, -15, 0, 40)
+			row.Size = UDim2.new(1, -12, 0, ROW_H)
+			row.Position = UDim2.new(0, 0, 0, yPos)
 			row.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-			row.Parent = scrollFrame
+			row.Parent = rowsContainer
+			table.insert(rowCache, row)
 
 			local rowCorner = Instance.new("UICorner")
 			rowCorner.CornerRadius = UDim.new(0, 4)
@@ -318,33 +397,105 @@ local function buildAdminUI(parent)
 			rowBtn.BackgroundTransparency = 1
 			rowBtn.Text = ""
 			rowBtn.Parent = row
+			local cmdName = cmd.Name
 			rowBtn.MouseButton1Click:Connect(function()
-				cmdBox.Text = cmd.Name .. " "
+				cmdBox.Text = cmdName .. " "
 				cmdBox:CaptureFocus()
 			end)
+		end
 
-			table.insert(commandRows, {Frame = row, Name = cmd.Name, Category = cmd.Category})
+		local usedOnPage = endI - startI + 1
+		if usedOnPage < 0 then usedOnPage = 0 end
+		rowsContainer.CanvasSize = UDim2.new(0, 0, 0, usedOnPage * (ROW_H + ROW_GAP))
+	end
+
+	local function buildPageBar(totalPages)
+		for _, f in ipairs(pageButtonFrames) do f:Destroy() end
+		pageButtonFrames = {}
+
+		if totalPages <= 1 then
+			pageBar.Visible = false
+			return
+		end
+		pageBar.Visible = true
+
+		local prevBtn = makePageButton("<")
+		prevBtn.Size = UDim2.new(0, 26, 0, 26)
+		table.insert(pageButtonFrames, prevBtn)
+
+		local numBtns = {}
+		for i = 1, totalPages do
+			local nb = makePageButton(tostring(i), true)
+			if i == currentPage then
+				nb.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+				nb.TextColor3 = Color3.fromRGB(255, 255, 255)
+			else
+				nb.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+				nb.TextColor3 = Color3.fromRGB(255, 255, 255)
+			end
+			table.insert(pageButtonFrames, nb)
+			table.insert(numBtns, {btn = nb, page = i})
+		end
+
+		local nextBtn = makePageButton(">")
+		nextBtn.Size = UDim2.new(0, 26, 0, 26)
+		table.insert(pageButtonFrames, nextBtn)
+
+		prevBtn.MouseButton1Click:Connect(function()
+			if currentPage > 1 then
+				currentPage = currentPage - 1
+				rowsContainer.CanvasPosition = Vector2.new(0, 0)
+				buildPageBar(totalPages)
+				renderPage()
+			end
+		end)
+
+		nextBtn.MouseButton1Click:Connect(function()
+			if currentPage < totalPages then
+				currentPage = currentPage + 1
+				rowsContainer.CanvasPosition = Vector2.new(0, 0)
+				buildPageBar(totalPages)
+				renderPage()
+			end
+		end)
+
+		for _, data in ipairs(numBtns) do
+			local pg = data.page
+			data.btn.MouseButton1Click:Connect(function()
+				currentPage = pg
+				rowsContainer.CanvasPosition = Vector2.new(0, 0)
+				buildPageBar(totalPages)
+				renderPage()
+			end)
 		end
 	end
 
-	local function refreshList()
+	local function applyFilter()
 		local term = string.lower(searchBox.Text)
-		for _, obj in ipairs(commandRows) do
-			local matchesCat = (currentCategory == "All" or obj.Category == currentCategory)
-			local matchesSearch = (term == "" or string.find(string.lower(obj.Name), term))
-			obj.Frame.Visible = matchesCat and matchesSearch
+		filteredList = {}
+		for _, cmd in ipairs(allCommands) do
+			local matchCat = (currentCategory == "All" or cmd.Category == currentCategory)
+			local matchSearch = (term == "" or string.find(string.lower(cmd.Name), term, 1, true))
+			if matchCat and matchSearch then
+				table.insert(filteredList, cmd)
+			end
 		end
-		scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
+		local totalPages = math.max(1, math.ceil(#filteredList / CMDS_PER_PAGE))
+		if currentPage > totalPages then currentPage = totalPages end
+		rowsContainer.CanvasPosition = Vector2.new(0, 0)
+		buildPageBar(totalPages)
+		renderPage()
 	end
 
-	for cat, _ in pairs(categories) do
+	for i, cat in ipairs(categories) do
 		local tabBtn = Instance.new("TextButton")
-		tabBtn.Size = UDim2.new(0, 80, 1, 0)
+		tabBtn.Size = UDim2.new(0, 80, 1, -4)
 		tabBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
 		tabBtn.Text = cat
 		tabBtn.Font = Enum.Font.FredokaOne
 		tabBtn.TextColor3 = Color3.new(1, 1, 1)
 		tabBtn.TextSize = 14
+		tabBtn.LayoutOrder = i
 		tabBtn.Parent = tabsFrame
 
 		local tCorner = Instance.new("UICorner")
@@ -357,14 +508,21 @@ local function buildAdminUI(parent)
 
 		tabBtn.MouseButton1Click:Connect(function()
 			currentCategory = cat
-			refreshList()
+			currentPage = 1
+			rowsContainer.CanvasPosition = Vector2.new(0, 0)
+			applyFilter()
 		end)
 	end
 
 	searchBox.Changed:Connect(function(prop)
-		if prop == "Text" then refreshList() end
+		if prop == "Text" then
+			currentPage = 1
+			rowsContainer.CanvasPosition = Vector2.new(0, 0)
+			applyFilter()
+		end
 	end)
-	refreshList()
+
+	applyFilter()
 
 	local function executeCommand()
 		if cmdBox.Text ~= "" then
@@ -471,7 +629,7 @@ local function toggleFly(enable, speed)
 	if not char then return end
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	local hum = char:FindFirstChildWhichIsA("Humanoid")
-	if not hrp or not hum then return end
+	if not hrp or hum == nil then return end
 
 	if enable then
 		currentFlySpeed = speed or 50
