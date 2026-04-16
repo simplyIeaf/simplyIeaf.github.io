@@ -838,13 +838,13 @@
     "Vote Kick System ServerScript": {
       "title": "Vote Kick System ServerScript",
       "displayTitle": "Vote Kick System ServerScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "vote-kick-system-serverscript.lua",
       "size": 8628,
-      "created": "2026-04-01T16:20:39.413Z",
-      "updated": "2026-04-01T16:20:39.414Z"
+      "created": "2026-04-16T10:04:25.466Z",
+      "updated": "2026-04-16T10:04:25.466Z"
     },
     "Vote Kick System LocalScript": {
       "title": "Vote Kick System LocalScript",
