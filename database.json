@@ -761,13 +761,13 @@
     "Custom Button Animation ServerScript": {
       "title": "Custom Button Animation ServerScript",
       "displayTitle": "Custom Button Animation ServerScript",
-      "visibility": "UNLISTED",
-      "description": "<p><br></p>",
+      "visibility": "PUBLIC",
+      "description": "",
       "expiration": null,
       "filename": "custom-button-animation-serverscript.lua",
       "size": 3428,
-      "created": "2026-03-01T23:34:03.078Z",
-      "updated": "2026-03-01T23:34:03.078Z"
+      "created": "2026-04-16T10:07:44.665Z",
+      "updated": "2026-04-16T10:07:44.665Z"
     },
     "Custom Button Animation LocalScript": {
       "title": "Custom Button Animation LocalScript",
