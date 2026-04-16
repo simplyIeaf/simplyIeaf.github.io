@@ -827,13 +827,13 @@
     "Better Trading System LocalScript": {
       "title": "Better Trading System LocalScript",
       "displayTitle": "Better Trading System LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "better-trading-system-localscript.lua",
       "size": 33623,
-      "created": "2026-03-28T12:02:29.607Z",
-      "updated": "2026-03-28T12:02:29.608Z"
+      "created": "2026-04-16T10:05:31.878Z",
+      "updated": "2026-04-16T10:05:31.878Z"
     },
     "Vote Kick System ServerScript": {
       "title": "Vote Kick System ServerScript",
