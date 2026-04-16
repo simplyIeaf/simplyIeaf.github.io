@@ -849,13 +849,13 @@
     "Vote Kick System LocalScript": {
       "title": "Vote Kick System LocalScript",
       "displayTitle": "Vote Kick System LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "vote-kick-system-localscript.lua",
       "size": 12037,
-      "created": "2026-04-01T16:21:22.937Z",
-      "updated": "2026-04-01T16:21:22.937Z"
+      "created": "2026-04-16T10:04:52.246Z",
+      "updated": "2026-04-16T10:04:52.246Z"
     },
     "Better Admin Panel ServerScript": {
       "title": "Better Admin Panel ServerScript",
