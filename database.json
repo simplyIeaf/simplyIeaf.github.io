@@ -1886,6 +1886,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1776450646232": {
+      "id": "bot_1776450646232",
+      "title": "Sjsjnsjnjn",
+      "message": "Sunjnsnjs n",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-04-17T18:30:46.232Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
