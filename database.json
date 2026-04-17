@@ -1868,7 +1868,7 @@
       "timezone": "",
       "created": "2026-04-17T18:05:58.300Z",
       "sent": false,
-      "status": "pending",
+      "status": "processing",
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
