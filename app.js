@@ -518,7 +518,7 @@ const app = {
             bot.isProcessing = true;
             
             const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
                 {
                     method: 'POST',
                     headers: {
@@ -595,7 +595,7 @@ const app = {
 
         try {
             const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord_bot.yml/dispatches`,
+                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
                 {
                     method: 'POST',
                     headers: {
