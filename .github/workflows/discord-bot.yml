@@ -16,7 +16,7 @@ jobs:
   process-bot:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -34,82 +34,156 @@ jobs:
           import fs from 'fs';
           import https from 'https';
 
-          const WEBHOOK_URL = process.env.WEBHOOK_URL;
+          const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+          const FORUM_CHANNEL_ID = process.env.FORUM_CHANNEL_ID;
           const MANUAL_ID = process.env.MANUAL_BOT_ID;
 
-          async function sendToDiscord(title, message) {
+          function httpsRequest(options, body = null) {
             return new Promise((resolve) => {
-              const payload = JSON.stringify({
-                content: message,
-                thread_name: title,
-                username: "Leaf"
-              });
-
-              const url = new URL(WEBHOOK_URL);
-              const options = {
-                hostname: url.hostname,
-                path: url.pathname + url.search,
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(payload)
-                }
-              };
-
               const req = https.request(options, (res) => {
                 let data = '';
                 res.on('data', (chunk) => data += chunk);
-                res.on('end', () => {
-                  if (res.statusCode >= 200 && res.statusCode < 300) {
-                    resolve({ success: true });
-                  } else {
-                    console.error(`Discord API Error: ${res.statusCode} - ${data}`);
-                    resolve({ success: false, error: data });
-                  }
-                });
+                res.on('end', () => resolve({ status: res.statusCode, body: data }));
               });
-
-              req.on('error', (e) => resolve({ success: false, error: e.message }));
-              req.write(payload);
+              req.on('error', (e) => resolve({ status: 0, body: e.message }));
+              if (body) req.write(body);
               req.end();
             });
           }
 
+          async function createForumPost(title, message) {
+            const payload = JSON.stringify({
+              name: title,
+              message: {
+                content: message
+              }
+            });
+
+            const res = await httpsRequest({
+              hostname: 'discord.com',
+              path: `/api/v10/channels/${FORUM_CHANNEL_ID}/threads`,
+              method: 'POST',
+              headers: {
+                'Authorization': `Bot ${BOT_TOKEN}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload)
+              }
+            }, payload);
+
+            if (res.status === 201) {
+              const parsed = JSON.parse(res.body);
+              // In forum threads, thread ID == starter message ID
+              const threadId = parsed.id;
+              console.log(`Forum post created! Thread ID: ${threadId}`);
+              return { success: true, threadId, messageId: threadId };
+            } else {
+              console.error(`Failed to create forum post: ${res.status} - ${res.body}`);
+              return { success: false };
+            }
+          }
+
+          async function addReaction(channelId, messageId) {
+            const emoji = encodeURIComponent('🔥');
+            const res = await httpsRequest({
+              hostname: 'discord.com',
+              path: `/api/v10/channels/${channelId}/messages/${messageId}/reactions/${emoji}/@me`,
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bot ${BOT_TOKEN}`,
+                'Content-Length': '0'
+              }
+            });
+
+            if (res.status === 204) {
+              console.log('Reaction 🔥 added');
+              return true;
+            } else {
+              console.error(`Reaction failed: ${res.status} - ${res.body}`);
+              return false;
+            }
+          }
+
+          async function joinThread(threadId) {
+            const res = await httpsRequest({
+              hostname: 'discord.com',
+              path: `/api/v10/channels/${threadId}/thread-members/@me`,
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bot ${BOT_TOKEN}`,
+                'Content-Length': '0'
+              }
+            });
+
+            if (res.status === 204) {
+              console.log('Joined thread');
+              return true;
+            } else {
+              console.error(`Join thread failed: ${res.status} - ${res.body}`);
+              return false;
+            }
+          }
+
+          async function processBot(bot) {
+            const result = await createForumPost(bot.title, bot.message);
+            if (!result.success) return false;
+
+            // Small delay before reacting
+            await new Promise(r => setTimeout(r, 1500));
+
+            await addReaction(result.threadId, result.messageId);
+            await joinThread(result.threadId);
+
+            return true;
+          }
+
           async function run() {
+            if (!BOT_TOKEN) {
+              console.error('DISCORD_BOT_TOKEN is not set');
+              process.exit(1);
+            }
+            if (!FORUM_CHANNEL_ID) {
+              console.error('FORUM_CHANNEL_ID is not set');
+              process.exit(1);
+            }
             if (!fs.existsSync('database.json')) {
               console.error('database.json not found');
-              return;
+              process.exit(1);
             }
-            
+
             const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
             const now = new Date();
             let dirty = false;
 
+            // Manual trigger
             if (MANUAL_ID && db.bots && db.bots[MANUAL_ID]) {
               const bot = db.bots[MANUAL_ID];
               if (!bot.sent) {
                 console.log(`Manual trigger for: ${bot.title}`);
-                const result = await sendToDiscord(bot.title, bot.message);
-                if (result.success) {
+                const success = await processBot(bot);
+                if (success) {
                   bot.sent = true;
                   bot.status = 'sent';
                   bot.sentTime = now.toISOString();
                   bot.scheduled = false;
                   dirty = true;
                 }
+              } else {
+                console.log(`Bot ${MANUAL_ID} already sent, skipping`);
               }
             }
 
+            // Scheduled bots
             if (db.bots) {
               for (const [id, bot] of Object.entries(db.bots)) {
+                if (MANUAL_ID && id === MANUAL_ID) continue;
                 if (bot.sent || bot.cancelled || bot.isProcessing) continue;
 
                 if (bot.scheduled && bot.scheduledTime) {
                   const scheduleDate = new Date(bot.scheduledTime);
                   if (scheduleDate <= now) {
-                    console.log(`Processing scheduled: ${bot.title}`);
-                    const result = await sendToDiscord(bot.title, bot.message);
-                    if (result.success) {
+                    console.log(`Processing scheduled bot: ${bot.title}`);
+                    const success = await processBot(bot);
+                    if (success) {
                       bot.sent = true;
                       bot.status = 'sent';
                       bot.sentTime = now.toISOString();
@@ -125,15 +199,21 @@ jobs:
             if (dirty) {
               fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
               console.log('Changes saved to database.json');
+            } else {
+              console.log('No bots to process');
             }
           }
 
-          run();
+          run().catch(e => {
+            console.error('Fatal error:', e);
+            process.exit(1);
+          });
           EOF
 
       - name: Run Processor
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
           MANUAL_BOT_ID: ${{ github.event.inputs.botId }}
         run: node process_bot.mjs
 
@@ -141,11 +221,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
-          # Key Fix: Only add database.json, ignore process_bot.mjs
           git add database.json
-          
-          # Check if database.json actually changed
           if git diff --staged --quiet; then
             echo "No changes to database.json"
           else
