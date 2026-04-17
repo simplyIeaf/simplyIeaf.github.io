@@ -1732,6 +1732,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1776446462995": {
+      "id": "bot_1776446462995",
+      "title": "test",
+      "message": "testing",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-04-17T17:21:02.995Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
