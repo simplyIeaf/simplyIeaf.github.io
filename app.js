@@ -616,7 +616,7 @@ const app = {
             this.dbSha = newDbData.content.sha;
 
             if (schedule) {
-                this.showToast(`✅ Scheduled successfully`, 'success');
+                this.showToast(`Scheduled successfully`, 'success');
                 await this.loadDatabase();
             } else {
                 await this.sendBotNow(botId);
@@ -1097,8 +1097,7 @@ const app = {
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            // Fetch raw code properly
-            const rawUrl = `https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`;
+            const rawUrl = `https://${CONFIG.user}.github.io/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`;
             const res = await fetch(rawUrl);
             
             if (res.ok) {
