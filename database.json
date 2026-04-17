@@ -1718,6 +1718,20 @@
       "sentTime": "2026-04-15T08:02:55.729Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1776446451163": {
+      "id": "bot_1776446451163",
+      "title": "test",
+      "message": "testing",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-04-17T17:20:51.163Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
