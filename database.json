@@ -1905,13 +1905,13 @@
       "id": "bot_1776450865789",
       "title": "Post Testing",
       "message": "There’s no script links in here, because this was made for testing (removed soon)",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-04-17T19:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-04-17T18:34:25.789Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-04-17T19:09:12.352Z",
       "cancelled": false,
       "isProcessing": false
     }
