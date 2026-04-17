@@ -1812,9 +1812,9 @@
       "timezone": "",
       "created": "2026-04-17T17:32:08.312Z",
       "sent": false,
-      "status": "pending",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false
     },
     "bot_1776448237871": {
