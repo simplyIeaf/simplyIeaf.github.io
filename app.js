@@ -100,13 +100,7 @@ const app = {
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
-        
-        const today = new Date().toISOString().split('T')[0];
-        const expireInput = document.getElementById('edit-expire');
-        if (expireInput) expireInput.min = today;
-        
         this.initEventListeners();
-        this.loadMonacoIfNeeded();
         
         window.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -139,10 +133,7 @@ const app = {
     
     startBotScheduler() {
         setTimeout(() => this.checkScheduledBots(), 1000);
-        
-        setInterval(() => {
-            this.checkScheduledBots();
-        }, 30000);
+        setInterval(() => this.checkScheduledBots(), 30000);
     },
     
     initEventListeners() {
@@ -155,12 +146,18 @@ const app = {
         }
     },
     
-    loadMonacoIfNeeded() {
-        if (location.hash === '#admin') {
-            setTimeout(() => {
-                this.loadMonacoEditor();
-                this.loadQuillEditor();
-            }, 100);
+    initCodeMirror() {
+        if (window.cmEditor) return;
+        const textarea = document.getElementById('edit-code');
+        if (textarea && typeof CodeMirror !== 'undefined') {
+            window.cmEditor = CodeMirror.fromTextArea(textarea, {
+                mode: 'lua',
+                theme: 'monokai',
+                lineNumbers: true,
+                lineWrapping: true,
+                matchBrackets: true,
+                indentUnit: 4
+            });
         }
     },
 
@@ -282,9 +279,7 @@ const app = {
             localStorage.removeItem('gh_token');
             localStorage.removeItem('gh_user');
             localStorage.removeItem('gh_token_expiry');
-        } catch(e) {
-            console.error('Logout error:', e);
-        }
+        } catch(e) {}
         
         this.token = null;
         this.currentUser = null;
@@ -315,9 +310,7 @@ const app = {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
-            if (!res.ok) {
-                throw new Error('Invalid token');
-            }
+            if (!res.ok) throw new Error('Invalid token');
             
             const user = await res.json();
             if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
@@ -328,17 +321,13 @@ const app = {
             this.updateUIForLoggedInUser();
             return true;
         } catch (e) {
-            if (!silent) {
-                this.showLoginError(e.message);
-            }
+            if (!silent) this.showLoginError(e.message);
             this.token = null;
             try {
                 localStorage.removeItem('gh_token');
                 localStorage.removeItem('gh_user');
                 localStorage.removeItem('gh_token_expiry');
-            } catch(err) {
-                console.error('Error clearing storage:', err);
-            }
+            } catch(err) {}
             return false;
         }
     },
@@ -364,9 +353,7 @@ const app = {
                 return;
             }
             
-            if (!res.ok) {
-                throw new Error(`Failed to load database: ${res.status}`);
-            }
+            if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
             
             const file = await res.json();
             this.dbSha = file.sha;
@@ -415,43 +402,29 @@ const app = {
             delete this.scheduledTimers[botId];
         }
 
-        if (bot.sent || bot.cancelled || bot.isProcessing || !bot.scheduled) {
-            return;
-        }
+        if (bot.sent || bot.cancelled || bot.isProcessing || !bot.scheduled) return;
 
         const scheduledDate = new Date(bot.scheduledTime);
         const delay = scheduledDate.getTime() - Date.now();
 
         if (delay <= 0) {
-            if (delay > -300000) {
-                console.log(`Bot ${botId} is slightly late, triggering immediately`);
-                this.triggerScheduledBot(botId);
-            }
+            if (delay > -300000) this.triggerScheduledBot(botId);
             return;
         }
 
         const MAX_BROWSER_DELAY = 2147483647;
-        if (delay > MAX_BROWSER_DELAY) {
-            console.log(`Bot ${botId} scheduled too far in the future for browser timer`);
-            return;
-        }
+        if (delay > MAX_BROWSER_DELAY) return;
 
         this.scheduledTimers[botId] = setTimeout(() => {
-            console.log(`Browser timer triggered for bot: ${botId}`);
             this.triggerScheduledBot(botId);
             delete this.scheduledTimers[botId];
         }, delay);
-
-        console.log(`Scheduled browser timer for bot ${botId} at ${scheduledDate.toLocaleString()}`);
     },
 
     async triggerScheduledBot(botId) {
         try {
             const bot = this.db.bots[botId];
-            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) {
-                console.log(`Bot ${botId} not ready for sending`);
-                return;
-            }
+            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) return;
 
             bot.isProcessing = true;
             
@@ -477,52 +450,33 @@ const app = {
             );
 
             if (workflowResponse.status === 204) {
-                console.log(`✅ Workflow triggered for bot: ${botId}`);
-                
                 bot.status = 'processing';
                 bot.lastTriggered = new Date().toISOString();
                 bot.isProcessing = false;
-                
                 setTimeout(() => this.loadDatabase(), 5000);
-                
             } else {
                 const errorText = await workflowResponse.text();
-                console.error(`Failed to trigger workflow: ${workflowResponse.status} - ${errorText}`);
-                
                 bot.isProcessing = false;
                 bot.lastError = `Workflow trigger failed: ${workflowResponse.status}`;
-                
-                this.showToast(`Failed to trigger scheduled bot: ${workflowResponse.status}`, 'error');
             }
-
         } catch (error) {
-            console.error('Error triggering scheduled bot:', error);
             if (this.db.bots[botId]) {
                 this.db.bots[botId].isProcessing = false;
                 this.db.bots[botId].lastError = error.message;
             }
-            this.showToast(`Error: ${error.message}`, 'error');
         }
     },
 
     checkScheduledBots() {
         if (!this.currentUser || !this.db) return;
-
         const now = Date.now();
-        
         Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
             if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled && !bot.isProcessing) {
                 const scheduledTime = new Date(bot.scheduledTime).getTime();
                 const timeDiff = scheduledTime - now;
-                
                 if (timeDiff > 0 && timeDiff <= 300000) {
-                    if (!this.scheduledTimers[botId]) {
-                        console.log(`Setting up timer for bot ${botId} in ${Math.round(timeDiff/1000)} seconds`);
-                        this.scheduleBotTimer(botId, bot);
-                    }
-                }
-                else if (timeDiff <= 0 && timeDiff > -300000 && !this.scheduledTimers[botId]) {
-                    console.log(`Bot ${botId} is due, triggering immediately`);
+                    if (!this.scheduledTimers[botId]) this.scheduleBotTimer(botId, bot);
+                } else if (timeDiff <= 0 && timeDiff > -300000 && !this.scheduledTimers[botId]) {
                     this.triggerScheduledBot(botId);
                 }
             }
@@ -531,7 +485,6 @@ const app = {
 
     async sendBotNow(botId) {
         if (!this.currentUser || !this.db || !this.db.bots[botId]) return false;
-        
         const bot = this.db.bots[botId];
         if (bot.isProcessing || bot.sent) return false;
 
@@ -547,12 +500,7 @@ const app = {
                         'Accept': 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        ref: 'main',
-                        inputs: {
-                            botId: botId
-                        }
-                    })
+                    body: JSON.stringify({ ref: 'main', inputs: { botId: botId } })
                 }
             );
 
@@ -580,13 +528,11 @@ const app = {
                     return true;
                 }
             } else {
-                const errorText = await workflowResponse.text();
                 throw new Error(`GitHub Error: ${workflowResponse.status}`);
             }
             return false;
         } catch (error) {
             bot.isProcessing = false;
-            console.error('Send bot error:', error);
             this.showToast(`Error: ${error.message}`, 'error');
             return false;
         }
@@ -615,7 +561,6 @@ const app = {
         
         if (this.actionInProgress) return;
         this.actionInProgress = true;
-        
         saveBtn.disabled = true;
         if (typeof NProgress !== 'undefined') NProgress.start();
         
@@ -704,16 +649,13 @@ const app = {
         
         list.innerHTML = sorted.map(s => {
             const scriptId = utils.sanitizeTitle(s.title);
-            const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            
             return `<div class="script-card" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
-                        <h3 class="script-title">${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</h3>
+                        <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
                         ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
-                        ${isExpired ? `<span class="badge" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
                     </div>
-                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.replace(/<[^>]*>/g, '').substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
+                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
                         ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
@@ -725,8 +667,6 @@ const app = {
 
     filterLogic(scripts) {
         const query = this.searchQuery.toLowerCase();
-        const now = new Date();
-        
         return scripts.filter(s => {
             if (!s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
@@ -734,7 +674,6 @@ const app = {
             if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
             if (this.currentFilter === 'public' && s.visibility !== 'PUBLIC') return false;
             if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
-            if (s.expiration && new Date(s.expiration) < now) return false;
             return true;
         });
     },
@@ -791,8 +730,10 @@ const app = {
             if (tab === 'create') {
                 this.resetEditor();
             }
-            this.loadMonacoEditor();
-            this.loadQuillEditor();
+            setTimeout(() => {
+                this.initCodeMirror();
+                if (window.cmEditor) window.cmEditor.refresh();
+            }, 50);
         }
     },
 
@@ -804,27 +745,21 @@ const app = {
         const botsCount = Object.keys(this.db.bots || {}).length;
         document.getElementById('total-stats').textContent = `${scripts.length} Scripts, ${botsCount} Bots`;
         if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-admin-state">
-                <p>No scripts yet. Click "Add New" to create your first script.</p>
-            </div>`;
+            list.innerHTML = `<div class="empty-admin-state"><p>No scripts yet. Click "Add New" to create your first script.</p></div>`;
             return;
         }
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
-            const isExpired = s.expiration && new Date(s.expiration) < new Date();
-            return `<div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+            return `<div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '"')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '"')}')">
                 <div class="admin-item-left">
-                    <strong>${utils.escapeHtml(s.title)} ${isExpired ? '⏰' : ''}</strong>
+                    <strong>${utils.escapeHtml(s.title)}</strong>
                     <div class="admin-meta">
                         <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
-                        ${isExpired ? `<span class="badge badge-sm" style="background:#ef4444;color:#fff">EXPIRED</span>` : ''}
                         <span class="text-muted">Updated ${updated}</span>
                     </div>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
             </div>`;
         }).join('');
@@ -838,34 +773,15 @@ const app = {
         const sorted = bots.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
         
         if (sorted.length === 0) {
-            list.innerHTML = `<div class="empty-admin-state">
-                <p>No bots yet. Click "Create Bot" to add one.</p>
-            </div>`;
+            list.innerHTML = `<div class="empty-admin-state"><p>No bots yet. Click "Create Bot" to add one.</p></div>`;
             return;
         }
         
         list.innerHTML = sorted.map(b => {
-            let status = 'Pending';
-            let statusClass = 'status-pending';
-            
-            if (b.cancelled) {
-                status = 'Cancelled';
-                statusClass = 'status-cancelled';
-            } else if (b.sent) {
-                status = 'Sent';
-                statusClass = 'status-sent';
-            } else if (b.scheduled) {
-                status = 'Scheduled';
-                statusClass = 'status-scheduled';
-            }
-            
-            let timeInfo = 'Pending';
-            if (b.sent) {
-                timeInfo = `Sent: ${new Date(b.sentTime).toLocaleString()}`;
-            } else if (b.scheduled) {
-                const displayTime = utils.formatDisplayTime(b.scheduledTime, b.timezone);
-                timeInfo = `Scheduled: ${displayTime}`;
-            }
+            let status = 'Pending', statusClass = 'status-pending', timeInfo = 'Pending';
+            if (b.cancelled) { status = 'Cancelled'; statusClass = 'status-cancelled'; } 
+            else if (b.sent) { status = 'Sent'; statusClass = 'status-sent'; timeInfo = `Sent: ${new Date(b.sentTime).toLocaleString()}`; } 
+            else if (b.scheduled) { status = 'Scheduled'; statusClass = 'status-scheduled'; timeInfo = `Scheduled: ${utils.formatDisplayTime(b.scheduledTime, b.timezone)}`; }
             
             return `<div class="admin-item" data-bot-id="${b.id}" onclick="app.populateBotEditor('${b.id}')">
                 <div class="admin-item-left">
@@ -876,9 +792,7 @@ const app = {
                     </div>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
                 <div class="swipe-hint">Swipe to cancel</div>
             </div>`;
@@ -889,8 +803,7 @@ const app = {
     initSwipeToDelete() {
         const adminItems = document.querySelectorAll('.admin-item');
         adminItems.forEach(item => {
-            let startX = 0;
-            let isSwiping = false;
+            let startX = 0, isSwiping = false;
             
             item.addEventListener('touchstart', (e) => {
                 startX = e.touches[0].clientX;
@@ -901,8 +814,7 @@ const app = {
             
             item.addEventListener('touchmove', (e) => {
                 if (!startX) return;
-                const currentX = e.touches[0].clientX;
-                const diff = currentX - startX;
+                const currentX = e.touches[0].clientX, diff = currentX - startX;
                 if (Math.abs(diff) > 30) {
                     isSwiping = true;
                     e.preventDefault();
@@ -915,8 +827,7 @@ const app = {
             
             item.addEventListener('touchend', (e) => {
                 if (!startX || !isSwiping) return;
-                const endX = e.changedTouches[0].clientX;
-                const diff = endX - startX;
+                const endX = e.changedTouches[0].clientX, diff = endX - startX;
                 item.style.transition = 'transform 0.3s ease, background-color 0.3s ease, opacity 0.3s ease';
                 item.classList.remove('swiping');
                 
@@ -928,12 +839,8 @@ const app = {
                     setTimeout(() => {
                         const scriptTitle = item.getAttribute('data-script-title');
                         const botId = item.getAttribute('data-bot-id');
-                        
-                        if (scriptTitle) {
-                            this.deleteScriptConfirmation(scriptTitle);
-                        } else if (botId) {
-                            this.deleteBotConfirmation(botId);
-                        }
+                        if (scriptTitle) this.deleteScriptConfirmation(scriptTitle);
+                        else if (botId) this.deleteBotConfirmation(botId);
                     }, 300);
                 } else {
                     item.style.transform = 'translateX(0)';
@@ -944,10 +851,7 @@ const app = {
             });
             
             item.addEventListener('click', (e) => {
-                if (isSwiping) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
+                if (isSwiping) { e.preventDefault(); e.stopPropagation(); }
             });
         });
     },
@@ -960,7 +864,6 @@ const app = {
         }
 
         let shouldDelete = false;
-        
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
                 title: 'Delete Script',
@@ -976,24 +879,15 @@ const app = {
             shouldDelete = confirm(`Delete "${scriptTitle}"?`);
         }
 
-        if (!shouldDelete) {
-            await this.loadDatabase();
-            return;
-        }
-
-        await this.deleteScriptLogic(scriptTitle);
+        if (shouldDelete) await this.deleteScriptLogic(scriptTitle);
+        else await this.loadDatabase();
     },
 
     async deleteBotConfirmation(botId) {
-        if (!botId || !this.db.bots[botId]) {
-            this.showToast('Bot not found', 'error');
-            await this.loadDatabase();
-            return;
-        }
+        if (!botId || !this.db.bots[botId]) return;
 
         const bot = this.db.bots[botId];
         let shouldDelete = false;
-        
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
                 title: 'Cancel Bot',
@@ -1009,12 +903,8 @@ const app = {
             shouldDelete = confirm(`Cancel bot "${bot.title}"?`);
         }
 
-        if (!shouldDelete) {
-            await this.loadDatabase();
-            return;
-        }
-
-        await this.deleteBotLogic(botId);
+        if (shouldDelete) await this.deleteBotLogic(botId);
+        else await this.loadDatabase();
     },
 
     async deleteScriptLogic(scriptTitle) {
@@ -1028,7 +918,6 @@ const app = {
             if (!script) throw new Error('Script not found');
             
             const scriptId = utils.sanitizeTitle(scriptTitle);
-            
             await this.deleteScriptFiles(scriptId, script.filename);
             
             delete this.db.scripts[scriptTitle];
@@ -1067,31 +956,32 @@ const app = {
 
     async deleteScriptFiles(scriptId, filename) {
         try {
-            const scriptDir = `scripts/${scriptId}`;
-            
-            const dirUrl = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${scriptDir}`;
-            const dirRes = await fetch(dirUrl, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (dirRes.ok) {
-                const files = await dirRes.json();
-                for (const file of Array.isArray(files) ? files : [files]) {
-                    await fetch(file.url, {
+            const filesToDelete = [
+                `scripts/${scriptId}/index.html`,
+                `scripts/${scriptId}/raw/${filename}`
+            ];
+
+            for (const path of filesToDelete) {
+                const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
+                const res = await fetch(url, { headers: { 'Authorization': `token ${this.token}` } });
+                if (res.ok) {
+                    const fileData = await res.json();
+                    await fetch(url, {
                         method: 'DELETE',
                         headers: { 
                             'Authorization': `token ${this.token}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            message: `Delete script files: ${scriptId}`,
-                            sha: file.sha
+                            message: `Delete script file: ${path}`,
+                            sha: fileData.sha,
+                            branch: CONFIG.branch
                         })
                     });
                 }
             }
         } catch (e) {
-            console.error('Error deleting script files:', e);
+            console.error('Error explicitly deleting script files:', e);
         }
     },
 
@@ -1101,7 +991,6 @@ const app = {
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            
             if (this.scheduledTimers[botId]) {
                 clearTimeout(this.scheduledTimers[botId]);
                 delete this.scheduledTimers[botId];
@@ -1129,13 +1018,9 @@ const app = {
                     this.dbSha = newDbData.content.sha;
                     this.showToast('Bot cancelled', 'success');
                     await this.loadDatabase();
-                } else {
-                    throw new Error('Failed to update database');
-                }
+                } else throw new Error('Failed to update database');
             }
-            
         } catch(e) {
-            console.error('Cancel error:', e);
             this.showToast(`Error: ${e.message}`, 'error');
             await this.loadDatabase();
         } finally {
@@ -1148,15 +1033,11 @@ const app = {
         document.getElementById('editor-heading').textContent = 'Create New Script';
         document.getElementById('edit-title').value = '';
         document.getElementById('edit-visibility').value = 'PUBLIC';
-        document.getElementById('edit-expire').value = '';
         
-        if (window.monacoEditor) {
-            window.monacoEditor.setValue('');
-        }
+        const editDesc = document.getElementById('edit-desc');
+        if (editDesc) editDesc.value = '';
         
-        if (window.quillEditor) {
-            window.quillEditor.root.innerHTML = '';
-        }
+        if (window.cmEditor) window.cmEditor.setValue('');
         
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         if (saveBtn) saveBtn.textContent = 'Publish';
@@ -1191,8 +1072,7 @@ const app = {
         if (scheduleCheckbox && scheduleFields) {
             scheduleFields.style.display = scheduleCheckbox.checked ? 'block' : 'none';
             if (scheduleCheckbox.checked) {
-                const now = new Date();
-                const localDateTime = now.toISOString().slice(0, 16);
+                const localDateTime = new Date().toISOString().slice(0, 16);
                 document.getElementById('bot-schedule-time').min = localDateTime;
             }
         }
@@ -1211,37 +1091,25 @@ const app = {
         document.getElementById('editor-heading').textContent = `Edit: ${title}`;
         document.getElementById('edit-title').value = s.displayTitle || s.title;
         document.getElementById('edit-visibility').value = s.visibility;
-        document.getElementById('edit-expire').value = s.expiration || '';
         
-        if (window.quillEditor) {
-            setTimeout(() => {
-                window.quillEditor.root.innerHTML = s.description || '';
-            }, 100);
-        }
+        const editDesc = document.getElementById('edit-desc');
+        if (editDesc) editDesc.value = s.description || '';
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            
-            const res = await fetch(`https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/refs/heads/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`);
+            // Fetch raw code properly
+            const rawUrl = `https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`;
+            const res = await fetch(rawUrl);
             
             if (res.ok) {
                 const code = await res.text();
-                
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(code);
-                }
+                if (window.cmEditor) window.cmEditor.setValue(code);
             } else {
-                const errorText = '-- Error loading content';
-                if (window.monacoEditor) {
-                    window.monacoEditor.setValue(errorText);
-                }
+                if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
             }
         } catch(e) {
             console.error('Load error:', e);
-            const errorText = '-- Error loading content';
-            if (window.monacoEditor) {
-                window.monacoEditor.setValue(errorText);
-            }
+            if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
         } finally {
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
@@ -1254,9 +1122,7 @@ const app = {
         if (!deleteBtn && actionButtons) {
             deleteBtn = document.createElement('button');
             deleteBtn.className = 'btn btn-delete';
-            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-            </svg> Delete`;
+            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg> Delete`;
             deleteBtn.onclick = () => this.deleteScriptConfirmation(title);
             actionButtons.appendChild(deleteBtn);
         }
@@ -1281,8 +1147,7 @@ const app = {
         document.getElementById('bot-schedule').checked = bot.scheduled || false;
         
         if (bot.scheduledTime) {
-            const date = new Date(bot.scheduledTime);
-            const localDateTime = date.toISOString().slice(0, 16);
+            const localDateTime = new Date(bot.scheduledTime).toISOString().slice(0, 16);
             document.getElementById('bot-schedule-time').value = localDateTime;
         }
         
@@ -1290,7 +1155,6 @@ const app = {
         
         const saveBtn = document.querySelector('.bot-actions .btn:last-child');
         if (saveBtn) saveBtn.textContent = bot.scheduled ? 'Update Schedule' : 'Send Now';
-        
         this.toggleScheduleFields();
     },
 
@@ -1305,10 +1169,10 @@ const app = {
         
         const titleInput = document.getElementById('edit-title');
         const visibilityInput = document.getElementById('edit-visibility');
-        const expireInput = document.getElementById('edit-expire');
+        const descInput = document.getElementById('edit-desc');
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         
-        if (!titleInput || !visibilityInput || !expireInput || !saveBtn) {
+        if (!titleInput || !visibilityInput || !saveBtn) {
             this.showToast('Form elements not found', 'error');
             this.actionInProgress = false;
             return;
@@ -1316,9 +1180,8 @@ const app = {
         
         const title = titleInput.value.trim();
         const visibility = visibilityInput.value;
-        const expiration = expireInput.value;
-        const code = window.monacoEditor ? window.monacoEditor.getValue() : '';
-        const desc = window.quillEditor ? window.quillEditor.root.innerHTML : '';
+        const code = window.cmEditor ? window.cmEditor.getValue() : '';
+        const desc = descInput ? descInput.value.trim() : '';
         const originalBtnText = saveBtn.textContent;
         
         const titleError = utils.validateTitle(title);
@@ -1326,12 +1189,6 @@ const app = {
         
         if (titleError || codeError) {
             this.showToast(titleError || codeError, 'error');
-            this.actionInProgress = false;
-            return;
-        }
-        
-        if (expiration && new Date(expiration) < new Date()) {
-            this.showToast('Expiration date cannot be in the past', 'error');
             this.actionInProgress = false;
             return;
         }
@@ -1347,7 +1204,6 @@ const app = {
         
         try {
             let originalCreationDate = new Date().toISOString();
-            
             if (isEditing && this.db.scripts[this.originalTitle]) {
                 originalCreationDate = this.db.scripts[this.originalTitle].created;
             }
@@ -1357,7 +1213,6 @@ const app = {
                 displayTitle: title,
                 visibility: visibility,
                 description: desc,
-                expiration: expiration || null,
                 filename: filename,
                 size: code.length,
                 created: originalCreationDate,
@@ -1365,7 +1220,6 @@ const app = {
             };
             
             await this.createScriptFiles(newScriptId, filename, code, isEditing, this.originalScriptId);
-            
             this.db.scripts[title] = scriptData;
             
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
@@ -1381,10 +1235,7 @@ const app = {
                 })
             });
             
-            if (!dbRes.ok) {
-                const errorData = await dbRes.json();
-                throw new Error(`Failed to update database: ${errorData.message || 'Unknown error'}`);
-            }
+            if (!dbRes.ok) throw new Error('Failed to update database');
             
             const newDbData = await dbRes.json();
             this.dbSha = newDbData.content.sha;
@@ -1397,11 +1248,9 @@ const app = {
             
             document.getElementById('editor-heading').textContent = `Edit: ${title}`;
             saveBtn.textContent = 'Update Script';
-            
             await this.loadDatabase();
             
         } catch(e) {
-            console.error('Save error:', e);
             this.showToast(`Error: ${e.message}`, 'error');
         } finally {
             saveBtn.disabled = false;
@@ -1419,13 +1268,10 @@ const app = {
         
         const now = new Date();
         const formattedDate = now.toLocaleDateString('en-US', {
-            month: '2-digit',
-            day: '2-digit',
-            year: 'numeric'
+            month: '2-digit', day: '2-digit', year: 'numeric'
         });
         
         const escapedScriptId = utils.escapeHtml(scriptId);
-        const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
         
         const scriptViewerHTML = `<!DOCTYPE html>
 <html lang="en">
@@ -1444,7 +1290,7 @@ const app = {
             <div class="nav-left">
                 <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
                     <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
-                    <span class="nav-title">Leaf's Scripts</span>
+                    <span class="nav-title" style="color:#ffffff;">Leaf's Scripts</span>
                 </a>
             </div>
             <div class="nav-right">
@@ -1531,10 +1377,7 @@ const app = {
 
     async createOrUpdateFile(path, content, contentType) {
         const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
-        
-        const getRes = await fetch(url, {
-            headers: { 'Authorization': `token ${this.token}` }
-        });
+        const getRes = await fetch(url, { headers: { 'Authorization': `token ${this.token}` } });
         
         let sha = null;
         if (getRes.ok) {
@@ -1547,10 +1390,7 @@ const app = {
             content: utils.safeBtoa(content),
             branch: CONFIG.branch
         };
-        
-        if (sha) {
-            body.sha = sha;
-        }
+        if (sha) body.sha = sha;
         
         const putRes = await fetch(url, {
             method: 'PUT',
@@ -1561,10 +1401,7 @@ const app = {
             body: JSON.stringify(body)
         });
         
-        if (!putRes.ok) {
-            const error = await putRes.json();
-            throw new Error(`Failed to create/update file ${path}: ${error.message}`);
-        }
+        if (!putRes.ok) throw new Error(`Failed to create/update file ${path}`);
     },
 
     handleRouting() {
@@ -1583,77 +1420,6 @@ const app = {
         } else {
             document.getElementById('view-home').style.display = 'block';
         }
-    },
-    
-    loadMonacoEditor() {
-        if (typeof monaco !== 'undefined' || window.monacoEditor) return;
-        
-        if (!document.querySelector('#editor-container')) return;
-        
-        const loadMonaco = () => {
-            if (typeof monaco === 'undefined') {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js';
-                script.onload = () => {
-                    require.config({ 
-                        paths: { 
-                            vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' 
-                        } 
-                    });
-                    require(['vs/editor/editor.main'], () => {
-                        window.monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
-                            value: '',
-                            language: 'lua',
-                            theme: 'vs-dark',
-                            fontSize: 14,
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            wordWrap: 'on',
-                            lineNumbers: 'on',
-                            automaticLayout: true
-                        });
-                    });
-                };
-                document.head.appendChild(script);
-            }
-        };
-        
-        setTimeout(loadMonaco, 100);
-    },
-    
-    loadQuillEditor() {
-        if (typeof Quill !== 'undefined' || window.quillEditor) return;
-        
-        if (!document.querySelector('#quill-container')) return;
-        
-        const loadQuill = () => {
-            if (typeof Quill === 'undefined') {
-                const link = document.createElement('link');
-                link.href = 'https://cdn.quilljs.com/1.3.6/quill.snow.css';
-                link.rel = 'stylesheet';
-                document.head.appendChild(link);
-                
-                const script = document.createElement('script');
-                script.src = 'https://cdn.quilljs.com/1.3.6/quill.min.js';
-                script.onload = () => {
-                    window.quillEditor = new Quill('#quill-container', {
-                        theme: 'snow',
-                        modules: {
-                            toolbar: [
-                                ['bold', 'italic', 'underline'],
-                                ['code-block'],
-                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                                ['clean']
-                            ]
-                        },
-                        placeholder: 'Script description...'
-                    });
-                };
-                document.head.appendChild(script);
-            }
-        };
-        
-        setTimeout(loadQuill, 100);
     }
 };
 
@@ -1667,13 +1433,8 @@ function navigate(path) {
 
 window.addEventListener('DOMContentLoaded', () => {
     app.init();
-    
     if (typeof NProgress !== 'undefined') {
-        NProgress.configure({ 
-            showSpinner: false,
-            speed: 400,
-            trickleSpeed: 200 
-        });
+        NProgress.configure({ showSpinner: false, speed: 400, trickleSpeed: 200 });
     }
 });
 
