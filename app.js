@@ -100,9 +100,7 @@ const app = {
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
-        
         this.initEventListeners();
-        this.loadEditorsIfNeeded();
         
         window.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -135,9 +133,7 @@ const app = {
     
     startBotScheduler() {
         setTimeout(() => this.checkScheduledBots(), 1000);
-        setInterval(() => {
-            this.checkScheduledBots();
-        }, 30000);
+        setInterval(() => this.checkScheduledBots(), 30000);
     },
     
     initEventListeners() {
@@ -150,91 +146,18 @@ const app = {
         }
     },
     
-    loadEditorsIfNeeded() {
-        if (location.hash === '#admin') {
-            setTimeout(() => {
-                this.initEditors();
-            }, 100);
-        }
-    },
-
-    initEditors() {
-        let ta = document.getElementById('edit-description');
-        const qContainer = document.getElementById('quill-container');
-        if (qContainer && qContainer.tagName !== 'TEXTAREA') {
-            ta = document.createElement('textarea');
-            ta.id = 'edit-description';
-            ta.className = qContainer.className || 'form-control';
-            ta.placeholder = 'Script description...';
-            ta.style.width = '100%';
-            ta.style.minHeight = '150px';
-            ta.style.marginBottom = '15px';
-            ta.style.padding = '12px';
-            ta.style.fontFamily = 'inherit';
-            ta.style.fontSize = '14px';
-            ta.style.borderRadius = '6px';
-            ta.style.border = '1px solid var(--border-color)';
-            ta.style.background = 'var(--bg-secondary)';
-            ta.style.color = 'var(--text-primary)';
-            ta.style.resize = 'vertical';
-            qContainer.parentNode.replaceChild(ta, qContainer);
-        }
-
-        if (window.codeEditor || typeof CodeMirror !== 'undefined') return;
-        
-        const css1 = document.createElement('link'); 
-        css1.rel = 'stylesheet'; 
-        css1.href = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css'; 
-        document.head.appendChild(css1);
-        
-        const css2 = document.createElement('link'); 
-        css2.rel = 'stylesheet'; 
-        css2.href = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css'; 
-        document.head.appendChild(css2);
-        
-        const script1 = document.createElement('script'); 
-        script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js'; 
-        document.head.appendChild(script1);
-        
-        script1.onload = () => {
-            const script2 = document.createElement('script'); 
-            script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/lua/lua.min.js'; 
-            document.head.appendChild(script2);
-            
-            script2.onload = () => {
-                const container = document.getElementById('editor-container');
-                if (container) {
-                    container.innerHTML = '';
-                    window.codeEditor = CodeMirror(container, {
-                        value: '',
-                        mode: 'lua',
-                        theme: 'dracula',
-                        lineNumbers: true,
-                        lineWrapping: true,
-                        viewportMargin: Infinity
-                    });
-                    window.codeEditor.setSize('100%', '400px');
-                }
-            };
-        };
-    },
-
-    async syncDbSha() {
-        if (!this.token) return;
-        try {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?ref=${CONFIG.branch}&t=${Date.now()}`, {
-                headers: { 'Authorization': `token ${this.token}` }
+    initCodeMirror() {
+        if (window.cmEditor) return;
+        const textarea = document.getElementById('edit-code');
+        if (textarea && typeof CodeMirror !== 'undefined') {
+            window.cmEditor = CodeMirror.fromTextArea(textarea, {
+                mode: 'lua',
+                theme: 'monokai',
+                lineNumbers: true,
+                lineWrapping: true,
+                matchBrackets: true,
+                indentUnit: 4
             });
-            if (res.ok) {
-                const data = await res.json();
-                this.dbSha = data.sha;
-                const content = utils.safeAtob(data.content);
-                this.db = JSON.parse(content);
-                if (!this.db.scripts) this.db.scripts = {};
-                if (!this.db.bots) this.db.bots = {};
-            }
-        } catch(e) {
-            console.error('Failed to sync DB SHA:', e);
         }
     },
 
@@ -387,9 +310,7 @@ const app = {
                 headers: { 'Authorization': `token ${this.token}` }
             });
             
-            if (!res.ok) {
-                throw new Error('Invalid token');
-            }
+            if (!res.ok) throw new Error('Invalid token');
             
             const user = await res.json();
             if (user.login.toLowerCase() !== CONFIG.user.toLowerCase()) {
@@ -400,9 +321,7 @@ const app = {
             this.updateUIForLoggedInUser();
             return true;
         } catch (e) {
-            if (!silent) {
-                this.showLoginError(e.message);
-            }
+            if (!silent) this.showLoginError(e.message);
             this.token = null;
             try {
                 localStorage.removeItem('gh_token');
@@ -421,7 +340,7 @@ const app = {
                 list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading...</p></div>`;
             }
             
-            const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?ref=${CONFIG.branch}&t=${CONFIG.cacheBuster()}`;
+            const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`;
             const headers = this.token ? { 'Authorization': `token ${this.token}` } : {};
             
             const res = await fetch(url, { headers });
@@ -434,9 +353,7 @@ const app = {
                 return;
             }
             
-            if (!res.ok) {
-                throw new Error(`Failed to load database: ${res.status}`);
-            }
+            if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
             
             const file = await res.json();
             this.dbSha = file.sha;
@@ -457,6 +374,7 @@ const app = {
                 });
                 
             } catch(parseError) {
+                console.error('Database parse error:', parseError);
                 this.db = { scripts: {}, bots: {} };
             }
             
@@ -464,6 +382,7 @@ const app = {
             this.renderAdminList();
             
         } catch (e) {
+            console.error("DB Error", e);
             const list = document.getElementById('admin-list');
             if (list) {
                 list.innerHTML = `<div class="empty-admin-state">
@@ -483,24 +402,18 @@ const app = {
             delete this.scheduledTimers[botId];
         }
 
-        if (bot.sent || bot.cancelled || bot.isProcessing || !bot.scheduled) {
-            return;
-        }
+        if (bot.sent || bot.cancelled || bot.isProcessing || !bot.scheduled) return;
 
         const scheduledDate = new Date(bot.scheduledTime);
         const delay = scheduledDate.getTime() - Date.now();
 
         if (delay <= 0) {
-            if (delay > -300000) {
-                this.triggerScheduledBot(botId);
-            }
+            if (delay > -300000) this.triggerScheduledBot(botId);
             return;
         }
 
         const MAX_BROWSER_DELAY = 2147483647;
-        if (delay > MAX_BROWSER_DELAY) {
-            return;
-        }
+        if (delay > MAX_BROWSER_DELAY) return;
 
         this.scheduledTimers[botId] = setTimeout(() => {
             this.triggerScheduledBot(botId);
@@ -511,9 +424,7 @@ const app = {
     async triggerScheduledBot(botId) {
         try {
             const bot = this.db.bots[botId];
-            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) {
-                return;
-            }
+            if (!bot || bot.sent || bot.cancelled || bot.isProcessing) return;
 
             bot.isProcessing = true;
             
@@ -527,7 +438,7 @@ const app = {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        ref: CONFIG.branch,
+                        ref: 'main',
                         inputs: {
                             botId: botId,
                             title: bot.title,
@@ -543,40 +454,29 @@ const app = {
                 bot.lastTriggered = new Date().toISOString();
                 bot.isProcessing = false;
                 setTimeout(() => this.loadDatabase(), 5000);
-            } else if (workflowResponse.status === 404) {
-                 bot.isProcessing = false;
-                 this.showToast("Workflow 404: Check workflow scopes & 'discord_bot.yml' existence", 'error');
             } else {
+                const errorText = await workflowResponse.text();
                 bot.isProcessing = false;
                 bot.lastError = `Workflow trigger failed: ${workflowResponse.status}`;
-                this.showToast(`Failed to trigger scheduled bot: ${workflowResponse.status}`, 'error');
             }
-
         } catch (error) {
             if (this.db.bots[botId]) {
                 this.db.bots[botId].isProcessing = false;
                 this.db.bots[botId].lastError = error.message;
             }
-            this.showToast(`Error: ${error.message}`, 'error');
         }
     },
 
     checkScheduledBots() {
         if (!this.currentUser || !this.db) return;
-
         const now = Date.now();
-        
         Object.entries(this.db.bots || {}).forEach(([botId, bot]) => {
             if (bot.scheduled && bot.scheduledTime && !bot.sent && !bot.cancelled && !bot.isProcessing) {
                 const scheduledTime = new Date(bot.scheduledTime).getTime();
                 const timeDiff = scheduledTime - now;
-                
                 if (timeDiff > 0 && timeDiff <= 300000) {
-                    if (!this.scheduledTimers[botId]) {
-                        this.scheduleBotTimer(botId, bot);
-                    }
-                }
-                else if (timeDiff <= 0 && timeDiff > -300000 && !this.scheduledTimers[botId]) {
+                    if (!this.scheduledTimers[botId]) this.scheduleBotTimer(botId, bot);
+                } else if (timeDiff <= 0 && timeDiff > -300000 && !this.scheduledTimers[botId]) {
                     this.triggerScheduledBot(botId);
                 }
             }
@@ -585,9 +485,6 @@ const app = {
 
     async sendBotNow(botId) {
         if (!this.currentUser || !this.db || !this.db.bots[botId]) return false;
-        
-        await this.syncDbSha();
-        
         const bot = this.db.bots[botId];
         if (bot.isProcessing || bot.sent) return false;
 
@@ -603,15 +500,7 @@ const app = {
                         'Accept': 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        ref: CONFIG.branch,
-                        inputs: {
-                            botId: botId,
-                            title: bot.title,
-                            message: bot.message,
-                            scheduled: 'false'
-                        }
-                    })
+                    body: JSON.stringify({ ref: 'main', inputs: { botId: botId } })
                 }
             );
 
@@ -628,8 +517,7 @@ const app = {
                     body: JSON.stringify({
                         message: `Trigger bot: ${bot.title}`,
                         content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                        sha: this.dbSha,
-                        branch: CONFIG.branch
+                        sha: this.dbSha
                     })
                 });
 
@@ -639,8 +527,6 @@ const app = {
                     this.showToast('Triggered! Checking GitHub...', 'success');
                     return true;
                 }
-            } else if (workflowResponse.status === 404) {
-                throw new Error(`GitHub Error 404: Ensure token has 'workflow' scope and discord_bot.yml exists.`);
             } else {
                 throw new Error(`GitHub Error: ${workflowResponse.status}`);
             }
@@ -675,11 +561,8 @@ const app = {
         
         if (this.actionInProgress) return;
         this.actionInProgress = true;
-        
         saveBtn.disabled = true;
         if (typeof NProgress !== 'undefined') NProgress.start();
-        
-        await this.syncDbSha();
         
         try {
             const botId = this.currentBotId || `bot_${Date.now()}`;
@@ -723,8 +606,7 @@ const app = {
                 body: JSON.stringify({
                     message: `Update bot: ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha,
-                    branch: CONFIG.branch
+                    sha: this.dbSha
                 })
             });
 
@@ -766,15 +648,14 @@ const app = {
         }
         
         list.innerHTML = sorted.map(s => {
-            const scriptId = s.filename ? s.filename.replace('.lua', '') : utils.sanitizeTitle(s.title);
-            
+            const scriptId = utils.sanitizeTitle(s.title);
             return `<div class="script-card" onclick="window.location.href='scripts/${scriptId}/index.html'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
                         ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
                     </div>
-                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.replace(/<[^>]*>/g, '').substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
+                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
                     <div class="card-meta">
                         <span>${new Date(s.created).toLocaleDateString()}</span>
                         ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
@@ -849,7 +730,10 @@ const app = {
             if (tab === 'create') {
                 this.resetEditor();
             }
-            this.loadEditorsIfNeeded();
+            setTimeout(() => {
+                this.initCodeMirror();
+                if (window.cmEditor) window.cmEditor.refresh();
+            }, 50);
         }
     },
 
@@ -866,7 +750,7 @@ const app = {
         }
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
-            return `<div class="admin-item" data-script-title="${utils.escapeHtml(s.title)}" onclick="app.populateEditor(this.getAttribute('data-script-title'))">
+            return `<div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '"')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '"')}')">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(s.title)}</strong>
                     <div class="admin-meta">
@@ -875,9 +759,7 @@ const app = {
                     </div>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
             </div>`;
         }).join('');
@@ -896,26 +778,12 @@ const app = {
         }
         
         list.innerHTML = sorted.map(b => {
-            let status = 'Pending';
-            let statusClass = 'status-pending';
-            if (b.cancelled) {
-                status = 'Cancelled';
-                statusClass = 'status-cancelled';
-            } else if (b.sent) {
-                status = 'Sent';
-                statusClass = 'status-sent';
-            } else if (b.scheduled) {
-                status = 'Scheduled';
-                statusClass = 'status-scheduled';
-            }
-            let timeInfo = 'Pending';
-            if (b.sent) {
-                timeInfo = `Sent: ${new Date(b.sentTime).toLocaleString()}`;
-            } else if (b.scheduled) {
-                const displayTime = utils.formatDisplayTime(b.scheduledTime, b.timezone);
-                timeInfo = `Scheduled: ${displayTime}`;
-            }
-            return `<div class="admin-item" data-bot-id="${utils.escapeHtml(b.id)}" onclick="app.populateBotEditor(this.getAttribute('data-bot-id'))">
+            let status = 'Pending', statusClass = 'status-pending', timeInfo = 'Pending';
+            if (b.cancelled) { status = 'Cancelled'; statusClass = 'status-cancelled'; } 
+            else if (b.sent) { status = 'Sent'; statusClass = 'status-sent'; timeInfo = `Sent: ${new Date(b.sentTime).toLocaleString()}`; } 
+            else if (b.scheduled) { status = 'Scheduled'; statusClass = 'status-scheduled'; timeInfo = `Scheduled: ${utils.formatDisplayTime(b.scheduledTime, b.timezone)}`; }
+            
+            return `<div class="admin-item" data-bot-id="${b.id}" onclick="app.populateBotEditor('${b.id}')">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(b.title)}</strong>
                     <div class="admin-meta">
@@ -924,9 +792,7 @@ const app = {
                     </div>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 18l6-6-6-6"/>
-                    </svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
                 <div class="swipe-hint">Swipe to cancel</div>
             </div>`;
@@ -937,8 +803,7 @@ const app = {
     initSwipeToDelete() {
         const adminItems = document.querySelectorAll('.admin-item');
         adminItems.forEach(item => {
-            let startX = 0;
-            let isSwiping = false;
+            let startX = 0, isSwiping = false;
             
             item.addEventListener('touchstart', (e) => {
                 startX = e.touches[0].clientX;
@@ -949,8 +814,7 @@ const app = {
             
             item.addEventListener('touchmove', (e) => {
                 if (!startX) return;
-                const currentX = e.touches[0].clientX;
-                const diff = currentX - startX;
+                const currentX = e.touches[0].clientX, diff = currentX - startX;
                 if (Math.abs(diff) > 30) {
                     isSwiping = true;
                     e.preventDefault();
@@ -963,8 +827,7 @@ const app = {
             
             item.addEventListener('touchend', (e) => {
                 if (!startX || !isSwiping) return;
-                const endX = e.changedTouches[0].clientX;
-                const diff = endX - startX;
+                const endX = e.changedTouches[0].clientX, diff = endX - startX;
                 item.style.transition = 'transform 0.3s ease, background-color 0.3s ease, opacity 0.3s ease';
                 item.classList.remove('swiping');
                 
@@ -972,6 +835,7 @@ const app = {
                     item.style.transform = 'translateX(300px)';
                     item.style.opacity = '0';
                     item.classList.add('swipe-delete');
+                    
                     setTimeout(() => {
                         const scriptTitle = item.getAttribute('data-script-title');
                         const botId = item.getAttribute('data-bot-id');
@@ -987,10 +851,7 @@ const app = {
             });
             
             item.addEventListener('click', (e) => {
-                if (isSwiping) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
+                if (isSwiping) { e.preventDefault(); e.stopPropagation(); }
             });
         });
     },
@@ -1018,19 +879,12 @@ const app = {
             shouldDelete = confirm(`Delete "${scriptTitle}"?`);
         }
 
-        if (!shouldDelete) {
-            await this.loadDatabase();
-            return;
-        }
-        await this.deleteScriptLogic(scriptTitle);
+        if (shouldDelete) await this.deleteScriptLogic(scriptTitle);
+        else await this.loadDatabase();
     },
 
     async deleteBotConfirmation(botId) {
-        if (!botId || !this.db.bots[botId]) {
-            this.showToast('Bot not found', 'error');
-            await this.loadDatabase();
-            return;
-        }
+        if (!botId || !this.db.bots[botId]) return;
 
         const bot = this.db.bots[botId];
         let shouldDelete = false;
@@ -1049,11 +903,8 @@ const app = {
             shouldDelete = confirm(`Cancel bot "${bot.title}"?`);
         }
 
-        if (!shouldDelete) {
-            await this.loadDatabase();
-            return;
-        }
-        await this.deleteBotLogic(botId);
+        if (shouldDelete) await this.deleteBotLogic(botId);
+        else await this.loadDatabase();
     },
 
     async deleteScriptLogic(scriptTitle) {
@@ -1062,12 +913,11 @@ const app = {
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            await this.syncDbSha();
             
             const script = this.db.scripts[scriptTitle];
             if (!script) throw new Error('Script not found');
             
-            const scriptId = script.filename ? script.filename.replace('.lua', '') : utils.sanitizeTitle(scriptTitle);
+            const scriptId = utils.sanitizeTitle(scriptTitle);
             await this.deleteScriptFiles(scriptId, script.filename);
             
             delete this.db.scripts[scriptTitle];
@@ -1081,8 +931,7 @@ const app = {
                 body: JSON.stringify({
                     message: `Remove ${scriptTitle}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha,
-                    branch: CONFIG.branch
+                    sha: this.dbSha
                 })
             });
             
@@ -1096,6 +945,7 @@ const app = {
             }
             
         } catch(e) {
+            console.error('Delete error:', e);
             this.showToast(`Error: ${e.message}`, 'error');
             await this.loadDatabase();
         } finally {
@@ -1105,33 +955,33 @@ const app = {
     },
 
     async deleteScriptFiles(scriptId, filename) {
-        const pathsToDelete = [
-            `scripts/${scriptId}/raw/${filename}`,
-            `scripts/${scriptId}/index.html`
-        ];
-        
-        for (const filePath of pathsToDelete) {
-            try {
-                const getRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${filePath}?ref=${CONFIG.branch}`, {
-                    headers: { 'Authorization': `token ${this.token}` }
-                });
-                
-                if (getRes.ok) {
-                    const fileData = await getRes.json();
-                    await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${filePath}`, {
+        try {
+            const filesToDelete = [
+                `scripts/${scriptId}/index.html`,
+                `scripts/${scriptId}/raw/${filename}`
+            ];
+
+            for (const path of filesToDelete) {
+                const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
+                const res = await fetch(url, { headers: { 'Authorization': `token ${this.token}` } });
+                if (res.ok) {
+                    const fileData = await res.json();
+                    await fetch(url, {
                         method: 'DELETE',
                         headers: { 
                             'Authorization': `token ${this.token}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            message: `Delete script file: ${filePath}`,
+                            message: `Delete script file: ${path}`,
                             sha: fileData.sha,
                             branch: CONFIG.branch
                         })
                     });
                 }
-            } catch (e) {}
+            }
+        } catch (e) {
+            console.error('Error explicitly deleting script files:', e);
         }
     },
 
@@ -1146,8 +996,6 @@ const app = {
                 delete this.scheduledTimers[botId];
             }
             
-            await this.syncDbSha();
-            
             if (this.db.bots[botId]) {
                 this.db.bots[botId].cancelled = true;
                 this.db.bots[botId].status = 'cancelled';
@@ -1161,8 +1009,7 @@ const app = {
                     body: JSON.stringify({
                         message: `Cancel bot: ${this.db.bots[botId].title}`,
                         content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                        sha: this.dbSha,
-                        branch: CONFIG.branch
+                        sha: this.dbSha
                     })
                 });
                 
@@ -1171,11 +1018,8 @@ const app = {
                     this.dbSha = newDbData.content.sha;
                     this.showToast('Bot cancelled', 'success');
                     await this.loadDatabase();
-                } else {
-                    throw new Error('Failed to update database');
-                }
+                } else throw new Error('Failed to update database');
             }
-            
         } catch(e) {
             this.showToast(`Error: ${e.message}`, 'error');
             await this.loadDatabase();
@@ -1190,13 +1034,10 @@ const app = {
         document.getElementById('edit-title').value = '';
         document.getElementById('edit-visibility').value = 'PUBLIC';
         
-        const descEl = document.getElementById('edit-description');
-        if (descEl) descEl.value = '';
+        const editDesc = document.getElementById('edit-desc');
+        if (editDesc) editDesc.value = '';
         
-        if (window.codeEditor) {
-            window.codeEditor.setValue('');
-            setTimeout(() => window.codeEditor.refresh(), 50);
-        }
+        if (window.cmEditor) window.cmEditor.setValue('');
         
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         if (saveBtn) saveBtn.textContent = 'Publish';
@@ -1231,8 +1072,7 @@ const app = {
         if (scheduleCheckbox && scheduleFields) {
             scheduleFields.style.display = scheduleCheckbox.checked ? 'block' : 'none';
             if (scheduleCheckbox.checked) {
-                const now = new Date();
-                const localDateTime = now.toISOString().slice(0, 16);
+                const localDateTime = new Date().toISOString().slice(0, 16);
                 document.getElementById('bot-schedule-time').min = localDateTime;
             }
         }
@@ -1244,7 +1084,7 @@ const app = {
         
         this.currentEditingId = title;
         this.originalTitle = title;
-        this.originalScriptId = s.filename ? s.filename.replace('.lua', '') : utils.sanitizeTitle(title);
+        this.originalScriptId = utils.sanitizeTitle(title);
         
         this.switchAdminTab('create');
         
@@ -1252,39 +1092,24 @@ const app = {
         document.getElementById('edit-title').value = s.displayTitle || s.title;
         document.getElementById('edit-visibility').value = s.visibility;
         
-        const descEl = document.getElementById('edit-description');
-        if (descEl) {
-            descEl.value = s.description || '';
-        }
+        const editDesc = document.getElementById('edit-desc');
+        if (editDesc) editDesc.value = s.description || '';
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            
-            const rawUrl = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/scripts/${this.originalScriptId}/raw/${s.filename}?ref=${CONFIG.branch}&t=${Date.now()}`;
-            const res = await fetch(rawUrl, {
-                headers: {
-                    'Authorization': `token ${this.token}`,
-                    'Accept': 'application/vnd.github.v3.raw'
-                }
-            });
+            // Fetch raw code properly
+            const rawUrl = `https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`;
+            const res = await fetch(rawUrl);
             
             if (res.ok) {
                 const code = await res.text();
-                if (window.codeEditor) {
-                    window.codeEditor.setValue(code);
-                    setTimeout(() => window.codeEditor.refresh(), 50);
-                }
+                if (window.cmEditor) window.cmEditor.setValue(code);
             } else {
-                if (window.codeEditor) {
-                    window.codeEditor.setValue('-- Error loading content');
-                    setTimeout(() => window.codeEditor.refresh(), 50);
-                }
+                if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
             }
         } catch(e) {
-            if (window.codeEditor) {
-                window.codeEditor.setValue('-- Error loading content');
-                setTimeout(() => window.codeEditor.refresh(), 50);
-            }
+            console.error('Load error:', e);
+            if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
         } finally {
             if (typeof NProgress !== 'undefined') NProgress.done();
         }
@@ -1297,9 +1122,7 @@ const app = {
         if (!deleteBtn && actionButtons) {
             deleteBtn = document.createElement('button');
             deleteBtn.className = 'btn btn-delete';
-            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
-            </svg> Delete`;
+            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg> Delete`;
             deleteBtn.onclick = () => this.deleteScriptConfirmation(title);
             actionButtons.appendChild(deleteBtn);
         }
@@ -1324,8 +1147,7 @@ const app = {
         document.getElementById('bot-schedule').checked = bot.scheduled || false;
         
         if (bot.scheduledTime) {
-            const date = new Date(bot.scheduledTime);
-            const localDateTime = date.toISOString().slice(0, 16);
+            const localDateTime = new Date(bot.scheduledTime).toISOString().slice(0, 16);
             document.getElementById('bot-schedule-time').value = localDateTime;
         }
         
@@ -1333,7 +1155,6 @@ const app = {
         
         const saveBtn = document.querySelector('.bot-actions .btn:last-child');
         if (saveBtn) saveBtn.textContent = bot.scheduled ? 'Update Schedule' : 'Send Now';
-        
         this.toggleScheduleFields();
     },
 
@@ -1348,6 +1169,7 @@ const app = {
         
         const titleInput = document.getElementById('edit-title');
         const visibilityInput = document.getElementById('edit-visibility');
+        const descInput = document.getElementById('edit-desc');
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
         
         if (!titleInput || !visibilityInput || !saveBtn) {
@@ -1358,9 +1180,8 @@ const app = {
         
         const title = titleInput.value.trim();
         const visibility = visibilityInput.value;
-        const code = window.codeEditor ? window.codeEditor.getValue() : '';
-        const descEl = document.getElementById('edit-description');
-        const desc = descEl ? descEl.value : '';
+        const code = window.cmEditor ? window.cmEditor.getValue() : '';
+        const desc = descInput ? descInput.value.trim() : '';
         const originalBtnText = saveBtn.textContent;
         
         const titleError = utils.validateTitle(title);
@@ -1381,11 +1202,8 @@ const app = {
         
         if (typeof NProgress !== 'undefined') NProgress.start();
         
-        await this.syncDbSha();
-        
         try {
             let originalCreationDate = new Date().toISOString();
-            
             if (isEditing && this.db.scripts[this.originalTitle]) {
                 originalCreationDate = this.db.scripts[this.originalTitle].created;
             }
@@ -1402,10 +1220,6 @@ const app = {
             };
             
             await this.createScriptFiles(newScriptId, filename, code, isEditing, this.originalScriptId);
-            
-            if (isEditing && this.originalTitle !== title) {
-                delete this.db.scripts[this.originalTitle];
-            }
             this.db.scripts[title] = scriptData;
             
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
@@ -1417,15 +1231,11 @@ const app = {
                 body: JSON.stringify({
                     message: `${isEditing ? 'Update' : 'Add'} ${title}`,
                     content: utils.safeBtoa(JSON.stringify(this.db, null, 2)),
-                    sha: this.dbSha,
-                    branch: CONFIG.branch
+                    sha: this.dbSha
                 })
             });
             
-            if (!dbRes.ok) {
-                const errorData = await dbRes.json();
-                throw new Error(`Failed to update database: ${errorData.message || 'Unknown error'}`);
-            }
+            if (!dbRes.ok) throw new Error('Failed to update database');
             
             const newDbData = await dbRes.json();
             this.dbSha = newDbData.content.sha;
@@ -1438,7 +1248,6 @@ const app = {
             
             document.getElementById('editor-heading').textContent = `Edit: ${title}`;
             saveBtn.textContent = 'Update Script';
-            
             await this.loadDatabase();
             
         } catch(e) {
@@ -1459,9 +1268,7 @@ const app = {
         
         const now = new Date();
         const formattedDate = now.toLocaleDateString('en-US', {
-            month: '2-digit',
-            day: '2-digit',
-            year: 'numeric'
+            month: '2-digit', day: '2-digit', year: 'numeric'
         });
         
         const escapedScriptId = utils.escapeHtml(scriptId);
@@ -1483,7 +1290,7 @@ const app = {
             <div class="nav-left">
                 <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
                     <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
-                    <span class="nav-title">Leaf's Scripts</span>
+                    <span class="nav-title" style="color:#ffffff;">Leaf's Scripts</span>
                 </a>
             </div>
             <div class="nav-right">
@@ -1491,6 +1298,7 @@ const app = {
             </div>
         </div>
     </nav>
+    
     <div class="container">
         <div class="script-header-lg">
             <div>
@@ -1503,6 +1311,7 @@ const app = {
                 </div>
             </div>
         </div>
+
         <div class="code-box">
             <div class="toolbar">
                 <div class="file-info">raw/${filename}</div>
@@ -1515,11 +1324,13 @@ const app = {
             <pre><code id="code-display" class="language-lua">Loading...</code></pre>
         </div>
     </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
     <script>
         const filename = '${filename}';
         const scriptId = '${scriptId}';
+        
         async function loadScript() {
             try {
                 const res = await fetch(\`raw/\${filename}\`);
@@ -1530,6 +1341,7 @@ const app = {
                 document.getElementById('code-display').textContent = '-- Error loading source';
             }
         }
+        
         function copyScript(btn) {
             const code = document.getElementById('code-display').textContent;
             navigator.clipboard.writeText(code).then(() => {
@@ -1538,6 +1350,7 @@ const app = {
                 setTimeout(() => btn.innerText = original, 2000);
             });
         }
+        
         function downloadScript() {
             const code = document.getElementById('code-display').textContent;
             const element = document.createElement('a');
@@ -1548,6 +1361,7 @@ const app = {
             element.click();
             document.body.removeChild(element);
         }
+        
         loadScript();
     </script>
 </body>
@@ -1563,10 +1377,7 @@ const app = {
 
     async createOrUpdateFile(path, content, contentType) {
         const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
-        
-        const getRes = await fetch(url, {
-            headers: { 'Authorization': `token ${this.token}` }
-        });
+        const getRes = await fetch(url, { headers: { 'Authorization': `token ${this.token}` } });
         
         let sha = null;
         if (getRes.ok) {
@@ -1579,10 +1390,7 @@ const app = {
             content: utils.safeBtoa(content),
             branch: CONFIG.branch
         };
-        
-        if (sha) {
-            body.sha = sha;
-        }
+        if (sha) body.sha = sha;
         
         const putRes = await fetch(url, {
             method: 'PUT',
@@ -1593,10 +1401,7 @@ const app = {
             body: JSON.stringify(body)
         });
         
-        if (!putRes.ok) {
-            const error = await putRes.json();
-            throw new Error(`Failed to create/update file ${path}: ${error.message}`);
-        }
+        if (!putRes.ok) throw new Error(`Failed to create/update file ${path}`);
     },
 
     handleRouting() {
@@ -1628,13 +1433,8 @@ function navigate(path) {
 
 window.addEventListener('DOMContentLoaded', () => {
     app.init();
-    
     if (typeof NProgress !== 'undefined') {
-        NProgress.configure({ 
-            showSpinner: false,
-            speed: 400,
-            trickleSpeed: 200 
-        });
+        NProgress.configure({ showSpinner: false, speed: 400, trickleSpeed: 200 });
     }
 });
 
