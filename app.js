@@ -1097,8 +1097,8 @@ const app = {
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            const rawUrl = `https://${CONFIG.user}.github.io/scripts/${this.originalScriptId}/raw/${s.filename}?t=${CONFIG.cacheBuster()}`;
-            const res = await fetch(rawUrl);
+            const rawUrl = `https://simplyieaf.github.io/scripts/${this.originalScriptId}/raw/${this.originalScriptId}.lua`;
+            const res = await fetch(rawUrl, { cache: 'no-store' });
             
             if (res.ok) {
                 const code = await res.text();
