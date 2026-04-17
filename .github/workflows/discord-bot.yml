@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Create Processor Script
         run: |
@@ -34,8 +34,8 @@ jobs:
           import fs from 'fs';
           import https from 'https';
 
+          const WEBHOOK_URL = process.env.WEBHOOK_URL;
           const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-          const FORUM_CHANNEL_ID = process.env.FORUM_CHANNEL_ID;
           const MANUAL_ID = process.env.MANUAL_BOT_ID;
 
           function httpsRequest(options, body = null) {
@@ -51,139 +51,89 @@ jobs:
             });
           }
 
-          async function createForumPost(title, message) {
+          async function sendToDiscord(title, message) {
             const payload = JSON.stringify({
-              name: title,
-              message: {
-                content: message
-              }
+              content: message,
+              thread_name: title,
+              username: "Leaf"
             });
 
+            const url = new URL(WEBHOOK_URL + '?wait=true');
             const res = await httpsRequest({
-              hostname: 'discord.com',
-              path: `/api/v10/channels/${FORUM_CHANNEL_ID}/threads`,
+              hostname: url.hostname,
+              path: url.pathname + url.search,
               method: 'POST',
               headers: {
-                'Authorization': `Bot ${BOT_TOKEN}`,
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(payload)
               }
             }, payload);
 
-            if (res.status === 201) {
+            if (res.status >= 200 && res.status < 300) {
               const parsed = JSON.parse(res.body);
-              // In forum threads, thread ID == starter message ID
-              const threadId = parsed.id;
-              console.log(`Forum post created! Thread ID: ${threadId}`);
-              return { success: true, threadId, messageId: threadId };
+              console.log(`Sent! Message ID: ${parsed.id}, Channel: ${parsed.channel_id}`);
+
+              if (BOT_TOKEN) {
+                await new Promise(r => setTimeout(r, 1500));
+                const emoji = encodeURIComponent('🔥');
+                const reaction = await httpsRequest({
+                  hostname: 'discord.com',
+                  path: `/api/v10/channels/${parsed.channel_id}/messages/${parsed.id}/reactions/${emoji}/@me`,
+                  method: 'PUT',
+                  headers: {
+                    'Authorization': `Bot ${BOT_TOKEN}`,
+                    'Content-Length': '0'
+                  }
+                });
+                if (reaction.status === 204) {
+                  console.log('Reaction 🔥 added');
+                } else {
+                  console.error(`Reaction failed: ${reaction.status} - ${reaction.body}`);
+                }
+              }
+
+              return { success: true };
             } else {
-              console.error(`Failed to create forum post: ${res.status} - ${res.body}`);
+              console.error(`Discord webhook error: ${res.status} - ${res.body}`);
               return { success: false };
             }
           }
 
-          async function addReaction(channelId, messageId) {
-            const emoji = encodeURIComponent('🔥');
-            const res = await httpsRequest({
-              hostname: 'discord.com',
-              path: `/api/v10/channels/${channelId}/messages/${messageId}/reactions/${emoji}/@me`,
-              method: 'PUT',
-              headers: {
-                'Authorization': `Bot ${BOT_TOKEN}`,
-                'Content-Length': '0'
-              }
-            });
-
-            if (res.status === 204) {
-              console.log('Reaction 🔥 added');
-              return true;
-            } else {
-              console.error(`Reaction failed: ${res.status} - ${res.body}`);
-              return false;
-            }
-          }
-
-          async function joinThread(threadId) {
-            const res = await httpsRequest({
-              hostname: 'discord.com',
-              path: `/api/v10/channels/${threadId}/thread-members/@me`,
-              method: 'PUT',
-              headers: {
-                'Authorization': `Bot ${BOT_TOKEN}`,
-                'Content-Length': '0'
-              }
-            });
-
-            if (res.status === 204) {
-              console.log('Joined thread');
-              return true;
-            } else {
-              console.error(`Join thread failed: ${res.status} - ${res.body}`);
-              return false;
-            }
-          }
-
-          async function processBot(bot) {
-            const result = await createForumPost(bot.title, bot.message);
-            if (!result.success) return false;
-
-            // Small delay before reacting
-            await new Promise(r => setTimeout(r, 1500));
-
-            await addReaction(result.threadId, result.messageId);
-            await joinThread(result.threadId);
-
-            return true;
-          }
-
           async function run() {
-            if (!BOT_TOKEN) {
-              console.error('DISCORD_BOT_TOKEN is not set');
-              process.exit(1);
-            }
-            if (!FORUM_CHANNEL_ID) {
-              console.error('FORUM_CHANNEL_ID is not set');
-              process.exit(1);
-            }
             if (!fs.existsSync('database.json')) {
               console.error('database.json not found');
-              process.exit(1);
+              return;
             }
 
             const db = JSON.parse(fs.readFileSync('database.json', 'utf8'));
             const now = new Date();
             let dirty = false;
 
-            // Manual trigger
             if (MANUAL_ID && db.bots && db.bots[MANUAL_ID]) {
               const bot = db.bots[MANUAL_ID];
               if (!bot.sent) {
                 console.log(`Manual trigger for: ${bot.title}`);
-                const success = await processBot(bot);
-                if (success) {
+                const result = await sendToDiscord(bot.title, bot.message);
+                if (result.success) {
                   bot.sent = true;
                   bot.status = 'sent';
                   bot.sentTime = now.toISOString();
                   bot.scheduled = false;
                   dirty = true;
                 }
-              } else {
-                console.log(`Bot ${MANUAL_ID} already sent, skipping`);
               }
             }
 
-            // Scheduled bots
             if (db.bots) {
               for (const [id, bot] of Object.entries(db.bots)) {
-                if (MANUAL_ID && id === MANUAL_ID) continue;
                 if (bot.sent || bot.cancelled || bot.isProcessing) continue;
 
                 if (bot.scheduled && bot.scheduledTime) {
                   const scheduleDate = new Date(bot.scheduledTime);
                   if (scheduleDate <= now) {
-                    console.log(`Processing scheduled bot: ${bot.title}`);
-                    const success = await processBot(bot);
-                    if (success) {
+                    console.log(`Processing scheduled: ${bot.title}`);
+                    const result = await sendToDiscord(bot.title, bot.message);
+                    if (result.success) {
                       bot.sent = true;
                       bot.status = 'sent';
                       bot.sentTime = now.toISOString();
@@ -199,21 +149,16 @@ jobs:
             if (dirty) {
               fs.writeFileSync('database.json', JSON.stringify(db, null, 2));
               console.log('Changes saved to database.json');
-            } else {
-              console.log('No bots to process');
             }
           }
 
-          run().catch(e => {
-            console.error('Fatal error:', e);
-            process.exit(1);
-          });
+          run();
           EOF
 
       - name: Run Processor
         env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          FORUM_CHANNEL_ID: ${{ secrets.DISCORD_FORUM_CHANNEL_ID }}
           MANUAL_BOT_ID: ${{ github.event.inputs.botId }}
         run: node process_bot.mjs
 
