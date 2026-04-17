@@ -1882,7 +1882,7 @@
       "timezone": "",
       "created": "2026-04-17T18:28:43.768Z",
       "sent": false,
-      "status": "pending",
+      "status": "processing",
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
