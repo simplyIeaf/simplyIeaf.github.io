@@ -1872,6 +1872,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1776450523768": {
+      "id": "bot_1776450523768",
+      "title": "tets",
+      "message": "Test",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-04-17T18:28:43.768Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
