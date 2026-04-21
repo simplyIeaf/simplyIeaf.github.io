@@ -21,9 +21,7 @@ local config = {
 }
 
 local adminIds = {
-    [8033814042] = true,
-    [1202134065] = true,
-    [10156878697] = true
+    [8033814042] = true -- replace with your roblox user id
 }
 
 local activeRoundPlayers = {}
