@@ -1953,13 +1953,13 @@
       "id": "bot_1777059363224",
       "title": "Better Update Log System",
       "message": "SurfaceGui Script Link:\nhttps://simplyieaf.github.io/scripts/better-update-log-system-script/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-04-25T08:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-04-24T19:36:03.224Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-04-25T08:38:51.830Z",
       "cancelled": false,
       "isProcessing": false
     }
