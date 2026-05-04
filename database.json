@@ -1972,6 +1972,20 @@
       "sentTime": "2026-04-25T08:38:51.830Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1777933222803": {
+      "id": "bot_1777933222803",
+      "title": "Advanced Loading Screen",
+      "message": "StarterPlayerScripts Script Link:\nhttps://simplyieaf.github.io/scripts/advanced-loading-screen-localscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-05-05T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-05-04T22:20:22.803Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
