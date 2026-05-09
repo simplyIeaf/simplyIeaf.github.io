@@ -2016,6 +2016,20 @@
       "sentTime": "2026-05-05T08:21:59.161Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1778320586238": {
+      "id": "bot_1778320586238",
+      "title": "Quest System",
+      "message": "StarterGui Script Link: https://simplyieaf.github.io/scripts/quest-system-localscript/index.html ServerScriptService Script Link: https://simplyieaf.github.io/scripts/quest-system-serverscript/index.html Leaderstats Script Link: https://simplyieaf.github.io/scripts/quest-system-leaderstats-script/index.html",
+      "scheduled": false,
+      "scheduledTime": null,
+      "timezone": "",
+      "created": "2026-05-09T09:56:26.238Z",
+      "sent": false,
+      "status": "pending",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
