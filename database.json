@@ -908,6 +908,16 @@
       "size": 9880,
       "created": "2026-05-04T22:17:24.956Z",
       "updated": "2026-05-04T22:18:51.866Z"
+    },
+    "Quest System LocalScript": {
+      "title": "Quest System LocalScript",
+      "displayTitle": "Quest System LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "filename": "quest-system-localscript.lua",
+      "size": 15486,
+      "created": "2026-05-09T09:47:01.033Z",
+      "updated": "2026-05-09T09:47:01.041Z"
     }
   },
   "bots": {
