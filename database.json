@@ -918,6 +918,16 @@
       "size": 15486,
       "created": "2026-05-09T09:47:01.033Z",
       "updated": "2026-05-09T09:47:01.041Z"
+    },
+    "Quest System ServerScript": {
+      "title": "Quest System ServerScript",
+      "displayTitle": "Quest System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "filename": "quest-system-serverscript.lua",
+      "size": 7738,
+      "created": "2026-05-09T09:47:29.496Z",
+      "updated": "2026-05-09T09:47:29.496Z"
     }
   },
   "bots": {
