@@ -928,6 +928,16 @@
       "size": 7738,
       "created": "2026-05-09T09:47:29.496Z",
       "updated": "2026-05-09T09:47:29.496Z"
+    },
+    "Quest System Leaderstats Script": {
+      "title": "Quest System Leaderstats Script",
+      "displayTitle": "Quest System Leaderstats Script",
+      "visibility": "PUBLIC",
+      "description": "",
+      "filename": "quest-system-leaderstats-script.lua",
+      "size": 1414,
+      "created": "2026-05-09T09:47:55.563Z",
+      "updated": "2026-05-09T09:47:55.563Z"
     }
   },
   "bots": {
