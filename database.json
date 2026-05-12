@@ -2050,6 +2050,20 @@
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1778627686016": {
+      "id": "bot_1778627686016",
+      "title": "Global Announcements Panel",
+      "message": "StarterGui Script Link: https://simplyieaf.github.io/scripts/global-announcements-panel-localscript/index.html ServerScriptService Script Link: https://simplyieaf.github.io/scripts/global-announcements-panel-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-05-13T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-05-12T23:14:46.016Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
