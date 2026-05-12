@@ -948,6 +948,16 @@
       "size": 3313,
       "created": "2026-05-12T22:57:22.896Z",
       "updated": "2026-05-12T22:57:22.904Z"
+    },
+    "Global Announcements Panel LocalScript": {
+      "title": "Global Announcements Panel LocalScript",
+      "displayTitle": "Global Announcements Panel LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "filename": "global-announcements-panel-localscript.lua",
+      "size": 23918,
+      "created": "2026-05-12T22:59:18.140Z",
+      "updated": "2026-05-12T22:59:18.140Z"
     }
   },
   "bots": {
