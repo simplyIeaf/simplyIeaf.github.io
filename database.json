@@ -938,6 +938,16 @@
       "size": 1414,
       "created": "2026-05-09T09:47:55.563Z",
       "updated": "2026-05-09T09:47:55.563Z"
+    },
+    "Global Announcements Panel ServerScript": {
+      "title": "Global Announcements Panel ServerScript",
+      "displayTitle": "Global Announcements Panel ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "filename": "global-announcements-panel-serverscript.lua",
+      "size": 3313,
+      "created": "2026-05-12T22:57:22.896Z",
+      "updated": "2026-05-12T22:57:22.904Z"
     }
   },
   "bots": {
