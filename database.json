@@ -968,6 +968,16 @@
       "size": 11286,
       "created": "2026-05-25T21:37:53.687Z",
       "updated": "2026-05-25T21:37:53.689Z"
+    },
+    "Donation Leaderboard Script #2": {
+      "title": "Donation Leaderboard Script #2",
+      "displayTitle": "Donation Leaderboard Script #2",
+      "visibility": "UNLISTED",
+      "description": "",
+      "filename": "donation-leaderboard-script-2.lua",
+      "size": 6082,
+      "created": "2026-05-25T21:39:06.402Z",
+      "updated": "2026-05-25T21:39:06.402Z"
     }
   },
   "bots": {
