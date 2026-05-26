@@ -2089,13 +2089,13 @@
       "id": "bot_1779745325561",
       "title": "Donation Leaderboard",
       "message": "Inserted Part Script Link: https://simplyieaf.github.io/scripts/donation-leaderboard-script-1/index.html Duplicated Part Script Link: https://simplyieaf.github.io/scripts/donation-leaderboard-script-2/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-05-26T08:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-05-25T21:42:05.561Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-05-26T08:51:00.950Z",
       "cancelled": false,
       "isProcessing": false
     }
