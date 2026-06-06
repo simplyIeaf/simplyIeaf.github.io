@@ -2118,6 +2118,20 @@
       "sentTime": "2026-05-26T08:51:00.950Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1780787264104": {
+      "id": "bot_1780787264104",
+      "title": "Troll System",
+      "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/troll-system-localscript/index.html\nServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/troll-system-serverscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-06-07T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-06-06T23:07:44.104Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
