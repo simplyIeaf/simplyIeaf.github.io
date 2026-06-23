@@ -2147,13 +2147,13 @@
       "id": "bot_1782158475381",
       "title": "Keyboard System",
       "message": "Keyboard Model ID (and link):\n3307431053\nhttps://create.roblox.com/store/asset/3307431053/Keyboard-Key\n\nStarterCharacterScripts Script Link:\nhttps://simplyieaf.github.io/scripts/keyboard-system-script/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-06-23T08:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-06-22T20:01:15.381Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-06-23T08:47:47.068Z",
       "cancelled": false,
       "isProcessing": false
     }
