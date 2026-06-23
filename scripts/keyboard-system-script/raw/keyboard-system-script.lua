@@ -63,50 +63,59 @@ local tweenInfoUp = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirect
 
 for _, element in ipairs(keyboardModel:GetDescendants()) do
 	if element:IsA("BasePart") then
-		local assignedColor = colorScheme[math.random(1, #colorScheme)]
-		element.Color = assignedColor
+		if not element:GetAttribute("Initialized") then
+			element:SetAttribute("Initialized", true)
+			element:SetAttribute("OriginalCFrame", element.CFrame)
+
+			local assignedColor = colorScheme[math.random(1, #colorScheme)]
+			element.Color = assignedColor
+
+			local sound = Instance.new("Sound")
+			sound.Name = "KeySound"
+			sound.SoundId = "rbxassetid://102855535543930"
+			sound.Volume = 1
+			sound.Parent = element
+
+			local surfaceGui = Instance.new("SurfaceGui")
+			surfaceGui.Name = "KeyGui"
+			surfaceGui.Face = Enum.NormalId.Top
+			surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			surfaceGui.PixelsPerStud = 50
+			surfaceGui.Parent = element
+
+			local textLabel = Instance.new("TextLabel")
+			textLabel.Size = UDim2.new(1, 0, 1, 0)
+			textLabel.BackgroundTransparency = 1
+			textLabel.Font = Enum.Font.GothamBold
+			textLabel.TextColor3 = Color3.new(0, 0, 0)
+			textLabel.TextScaled = true
+
+			local chosenLetter
+			repeat
+				chosenLetter = alphabet[math.random(1, #alphabet)]
+			until chosenLetter ~= previousLetter
+			previousLetter = chosenLetter
+
+			textLabel.Text = chosenLetter
+			textLabel.Parent = surfaceGui
+
+			local uiStroke = Instance.new("UIStroke")
+			uiStroke.Color = Color3.new(0, 0, 0)
+			uiStroke.Thickness = 1.5
+			uiStroke.Parent = textLabel
+		end
 
 		local state = {
-			originalCFrame = element.CFrame,
+			originalCFrame = element:GetAttribute("OriginalCFrame"),
 			pressed = false,
 			activeTween = nil,
 		}
 		keyStates[element] = state
 
-		local sound = Instance.new("Sound")
-		sound.SoundId = "rbxassetid://102855535543930"
-		sound.Volume = 1
-		sound.Parent = element
-
-		local surfaceGui = Instance.new("SurfaceGui")
-		surfaceGui.Face = Enum.NormalId.Top
-		surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		surfaceGui.PixelsPerStud = 50
-		surfaceGui.Parent = element
-
-		local textLabel = Instance.new("TextLabel")
-		textLabel.Size = UDim2.new(1, 0, 1, 0)
-		textLabel.BackgroundTransparency = 1
-		textLabel.Font = Enum.Font.GothamBold
-		textLabel.TextColor3 = Color3.new(0, 0, 0)
-		textLabel.TextScaled = true
-
-		local chosenLetter
-		repeat
-			chosenLetter = alphabet[math.random(1, #alphabet)]
-		until chosenLetter ~= previousLetter
-		previousLetter = chosenLetter
-
-		textLabel.Text = chosenLetter
-		textLabel.Parent = surfaceGui
-
-		local uiStroke = Instance.new("UIStroke")
-		uiStroke.Color = Color3.new(0, 0, 0)
-		uiStroke.Thickness = 1.5
-		uiStroke.Parent = textLabel
+		local sound = element:FindFirstChild("KeySound")
 
 		task.spawn(function()
-			while true do
+			while character and character.Parent do
 				task.wait(0.02)
 
 				local root = character:FindFirstChild("HumanoidRootPart")
@@ -122,7 +131,9 @@ for _, element in ipairs(keyboardModel:GetDescendants()) do
 							state.activeTween = nil
 						end
 
-						sound:Play()
+						if sound then
+							sound:Play()
+						end
 
 						local targetCFrame = state.originalCFrame - Vector3.new(0, 0.6, 0)
 						local tween = TweenService:Create(element, tweenInfoDown, {CFrame = targetCFrame})
