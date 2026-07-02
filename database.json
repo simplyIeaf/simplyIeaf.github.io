@@ -1008,6 +1008,16 @@
       "size": 4435,
       "created": "2026-06-23T16:14:09.763Z",
       "updated": "2026-06-23T16:14:09.765Z"
+    },
+    "Gun System Script": {
+      "title": "Gun System Script",
+      "displayTitle": "Gun System Script",
+      "visibility": "UNLISTED",
+      "description": "",
+      "filename": "gun-system-script.lua",
+      "size": 3164,
+      "created": "2026-07-02T21:31:36.546Z",
+      "updated": "2026-07-02T21:31:36.546Z"
     }
   },
   "bots": {
