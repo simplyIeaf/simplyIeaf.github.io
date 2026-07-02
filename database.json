@@ -1008,16 +1008,6 @@
       "size": 4435,
       "created": "2026-06-23T16:14:09.763Z",
       "updated": "2026-06-23T16:14:09.765Z"
-    },
-    "Gun Tool Script": {
-      "title": "Gun Tool Script",
-      "displayTitle": "Gun Tool Script",
-      "visibility": "UNLISTED",
-      "description": "",
-      "filename": "gun-tool-script.lua",
-      "size": 3099,
-      "created": "2026-07-02T16:32:12.508Z",
-      "updated": "2026-07-02T16:32:12.508Z"
     }
   },
   "bots": {
