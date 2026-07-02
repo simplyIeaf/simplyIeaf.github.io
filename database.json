@@ -1018,6 +1018,16 @@
       "size": 3164,
       "created": "2026-07-02T16:14:13.319Z",
       "updated": "2026-07-02T16:14:13.319Z"
+    },
+    "Gun LocalScript": {
+      "title": "Gun LocalScript",
+      "displayTitle": "Gun LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "filename": "gun-localscript.lua",
+      "size": 6261,
+      "created": "2026-07-02T16:14:56.769Z",
+      "updated": "2026-07-02T16:14:56.770Z"
     }
   },
   "bots": {
