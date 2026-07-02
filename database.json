@@ -1018,6 +1018,16 @@
       "size": 3164,
       "created": "2026-07-02T21:31:36.546Z",
       "updated": "2026-07-02T21:31:36.546Z"
+    },
+    "Gun System LocalScript": {
+      "title": "Gun System LocalScript",
+      "displayTitle": "Gun System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "filename": "gun-system-localscript.lua",
+      "size": 6261,
+      "created": "2026-07-02T21:31:57.811Z",
+      "updated": "2026-07-02T21:31:57.811Z"
     }
   },
   "bots": {
