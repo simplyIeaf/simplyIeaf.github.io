@@ -1022,12 +1022,12 @@
     "Gun LocalScript": {
       "title": "Gun LocalScript",
       "displayTitle": "Gun LocalScript",
-      "visibility": "PUBLIC",
+      "visibility": "UNLISTED",
       "description": "",
       "filename": "gun-localscript.lua",
       "size": 6261,
-      "created": "2026-07-02T16:14:56.769Z",
-      "updated": "2026-07-02T16:14:56.770Z"
+      "created": "2026-07-02T16:15:16.930Z",
+      "updated": "2026-07-02T16:15:16.930Z"
     }
   },
   "bots": {
