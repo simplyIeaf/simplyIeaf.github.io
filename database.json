@@ -2190,6 +2190,20 @@
       "sentTime": null,
       "cancelled": true,
       "isProcessing": false
+    },
+    "bot_1783028058602": {
+      "id": "bot_1783028058602",
+      "title": "Gun System",
+      "message": "Gun Script Link:\nhttps://simplyieaf.github.io/scripts/gun-system-script/index.html\nGun LocalScript Link:\nhttps://simplyieaf.github.io/scripts/gun-system-localscript/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-07-03T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-07-02T21:34:18.602Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
