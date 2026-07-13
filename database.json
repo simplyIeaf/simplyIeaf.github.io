@@ -2214,6 +2214,20 @@
       "sentTime": null,
       "cancelled": true,
       "isProcessing": false
+    },
+    "bot_1783962742440": {
+      "id": "bot_1783962742440",
+      "title": "Shop System",
+      "message": "Kill All Script Link:\nhttps://simplyieaf.github.io/scripts/shop-system-serverscript/index.html\nRoblox Documentation Link:\nhttps://create.roblox.com/docs/reference/engine/classes/MarketplaceService#ProcessReceipt",
+      "scheduled": true,
+      "scheduledTime": "2026-07-14T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-07-13T17:12:22.440Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
