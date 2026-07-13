@@ -1028,6 +1028,16 @@
       "size": 6261,
       "created": "2026-07-02T21:31:57.811Z",
       "updated": "2026-07-02T21:31:57.811Z"
+    },
+    "Shop System ServerScript": {
+      "title": "Shop System ServerScript",
+      "displayTitle": "Shop System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "This is the script i’ve written in the video",
+      "filename": "shop-system-serverscript.lua",
+      "size": 809,
+      "created": "2026-07-13T17:10:20.723Z",
+      "updated": "2026-07-13T17:10:20.723Z"
     }
   },
   "bots": {
