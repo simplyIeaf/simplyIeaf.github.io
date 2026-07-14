@@ -1022,12 +1022,12 @@
     "Gun System LocalScript": {
       "title": "Gun System LocalScript",
       "displayTitle": "Gun System LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "filename": "gun-system-localscript.lua",
       "size": 6261,
-      "created": "2026-07-02T21:31:57.811Z",
-      "updated": "2026-07-02T21:31:57.811Z"
+      "created": "2026-07-14T09:54:34.224Z",
+      "updated": "2026-07-14T09:54:34.224Z"
     },
     "Shop System ServerScript": {
       "title": "Shop System ServerScript",
