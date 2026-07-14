@@ -1002,12 +1002,12 @@
     "Keyboard System Script": {
       "title": "Keyboard System Script",
       "displayTitle": "Keyboard System Script",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "filename": "keyboard-system-script.lua",
       "size": 4435,
-      "created": "2026-06-23T16:14:09.763Z",
-      "updated": "2026-06-23T16:14:09.765Z"
+      "created": "2026-07-14T09:55:54.689Z",
+      "updated": "2026-07-14T09:55:54.689Z"
     },
     "Gun System Script": {
       "title": "Gun System Script",
