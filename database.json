@@ -902,12 +902,12 @@
     "Advanced Loading Screen LocalScript": {
       "title": "Advanced Loading Screen LocalScript",
       "displayTitle": "Advanced Loading Screen LocalScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "filename": "advanced-loading-screen-localscript.lua",
       "size": 9880,
-      "created": "2026-05-04T22:17:24.956Z",
-      "updated": "2026-05-04T22:18:51.866Z"
+      "created": "2026-07-14T09:53:49.836Z",
+      "updated": "2026-07-14T09:53:49.836Z"
     },
     "Quest System LocalScript": {
       "title": "Quest System LocalScript",
