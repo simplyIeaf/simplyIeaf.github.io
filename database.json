@@ -892,12 +892,12 @@
     "Better Update Log System Script": {
       "title": "Better Update Log System Script",
       "displayTitle": "Better Update Log System Script",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "Place it inside of SurfaceGui",
       "filename": "better-update-log-system-script.lua",
       "size": 9977,
-      "created": "2026-04-24T19:28:48.925Z",
-      "updated": "2026-04-24T19:28:48.927Z"
+      "created": "2026-07-14T09:56:56.454Z",
+      "updated": "2026-07-14T09:56:56.454Z"
     },
     "Advanced Loading Screen LocalScript": {
       "title": "Advanced Loading Screen LocalScript",
