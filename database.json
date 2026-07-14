@@ -1033,11 +1033,11 @@
       "title": "Shop System ServerScript",
       "displayTitle": "Shop System ServerScript",
       "visibility": "PUBLIC",
-      "description": "This is the script i’ve written in the video",
+      "description": "This is the script i’ve written in the video (only use this for developer products)",
       "filename": "shop-system-serverscript.lua",
       "size": 818,
-      "created": "2026-07-13T17:12:53.187Z",
-      "updated": "2026-07-13T17:12:53.187Z"
+      "created": "2026-07-14T09:53:08.708Z",
+      "updated": "2026-07-14T09:53:08.715Z"
     },
     "Shop System ServerScript #2": {
       "title": "Shop System ServerScript #2",
