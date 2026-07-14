@@ -1038,6 +1038,16 @@
       "size": 818,
       "created": "2026-07-13T17:12:53.187Z",
       "updated": "2026-07-13T17:12:53.187Z"
+    },
+    "Shop System ServerScript #2": {
+      "title": "Shop System ServerScript #2",
+      "displayTitle": "Shop System ServerScript #2",
+      "visibility": "PUBLIC",
+      "description": "Use this script instead if you wanna use gamepasses instead of developer products (only use gamepasses if you want the item to be able to be only bought once)",
+      "filename": "shop-system-serverscript-2.lua",
+      "size": 483,
+      "created": "2026-07-14T09:47:01.619Z",
+      "updated": "2026-07-14T09:47:01.627Z"
     }
   },
   "bots": {
