@@ -1012,12 +1012,12 @@
     "Gun System Script": {
       "title": "Gun System Script",
       "displayTitle": "Gun System Script",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "filename": "gun-system-script.lua",
       "size": 3164,
-      "created": "2026-07-02T21:31:36.546Z",
-      "updated": "2026-07-02T21:31:36.546Z"
+      "created": "2026-07-14T09:55:05.849Z",
+      "updated": "2026-07-14T09:55:05.849Z"
     },
     "Gun System LocalScript": {
       "title": "Gun System LocalScript",
