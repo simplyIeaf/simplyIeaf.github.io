@@ -15,7 +15,6 @@ local humanoidConnection
 local lastSettingsToggle = 0
 local settingsState = {
 fieldOfView = camera.FieldOfView,
-cameraSensitivity = 1,
 timeIsDay = Lighting.ClockTime > 6 and Lighting.ClockTime < 18,
 musicVolume = 0.5,
 musicId = "",
@@ -39,9 +38,6 @@ local originalSkyClone = originalSky and originalSky:Clone() or nil
 local hiddenGuiStates = {}
 local hiddenPlayerParts = {}
 local playerConnections = {}
-
-local cameraInputModule
-local originalCameraGetRotation
 
 local function createSquareButton(parent, iconId)
     local button = Instance.new("ImageButton")
@@ -264,37 +260,8 @@ local function applyTimeOfDay()
     Lighting.ClockTime = settingsState.timeIsDay and 14 or 2
 end
 
-local function applyCameraSensitivity()
-    UserInputService.MouseDeltaSensitivity = 1
-    
-    if cameraInputModule and originalCameraGetRotation then
-        cameraInputModule.getRotation = function(...)
-            return originalCameraGetRotation(...) * settingsState.cameraSensitivity
-        end
-    end
-end
-
-local function setupCameraSensitivity()
-    task.spawn(function()
-        local playerScripts = player:WaitForChild("PlayerScripts")
-        local playerModule = playerScripts:WaitForChild("PlayerModule")
-        local cameraModule = playerModule:WaitForChild("CameraModule")
-        local cameraInput = cameraModule:WaitForChild("CameraInput")
-        
-        local ok, module = pcall(require, cameraInput)
-        
-        if ok and module and type(module.getRotation) == "function" then
-            cameraInputModule = module
-            originalCameraGetRotation = module.getRotation
-            applyCameraSensitivity()
-        end
-    end)
-end
-
 local function applyAll()
     camera.FieldOfView = settingsState.fieldOfView
-    
-    applyCameraSensitivity()
     applyTimeOfDay()
     applySkybox()
     applyGuiVisibility()
@@ -665,17 +632,6 @@ local function buildSettingsUI(parent)
     end
     )
     
-    addSliderSetting(
-    "Camera Sensitivity",
-    0.1,
-    2,
-    settingsState.cameraSensitivity,
-    function(value)
-        settingsState.cameraSensitivity = value
-        applyCameraSensitivity()
-    end
-    )
-    
     addToggleSetting(
     "Time of Day",
     settingsState.timeIsDay,
@@ -890,31 +846,61 @@ local function buildSettingsUI(parent)
     return main
 end
 
-local function destroyUI()
-    for _, connection in ipairs(connections) do
-        connection:Disconnect()
+local function getTouchGuiDisplayOrder()
+    if not UserInputService.TouchEnabled then
+        return nil
     end
     
-    table.clear(connections)
+    local touchGui = playerGui:FindFirstChild("TouchGui")
     
-    if screenGui then
-        screenGui:Destroy()
+    if not touchGui then
+        touchGui = playerGui:WaitForChild("TouchGui", 3)
     end
     
-    screenGui = nil
-    settingsFrame = nil
+    if touchGui and touchGui:IsA("ScreenGui") then
+        return touchGui.DisplayOrder
+    end
+    
+    return nil
+end
+
+local function closeSettingsUI()
+    local focusedTextBox = UserInputService:GetFocusedTextBox()
+    
+    if focusedTextBox then
+        focusedTextBox:ReleaseFocus()
+    end
+    
+    if settingsFrame then
+        settingsFrame.Visible = false
+    end
 end
 
 local function createUI()
-    if screenGui and screenGui.Parent then
+    if settingsFrame and settingsFrame.Parent then
         return
     end
     
-    screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "GameSystemUI"
-    screenGui.IgnoreGuiInset = true
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = playerGui
+    local focusedTextBox = UserInputService:GetFocusedTextBox()
+    
+    if focusedTextBox then
+        focusedTextBox:ReleaseFocus()
+    end
+    
+    if not screenGui then
+        screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "GameSystemUI"
+        screenGui.IgnoreGuiInset = true
+        screenGui.ResetOnSpawn = false
+        
+        local touchDisplayOrder = getTouchGuiDisplayOrder()
+        
+        if touchDisplayOrder then
+            screenGui.DisplayOrder = touchDisplayOrder - 1
+        end
+        
+        screenGui.Parent = playerGui
+    end
     
     local uiScale = Instance.new("UIScale")
     uiScale.Parent = screenGui
@@ -1008,7 +994,7 @@ local function onCharacterAdded(character)
     local humanoid = character:WaitForChild("Humanoid")
     
     humanoidConnection = humanoid.Died:Connect(function()
-        destroyUI()
+        closeSettingsUI()
     end)
     
     createUI()
@@ -1032,17 +1018,8 @@ end
 player.CharacterAdded:Connect(onCharacterAdded)
 
 createUI()
-setupCameraSensitivity()
 applyAll()
 
 if player.Character then
     onCharacterAdded(player.Character)
 end
-
-UserInputService:GetPropertyChangedSignal(
-"MouseDeltaSensitivity"
-):Connect(function()
-    if UserInputService.MouseDeltaSensitivity ~= 1 then
-        UserInputService.MouseDeltaSensitivity = 1
-    end
-end)
