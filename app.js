@@ -44,6 +44,15 @@ const utils = {
         return div.innerHTML;
     },
 
+    escapeAttr(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    },
+
     validateTitle(title) {
         if (!title || title.trim().length === 0) return 'Title is required';
         if (title.length > 100) return 'Title must be less than 100 characters';
@@ -64,16 +73,21 @@ const utils = {
     
     formatDisplayTime(isoString, timezone) {
         const date = new Date(isoString);
-        return date.toLocaleString('en-US', {
-            timeZone: timezone,
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZoneName: 'short'
-        });
+        if (isNaN(date.getTime())) return 'Invalid date';
+        try {
+            return date.toLocaleString('en-US', {
+                timeZone: timezone || undefined,
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZoneName: 'short'
+            });
+        } catch(e) {
+            return date.toLocaleString();
+        }
     }
 };
 
@@ -106,10 +120,12 @@ const app = {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 if (location.hash === '#admin') {
-                    const activeTab = document.querySelector('.tab-btn.active').textContent.toLowerCase();
-                    if (activeTab.includes('add new')) {
+                    const activeTab = document.querySelector('.tab-btn.active');
+                    if (!activeTab) return;
+                    const activeTabName = activeTab.textContent.toLowerCase();
+                    if (activeTabName.includes('add new')) {
                         this.saveScript();
-                    } else if (activeTab.includes('bots') || activeTab.includes('create bot')) {
+                    } else if (activeTabName.includes('bots') || activeTabName.includes('create bot')) {
                         this.saveBot();
                     }
                 }
@@ -336,30 +352,36 @@ const app = {
         try {
             this.isLoading = true;
             const list = document.getElementById('admin-list');
-            if (list) {
+            if (this.currentUser && list) {
                 list.innerHTML = `<div style="text-align:center;padding:20px"><div class="spinner"></div><p>Loading...</p></div>`;
             }
             
-            const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`;
-            const headers = this.token ? { 'Authorization': `token ${this.token}` } : {};
-            
-            const res = await fetch(url, { headers });
-            
-            if (res.status === 404) {
-                this.db = { scripts: {}, bots: {} };
+            let content;
+            if (this.token) {
+                const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json?t=${CONFIG.cacheBuster()}`;
+                const res = await fetch(url, { headers: { 'Authorization': `token ${this.token}` } });
+                
+                if (res.status === 404) {
+                    this.db = { scripts: {}, bots: {} };
+                    this.dbSha = null;
+                    this.renderList();
+                    if (list) list.innerHTML = `<div class="empty-admin-state"><p>No scripts yet</p></div>`;
+                    return;
+                }
+                
+                if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
+                
+                const file = await res.json();
+                this.dbSha = file.sha;
+                content = utils.safeAtob(file.content);
+            } else {
+                const res = await fetch(`database.json?t=${CONFIG.cacheBuster()}`, { cache: 'no-store' });
+                if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
                 this.dbSha = null;
-                this.renderList();
-                if (list) list.innerHTML = `<div class="empty-admin-state"><p>No scripts yet</p></div>`;
-                return;
+                content = await res.text();
             }
             
-            if (!res.ok) throw new Error(`Failed to load database: ${res.status}`);
-            
-            const file = await res.json();
-            this.dbSha = file.sha;
-            
             try {
-                const content = utils.safeAtob(file.content);
                 this.db = JSON.parse(content);
                 if (!this.db.scripts) this.db.scripts = {};
                 if (!this.db.bots) this.db.bots = {};
@@ -407,6 +429,8 @@ const app = {
         const scheduledDate = new Date(bot.scheduledTime);
         const delay = scheduledDate.getTime() - Date.now();
 
+        if (isNaN(delay)) return;
+
         if (delay <= 0) {
             if (delay > -300000) this.triggerScheduledBot(botId);
             return;
@@ -421,33 +445,32 @@ const app = {
         }, delay);
     },
 
+    async dispatchBotWorkflow(botId) {
+        return fetch(
+            `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${this.token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ref: CONFIG.branch,
+                    inputs: { botId: botId }
+                })
+            }
+        );
+    },
+
     async triggerScheduledBot(botId) {
         try {
             const bot = this.db.bots[botId];
             if (!bot || bot.sent || bot.cancelled || bot.isProcessing) return;
 
             bot.isProcessing = true;
-            
-            const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `token ${this.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        ref: 'main',
-                        inputs: {
-                            botId: botId,
-                            title: bot.title,
-                            message: bot.message,
-                            scheduled: 'true'
-                        }
-                    })
-                }
-            );
+
+            const workflowResponse = await this.dispatchBotWorkflow(botId);
 
             if (workflowResponse.status === 204) {
                 bot.status = 'processing';
@@ -491,18 +514,7 @@ const app = {
         bot.isProcessing = true;
 
         try {
-            const workflowResponse = await fetch(
-                `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/actions/workflows/discord-bot.yml/dispatches`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `token ${this.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ ref: 'main', inputs: { botId: botId } })
-                }
-            );
+            const workflowResponse = await this.dispatchBotWorkflow(botId);
 
             if (workflowResponse.status === 204) {
                 bot.status = 'processing';
@@ -556,6 +568,11 @@ const app = {
         
         if (!title || !message) {
             this.showToast('Title and message are required', 'error');
+            return;
+        }
+        
+        if (schedule && !scheduleTime) {
+            this.showToast('Please pick a scheduled time', 'error');
             return;
         }
         
@@ -750,7 +767,7 @@ const app = {
         }
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
-            return `<div class="admin-item" data-script-title="${s.title.replace(/'/g, "\\'").replace(/"/g, '"')}" onclick="app.populateEditor('${s.title.replace(/'/g, "\\'").replace(/"/g, '"')}')">
+            return `<div class="admin-item" data-script-title="${utils.escapeAttr(s.title)}" onclick="app.populateEditor(this.getAttribute('data-script-title'))">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(s.title)}</strong>
                     <div class="admin-meta">
@@ -1097,7 +1114,7 @@ const app = {
         
         try {
             if (typeof NProgress !== 'undefined') NProgress.start();
-            const rawUrl = `https://simplyieaf.github.io/scripts/${this.originalScriptId}/raw/${this.originalScriptId}.lua`;
+            const rawUrl = `scripts/${this.originalScriptId}/raw/${s.filename}`;
             const res = await fetch(rawUrl, { cache: 'no-store' });
             
             if (res.ok) {
@@ -1218,7 +1235,7 @@ const app = {
                 updated: new Date().toISOString()
             };
             
-            await this.createScriptFiles(newScriptId, filename, code, isEditing, this.originalScriptId);
+            await this.createScriptFiles(newScriptId, filename, code, isEditing, this.originalScriptId, title);
             this.db.scripts[title] = scriptData;
             
             const dbRes = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/database.json`, {
@@ -1259,7 +1276,7 @@ const app = {
         }
     },
 
-    async createScriptFiles(scriptId, filename, code, isEditing, oldScriptId = null) {
+    async createScriptFiles(scriptId, filename, code, isEditing, oldScriptId = null, displayTitle = null) {
         const scriptDir = `scripts/${scriptId}`;
         const rawDir = `${scriptDir}/raw`;
         const indexPath = `${scriptDir}/index.html`;
@@ -1270,14 +1287,14 @@ const app = {
             month: '2-digit', day: '2-digit', year: 'numeric'
         });
         
-        const escapedScriptId = utils.escapeHtml(scriptId);
+        const escapedTitle = utils.escapeHtml(displayTitle || scriptId);
         
         const scriptViewerHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapedScriptId} - Leaf's Scripts</title>
+    <title>${escapedTitle} - Leaf's Scripts</title>
     <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="../../style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
@@ -1301,7 +1318,7 @@ const app = {
     <div class="container">
         <div class="script-header-lg">
             <div>
-                <h1>${escapedScriptId}</h1>
+                <h1>${escapedTitle}</h1>
                 <div class="meta-row">
                     <span class="meta-badge">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
