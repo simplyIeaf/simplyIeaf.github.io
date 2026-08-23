@@ -2281,13 +2281,13 @@
       "id": "bot_1787443610887",
       "title": "fsdfafaf",
       "message": "fafds",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-08-23T00:07:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-08-23T00:06:50.887Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-08-23T00:07:12.153Z",
       "cancelled": false,
       "isProcessing": false
     }
