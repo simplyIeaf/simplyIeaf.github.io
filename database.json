@@ -2295,13 +2295,13 @@
       "id": "bot_1787443961321",
       "title": "Settings System",
       "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/settings-system/index.html",
-      "scheduled": true,
+      "scheduled": false,
       "scheduledTime": "2026-08-23T08:00:00.000Z",
       "timezone": "Europe/Paris",
       "created": "2026-08-23T00:12:41.321Z",
-      "sent": false,
-      "status": "scheduled",
-      "sentTime": null,
+      "sent": true,
+      "status": "sent",
+      "sentTime": "2026-08-23T08:00:00.496Z",
       "cancelled": false,
       "isProcessing": false
     }
