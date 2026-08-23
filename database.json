@@ -1052,12 +1052,12 @@
     "Settings System": {
       "title": "Settings System",
       "displayTitle": "Settings System",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "filename": "settings-system.lua",
-      "size": 30852,
-      "created": "2026-08-23T13:08:38.281Z",
-      "updated": "2026-08-23T13:08:38.286Z"
+      "size": 30112,
+      "created": "2026-08-23T19:54:06.551Z",
+      "updated": "2026-08-23T19:54:06.554Z"
     }
   },
   "bots": {
