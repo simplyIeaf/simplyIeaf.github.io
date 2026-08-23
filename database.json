@@ -2290,6 +2290,20 @@
       "sentTime": "2026-08-23T00:07:12.153Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1787443961321": {
+      "id": "bot_1787443961321",
+      "title": "Settings System",
+      "message": "StarterGui Script Link:\nhttps://simplyieaf.github.io/scripts/settings-system/index.html",
+      "scheduled": true,
+      "scheduledTime": "2026-08-23T08:00:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-08-23T00:12:41.321Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
