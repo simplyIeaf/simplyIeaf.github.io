@@ -2272,7 +2272,7 @@
       "timezone": "",
       "created": "2026-08-23T00:05:14.835Z",
       "sent": false,
-      "status": "pending",
+      "status": "processing",
       "sentTime": null,
       "cancelled": false,
       "isProcessing": false
