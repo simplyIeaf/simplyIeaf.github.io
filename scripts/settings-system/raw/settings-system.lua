@@ -11,6 +11,7 @@ local camera = workspace.CurrentCamera
 local connections = {}
 local screenGui
 local settingsFrame
+local humanoidConnection
 local lastSettingsToggle = 0
 local settingsState = {
 fieldOfView = camera.FieldOfView,
@@ -876,7 +877,32 @@ local function buildSettingsUI(parent)
     end)
     )
     
+    table.insert(
+    connections,
+    main:GetPropertyChangedSignal("Visible"):Connect(function()
+        if not main.Visible then
+            skyBox:ReleaseFocus()
+            musicBox:ReleaseFocus()
+        end
+    end)
+    )
+    
     return main
+end
+
+local function destroyUI()
+    for _, connection in ipairs(connections) do
+        connection:Disconnect()
+    end
+    
+    table.clear(connections)
+    
+    if screenGui then
+        screenGui:Destroy()
+    end
+    
+    screenGui = nil
+    settingsFrame = nil
 end
 
 local function createUI()
@@ -973,6 +999,19 @@ local function onCharacterAdded(character)
     camera = workspace.CurrentCamera
     
     camera.FieldOfView = settingsState.fieldOfView
+    
+    if humanoidConnection then
+        humanoidConnection:Disconnect()
+        humanoidConnection = nil
+    end
+    
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    humanoidConnection = humanoid.Died:Connect(function()
+        destroyUI()
+    end)
+    
+    createUI()
     
     applyAll()
 end
