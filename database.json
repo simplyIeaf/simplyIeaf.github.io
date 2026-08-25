@@ -6,7 +6,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "animated-loading-screen.lua",
+      "filename": "animated-loading-screen.txt",
       "size": 5285,
       "created": "2026-02-14T13:19:51.562Z",
       "updated": "2026-02-14T13:19:51.562Z"
@@ -17,7 +17,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "system-messages.lua",
+      "filename": "system-messages.txt",
       "size": 1024,
       "created": "2026-02-14T13:21:15.895Z",
       "updated": "2026-02-14T13:21:15.895Z"
@@ -28,7 +28,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "nametag-system.lua",
+      "filename": "nametag-system.txt",
       "size": 4476,
       "created": "2026-02-14T13:22:26.837Z",
       "updated": "2026-02-14T13:22:26.837Z"
@@ -38,7 +38,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "spectating-system.lua",
+      "filename": "spectating-system.txt",
       "size": 10783,
       "created": "2025-12-27T19:43:42.711Z",
       "updated": "2025-12-27T19:43:42.711Z"
@@ -48,7 +48,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "music-system.lua",
+      "filename": "music-system.txt",
       "size": 4084,
       "created": "2025-12-27T19:44:42.071Z",
       "updated": "2025-12-27T19:44:42.071Z"
@@ -58,7 +58,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "chattag-system.lua",
+      "filename": "chattag-system.txt",
       "size": 2361,
       "created": "2025-12-27T19:45:31.318Z",
       "updated": "2025-12-27T19:45:31.318Z"
@@ -68,7 +68,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "soft-shutdown-system-script.lua",
+      "filename": "soft-shutdown-system-script.txt",
       "size": 2290,
       "created": "2025-12-27T19:46:24.602Z",
       "updated": "2025-12-27T19:46:24.602Z"
@@ -78,7 +78,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "soft-shutdown-system-localscript.lua",
+      "filename": "soft-shutdown-system-localscript.txt",
       "size": 1918,
       "created": "2025-12-27T19:47:05.298Z",
       "updated": "2025-12-27T19:47:05.298Z"
@@ -88,7 +88,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "customizable-welcome-message.lua",
+      "filename": "customizable-welcome-message.txt",
       "size": 4097,
       "created": "2025-12-27T19:47:43.660Z",
       "updated": "2025-12-27T19:47:43.660Z"
@@ -98,7 +98,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "player-profile-system.lua",
+      "filename": "player-profile-system.txt",
       "size": 13395,
       "created": "2025-12-27T19:48:18.148Z",
       "updated": "2025-12-27T19:48:18.148Z"
@@ -108,7 +108,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "global-announcements-system-localscript.lua",
+      "filename": "global-announcements-system-localscript.txt",
       "size": 2305,
       "created": "2025-12-27T19:49:01.532Z",
       "updated": "2025-12-27T19:49:01.532Z"
@@ -118,7 +118,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "global-announcements-system-script.lua",
+      "filename": "global-announcements-system-script.txt",
       "size": 1320,
       "created": "2025-12-27T19:49:38.736Z",
       "updated": "2025-12-27T19:49:38.736Z"
@@ -128,7 +128,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "revive-system.lua",
+      "filename": "revive-system.txt",
       "size": 6084,
       "created": "2025-12-27T19:50:06.994Z",
       "updated": "2025-12-27T19:50:06.994Z"
@@ -138,7 +138,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "freecam-system.lua",
+      "filename": "freecam-system.txt",
       "size": 14704,
       "created": "2025-12-27T19:53:09.735Z",
       "updated": "2025-12-27T19:53:09.735Z"
@@ -148,7 +148,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "customizable-chat-bubbles.lua",
+      "filename": "customizable-chat-bubbles.txt",
       "size": 683,
       "created": "2025-12-27T19:53:48.757Z",
       "updated": "2025-12-27T19:53:48.757Z"
@@ -158,7 +158,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "main-menu.lua",
+      "filename": "main-menu.txt",
       "size": 18400,
       "created": "2025-12-27T19:54:15.521Z",
       "updated": "2025-12-27T19:54:15.521Z"
@@ -168,7 +168,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "gifting-system-localscript.lua",
+      "filename": "gifting-system-localscript.txt",
       "size": 6402,
       "created": "2025-12-27T19:55:36.055Z",
       "updated": "2025-12-27T19:55:36.055Z"
@@ -178,7 +178,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "gifting-system-script.lua",
+      "filename": "gifting-system-script.txt",
       "size": 1645,
       "created": "2025-12-27T19:56:06.437Z",
       "updated": "2025-12-27T19:56:06.437Z"
@@ -188,7 +188,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "death-screen-localscript.lua",
+      "filename": "death-screen-localscript.txt",
       "size": 4653,
       "created": "2025-12-27T19:56:40.464Z",
       "updated": "2025-12-27T19:56:40.464Z"
@@ -198,7 +198,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "death-screen-script.lua",
+      "filename": "death-screen-script.txt",
       "size": 792,
       "created": "2025-12-27T19:57:06.837Z",
       "updated": "2025-12-27T19:57:06.837Z"
@@ -208,7 +208,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "death-cam-script.lua",
+      "filename": "death-cam-script.txt",
       "size": 629,
       "created": "2025-12-27T19:57:50.037Z",
       "updated": "2025-12-27T19:57:50.037Z"
@@ -218,7 +218,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "death-cam-localscript.lua",
+      "filename": "death-cam-localscript.txt",
       "size": 3791,
       "created": "2025-12-27T19:58:18.409Z",
       "updated": "2025-12-27T19:58:18.409Z"
@@ -228,7 +228,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "admin-abuse-events.lua",
+      "filename": "admin-abuse-events.txt",
       "size": 15119,
       "created": "2025-12-27T19:58:45.968Z",
       "updated": "2025-12-27T19:58:45.968Z"
@@ -238,7 +238,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "advanced-admin-panel-localscript.lua",
+      "filename": "advanced-admin-panel-localscript.txt",
       "size": 21313,
       "created": "2025-12-27T19:59:19.979Z",
       "updated": "2025-12-27T19:59:19.979Z"
@@ -248,7 +248,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "advanced-admin-panel-script.lua",
+      "filename": "advanced-admin-panel-script.txt",
       "size": 13769,
       "created": "2025-12-27T20:00:09.645Z",
       "updated": "2025-12-27T20:00:09.645Z"
@@ -258,7 +258,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "map-voting-system-localscript.lua",
+      "filename": "map-voting-system-localscript.txt",
       "size": 23363,
       "created": "2025-12-27T20:00:57.501Z",
       "updated": "2025-12-27T20:00:57.501Z"
@@ -268,7 +268,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "map-voting-system-script.lua",
+      "filename": "map-voting-system-script.txt",
       "size": 14005,
       "created": "2025-12-27T20:01:28.537Z",
       "updated": "2025-12-27T20:01:28.537Z"
@@ -278,7 +278,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "advanced-nametag-system-script.lua",
+      "filename": "advanced-nametag-system-script.txt",
       "size": 13585,
       "created": "2025-12-27T20:03:00.745Z",
       "updated": "2025-12-27T20:03:00.745Z"
@@ -288,7 +288,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "advanced-nametag-system-localscript.lua",
+      "filename": "advanced-nametag-system-localscript.txt",
       "size": 1354,
       "created": "2025-12-27T20:03:45.194Z",
       "updated": "2025-12-27T20:03:45.194Z"
@@ -298,7 +298,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "better-announcements-system-script.lua",
+      "filename": "better-announcements-system-script.txt",
       "size": 1417,
       "created": "2025-12-27T20:04:31.518Z",
       "updated": "2025-12-27T20:04:31.518Z"
@@ -308,7 +308,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "better-announcements-system-localscript.lua",
+      "filename": "better-announcements-system-localscript.txt",
       "size": 8284,
       "created": "2025-12-27T20:04:58.537Z",
       "updated": "2025-12-27T20:04:58.537Z"
@@ -318,7 +318,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "team-clothing-system.lua",
+      "filename": "team-clothing-system.txt",
       "size": 3457,
       "created": "2025-12-27T20:05:31.096Z",
       "updated": "2025-12-27T20:05:31.096Z"
@@ -328,7 +328,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "better-inventory-system.lua",
+      "filename": "better-inventory-system.txt",
       "size": 21288,
       "created": "2025-12-27T20:05:59.499Z",
       "updated": "2025-12-27T20:05:59.499Z"
@@ -338,7 +338,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "cmdr-admin-abuse-events-script.lua",
+      "filename": "cmdr-admin-abuse-events-script.txt",
       "size": 37053,
       "created": "2025-12-27T20:06:48.246Z",
       "updated": "2025-12-27T20:06:48.246Z"
@@ -348,7 +348,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "cmdr-admin-abuse-events-localscript.lua",
+      "filename": "cmdr-admin-abuse-events-localscript.txt",
       "size": 16860,
       "created": "2025-12-27T20:07:16.570Z",
       "updated": "2025-12-27T20:07:16.570Z"
@@ -358,7 +358,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "overhead-healthbar-system.lua",
+      "filename": "overhead-healthbar-system.txt",
       "size": 6233,
       "created": "2025-12-27T20:07:43.893Z",
       "updated": "2025-12-27T20:07:43.893Z"
@@ -368,7 +368,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "global-countdown-system-serverscript.lua",
+      "filename": "global-countdown-system-serverscript.txt",
       "size": 7492,
       "created": "2025-12-27T20:08:27.768Z",
       "updated": "2025-12-27T20:08:27.768Z"
@@ -378,7 +378,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "global-countdown-system-localscript.lua",
+      "filename": "global-countdown-system-localscript.txt",
       "size": 7783,
       "created": "2025-12-27T20:08:56.742Z",
       "updated": "2025-12-27T20:08:56.742Z"
@@ -388,7 +388,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "advanced-player-trail-system.lua",
+      "filename": "advanced-player-trail-system.txt",
       "size": 7820,
       "created": "2025-12-27T20:09:32.402Z",
       "updated": "2025-12-27T20:09:32.403Z"
@@ -398,7 +398,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "level-system-serverscript.lua",
+      "filename": "level-system-serverscript.txt",
       "size": 3627,
       "created": "2025-12-27T20:10:00.450Z",
       "updated": "2025-12-27T20:10:00.451Z"
@@ -408,7 +408,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "level-system-localscript.lua",
+      "filename": "level-system-localscript.txt",
       "size": 5953,
       "created": "2025-12-27T20:10:29.115Z",
       "updated": "2025-12-27T20:10:29.115Z"
@@ -418,7 +418,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "wall-climbing-system.lua",
+      "filename": "wall-climbing-system.txt",
       "size": 6367,
       "created": "2025-12-27T20:11:04.368Z",
       "updated": "2025-12-27T20:11:04.368Z"
@@ -428,7 +428,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "update-log-system-serverscript.lua",
+      "filename": "update-log-system-serverscript.txt",
       "size": 2396,
       "created": "2025-12-27T20:11:36.625Z",
       "updated": "2025-12-27T20:11:36.625Z"
@@ -438,7 +438,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "update-log-system-localscript.lua",
+      "filename": "update-log-system-localscript.txt",
       "size": 7239,
       "created": "2025-12-27T20:12:12.158Z",
       "updated": "2025-12-27T20:12:12.158Z"
@@ -448,7 +448,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "global-chat-system-serverscript.lua",
+      "filename": "global-chat-system-serverscript.txt",
       "size": 3704,
       "created": "2025-12-27T20:14:35.368Z",
       "updated": "2025-12-27T20:14:35.368Z"
@@ -458,7 +458,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "global-chat-system-localscript.lua",
+      "filename": "global-chat-system-localscript.txt",
       "size": 1831,
       "created": "2025-12-27T20:15:14.030Z",
       "updated": "2025-12-27T20:15:14.030Z"
@@ -468,7 +468,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "stamina-and-healthbar.lua",
+      "filename": "stamina-and-healthbar.txt",
       "size": 7664,
       "created": "2025-12-27T20:15:47.448Z",
       "updated": "2025-12-27T20:15:47.448Z"
@@ -478,7 +478,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "feedback-system-localscript.lua",
+      "filename": "feedback-system-localscript.txt",
       "size": 33203,
       "created": "2025-12-27T20:16:19.904Z",
       "updated": "2025-12-27T20:16:19.904Z"
@@ -488,7 +488,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "feedback-system-serverscript.lua",
+      "filename": "feedback-system-serverscript.txt",
       "size": 4255,
       "created": "2025-12-27T20:16:41.365Z",
       "updated": "2025-12-27T20:16:41.365Z"
@@ -498,7 +498,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "custom-player-animation-serverscript.lua",
+      "filename": "custom-player-animation-serverscript.txt",
       "size": 4045,
       "created": "2025-12-27T20:17:24.804Z",
       "updated": "2025-12-27T20:17:24.804Z"
@@ -508,7 +508,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "custom-player-animation-localscript.lua",
+      "filename": "custom-player-animation-localscript.txt",
       "size": 13766,
       "created": "2025-12-27T20:17:58.260Z",
       "updated": "2025-12-27T20:17:58.260Z"
@@ -518,7 +518,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "redeem-code-system-serverscript.lua",
+      "filename": "redeem-code-system-serverscript.txt",
       "size": 3000,
       "created": "2025-12-27T20:18:25.399Z",
       "updated": "2025-12-27T20:18:25.399Z"
@@ -528,7 +528,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "redeem-code-system-localscript.lua",
+      "filename": "redeem-code-system-localscript.txt",
       "size": 12089,
       "created": "2025-12-27T20:18:54.335Z",
       "updated": "2025-12-27T20:18:54.335Z"
@@ -538,7 +538,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "character-moveset-system-localscript.lua",
+      "filename": "character-moveset-system-localscript.txt",
       "size": 9228,
       "created": "2025-12-27T20:19:27.629Z",
       "updated": "2025-12-27T20:19:27.629Z"
@@ -548,7 +548,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "character-moveset-system-serverscript.lua",
+      "filename": "character-moveset-system-serverscript.txt",
       "size": 5817,
       "created": "2025-12-27T20:20:02.681Z",
       "updated": "2025-12-27T20:20:02.681Z"
@@ -558,7 +558,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "daily-rewards-system-serverscript.lua",
+      "filename": "daily-rewards-system-serverscript.txt",
       "size": 3874,
       "created": "2025-12-27T20:20:38.759Z",
       "updated": "2025-12-27T20:20:38.759Z"
@@ -568,7 +568,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": "",
-      "filename": "daily-rewards-system-localscript.lua",
+      "filename": "daily-rewards-system-localscript.txt",
       "size": 13046,
       "created": "2025-12-27T20:21:06.152Z",
       "updated": "2025-12-27T20:21:06.152Z"
@@ -578,7 +578,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "better-afk-system.lua",
+      "filename": "better-afk-system.txt",
       "size": 5846,
       "created": "2025-12-28T16:12:37.159Z",
       "updated": "2025-12-28T16:12:37.159Z"
@@ -588,7 +588,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "advanced-npc-dialogue-system.lua",
+      "filename": "advanced-npc-dialogue-system.txt",
       "size": 12890,
       "created": "2025-12-28T16:26:01.759Z",
       "updated": "2025-12-28T16:26:01.759Z"
@@ -599,7 +599,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "owner-has-joined-the-game.lua",
+      "filename": "owner-has-joined-the-game.txt",
       "size": 1455,
       "created": "2026-01-18T16:43:18.451Z",
       "updated": "2026-01-18T16:43:18.451Z"
@@ -610,7 +610,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "trading-system-localscript.lua",
+      "filename": "trading-system-localscript.txt",
       "size": 11449,
       "created": "2026-01-18T16:43:37.838Z",
       "updated": "2026-01-18T16:43:37.838Z"
@@ -621,7 +621,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "trading-system-serverscript.lua",
+      "filename": "trading-system-serverscript.txt",
       "size": 9580,
       "created": "2026-01-18T16:44:00.397Z",
       "updated": "2026-01-18T16:44:00.398Z"
@@ -632,7 +632,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "global-chat-announcements-serverscript.lua",
+      "filename": "global-chat-announcements-serverscript.txt",
       "size": 1652,
       "created": "2026-01-18T16:44:22.038Z",
       "updated": "2026-01-18T16:44:22.038Z"
@@ -643,7 +643,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "global-chat-announcements-localscript.lua",
+      "filename": "global-chat-announcements-localscript.txt",
       "size": 472,
       "created": "2026-01-18T16:44:39.381Z",
       "updated": "2026-01-18T16:44:39.381Z"
@@ -654,7 +654,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "better-freecam-system.lua",
+      "filename": "better-freecam-system.txt",
       "size": 17815,
       "created": "2026-02-07T10:45:45.281Z",
       "updated": "2026-02-07T10:45:45.281Z"
@@ -665,7 +665,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "dash-system.lua",
+      "filename": "dash-system.txt",
       "size": 7075,
       "created": "2026-01-22T07:15:49.628Z",
       "updated": "2026-01-22T07:15:49.628Z"
@@ -676,7 +676,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "safe-chat-system-localscript.lua",
+      "filename": "safe-chat-system-localscript.txt",
       "size": 3947,
       "created": "2026-02-07T10:46:37.219Z",
       "updated": "2026-02-07T10:46:37.219Z"
@@ -687,7 +687,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "safe-chat-system-serverscript.lua",
+      "filename": "safe-chat-system-serverscript.txt",
       "size": 1013,
       "created": "2026-02-07T10:47:17.652Z",
       "updated": "2026-02-07T10:47:17.652Z"
@@ -698,7 +698,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "inventory-save-system.lua",
+      "filename": "inventory-save-system.txt",
       "size": 2439,
       "created": "2026-02-11T22:45:51.368Z",
       "updated": "2026-02-11T22:45:51.368Z"
@@ -709,7 +709,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "troll-panel-system-localscript.lua",
+      "filename": "troll-panel-system-localscript.txt",
       "size": 17089,
       "created": "2026-02-20T12:23:34.975Z",
       "updated": "2026-02-20T12:23:34.975Z"
@@ -720,7 +720,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "troll-panel-serverscript.lua",
+      "filename": "troll-panel-serverscript.txt",
       "size": 9550,
       "created": "2026-02-20T12:22:58.681Z",
       "updated": "2026-02-20T12:22:58.681Z"
@@ -731,7 +731,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "global-poll-system-serverscript.lua",
+      "filename": "global-poll-system-serverscript.txt",
       "size": 10185,
       "created": "2026-02-20T18:39:57.714Z",
       "updated": "2026-02-20T18:39:57.714Z"
@@ -742,7 +742,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "global-poll-system-localscript.lua",
+      "filename": "global-poll-system-localscript.txt",
       "size": 41352,
       "created": "2026-02-20T12:32:57.898Z",
       "updated": "2026-02-20T12:32:57.899Z"
@@ -753,7 +753,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "global-leaderboard-system-script.lua",
+      "filename": "global-leaderboard-system-script.txt",
       "size": 8369,
       "created": "2026-03-06T07:21:51.454Z",
       "updated": "2026-03-06T07:21:51.454Z"
@@ -764,7 +764,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "custom-button-animation-serverscript.lua",
+      "filename": "custom-button-animation-serverscript.txt",
       "size": 3428,
       "created": "2026-04-16T10:07:44.665Z",
       "updated": "2026-04-16T10:07:44.665Z"
@@ -775,7 +775,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "custom-button-animation-localscript.lua",
+      "filename": "custom-button-animation-localscript.txt",
       "size": 13537,
       "created": "2026-04-16T10:07:18.000Z",
       "updated": "2026-04-16T10:07:18.000Z"
@@ -786,7 +786,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "custom-button-animation-button-script.lua",
+      "filename": "custom-button-animation-button-script.txt",
       "size": 1776,
       "created": "2026-04-16T10:06:46.905Z",
       "updated": "2026-04-16T10:06:46.905Z"
@@ -797,7 +797,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "like-game-counter.lua",
+      "filename": "like-game-counter.txt",
       "size": 5618,
       "created": "2026-03-28T12:12:53.098Z",
       "updated": "2026-03-28T12:12:53.098Z"
@@ -808,7 +808,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "like-goal-counter.lua",
+      "filename": "like-goal-counter.txt",
       "size": 5618,
       "created": "2026-03-13T13:25:06.490Z",
       "updated": "2026-03-13T13:25:06.490Z"
@@ -819,7 +819,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "better-trading-system-serverscript.lua",
+      "filename": "better-trading-system-serverscript.txt",
       "size": 13646,
       "created": "2026-04-16T10:05:55.859Z",
       "updated": "2026-04-16T10:05:55.859Z"
@@ -830,7 +830,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "better-trading-system-localscript.lua",
+      "filename": "better-trading-system-localscript.txt",
       "size": 33623,
       "created": "2026-04-16T10:05:31.878Z",
       "updated": "2026-04-16T10:05:31.878Z"
@@ -841,7 +841,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "vote-kick-system-serverscript.lua",
+      "filename": "vote-kick-system-serverscript.txt",
       "size": 8628,
       "created": "2026-04-16T10:04:25.466Z",
       "updated": "2026-04-16T10:04:25.466Z"
@@ -852,7 +852,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "vote-kick-system-localscript.lua",
+      "filename": "vote-kick-system-localscript.txt",
       "size": 12037,
       "created": "2026-04-16T10:04:52.246Z",
       "updated": "2026-04-16T10:04:52.246Z"
@@ -863,7 +863,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "better-admin-panel-serverscript.lua",
+      "filename": "better-admin-panel-serverscript.txt",
       "size": 32449,
       "created": "2026-04-05T09:39:52.385Z",
       "updated": "2026-04-05T09:39:52.385Z"
@@ -874,7 +874,7 @@
       "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
-      "filename": "better-admin-panel-localscript.lua",
+      "filename": "better-admin-panel-localscript.txt",
       "size": 31328,
       "created": "2026-04-05T09:43:32.200Z",
       "updated": "2026-04-05T09:43:32.200Z"
@@ -884,7 +884,7 @@
       "displayTitle": "Round System ServerScript",
       "visibility": "UNLISTED",
       "description": "Place this Script inside of ServerScriptService",
-      "filename": "round-system-serverscript.lua",
+      "filename": "round-system-serverscript.txt",
       "size": 17549,
       "created": "2026-04-21T09:58:22.173Z",
       "updated": "2026-04-21T09:58:22.174Z"
@@ -894,7 +894,7 @@
       "displayTitle": "Better Update Log System Script",
       "visibility": "PUBLIC",
       "description": "Place it inside of SurfaceGui",
-      "filename": "better-update-log-system-script.lua",
+      "filename": "better-update-log-system-script.txt",
       "size": 9977,
       "created": "2026-07-14T09:56:56.454Z",
       "updated": "2026-07-14T09:56:56.454Z"
@@ -904,7 +904,7 @@
       "displayTitle": "Advanced Loading Screen LocalScript",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "advanced-loading-screen-localscript.lua",
+      "filename": "advanced-loading-screen-localscript.txt",
       "size": 9880,
       "created": "2026-07-14T09:53:49.836Z",
       "updated": "2026-07-14T09:53:49.836Z"
@@ -914,7 +914,7 @@
       "displayTitle": "Quest System LocalScript",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "quest-system-localscript.lua",
+      "filename": "quest-system-localscript.txt",
       "size": 15486,
       "created": "2026-05-09T09:47:01.033Z",
       "updated": "2026-05-09T09:47:01.041Z"
@@ -924,7 +924,7 @@
       "displayTitle": "Quest System ServerScript",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "quest-system-serverscript.lua",
+      "filename": "quest-system-serverscript.txt",
       "size": 7738,
       "created": "2026-05-09T09:47:29.496Z",
       "updated": "2026-05-09T09:47:29.496Z"
@@ -934,7 +934,7 @@
       "displayTitle": "Quest System Leaderstats Script",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "quest-system-leaderstats-script.lua",
+      "filename": "quest-system-leaderstats-script.txt",
       "size": 1414,
       "created": "2026-05-09T09:47:55.563Z",
       "updated": "2026-05-09T09:47:55.563Z"
@@ -944,7 +944,7 @@
       "displayTitle": "Global Announcements Panel ServerScript",
       "visibility": "UNLISTED",
       "description": "",
-      "filename": "global-announcements-panel-serverscript.lua",
+      "filename": "global-announcements-panel-serverscript.txt",
       "size": 3313,
       "created": "2026-05-12T22:57:22.896Z",
       "updated": "2026-05-12T22:57:22.904Z"
@@ -954,7 +954,7 @@
       "displayTitle": "Global Announcements Panel LocalScript",
       "visibility": "UNLISTED",
       "description": "",
-      "filename": "global-announcements-panel-localscript.lua",
+      "filename": "global-announcements-panel-localscript.txt",
       "size": 24343,
       "created": "2026-05-12T23:13:01.929Z",
       "updated": "2026-05-12T23:13:01.931Z"
@@ -964,7 +964,7 @@
       "displayTitle": "Donation Leaderboard Script #1",
       "visibility": "UNLISTED",
       "description": "",
-      "filename": "donation-leaderboard-script-1.lua",
+      "filename": "donation-leaderboard-script-1.txt",
       "size": 11286,
       "created": "2026-05-25T21:37:53.687Z",
       "updated": "2026-05-25T21:37:53.689Z"
@@ -974,7 +974,7 @@
       "displayTitle": "Donation Leaderboard Script #2",
       "visibility": "UNLISTED",
       "description": "",
-      "filename": "donation-leaderboard-script-2.lua",
+      "filename": "donation-leaderboard-script-2.txt",
       "size": 6082,
       "created": "2026-05-25T21:39:06.402Z",
       "updated": "2026-05-25T21:39:06.402Z"
@@ -984,7 +984,7 @@
       "displayTitle": "Troll System LocalScript",
       "visibility": "UNLISTED",
       "description": "",
-      "filename": "troll-system-localscript.lua",
+      "filename": "troll-system-localscript.txt",
       "size": 17284,
       "created": "2026-06-06T23:03:58.713Z",
       "updated": "2026-06-06T23:03:58.713Z"
@@ -994,7 +994,7 @@
       "displayTitle": "Troll System ServerScript",
       "visibility": "UNLISTED",
       "description": "",
-      "filename": "troll-system-serverscript.lua",
+      "filename": "troll-system-serverscript.txt",
       "size": 4349,
       "created": "2026-06-06T23:05:03.026Z",
       "updated": "2026-06-06T23:05:03.026Z"
@@ -1004,7 +1004,7 @@
       "displayTitle": "Keyboard System Script",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "keyboard-system-script.lua",
+      "filename": "keyboard-system-script.txt",
       "size": 4435,
       "created": "2026-07-14T09:55:54.689Z",
       "updated": "2026-07-14T09:55:54.689Z"
@@ -1014,7 +1014,7 @@
       "displayTitle": "Gun System Script",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "gun-system-script.lua",
+      "filename": "gun-system-script.txt",
       "size": 3164,
       "created": "2026-07-14T09:55:05.849Z",
       "updated": "2026-07-14T09:55:05.849Z"
@@ -1024,7 +1024,7 @@
       "displayTitle": "Gun System LocalScript",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "gun-system-localscript.lua",
+      "filename": "gun-system-localscript.txt",
       "size": 6261,
       "created": "2026-07-14T09:54:34.224Z",
       "updated": "2026-07-14T09:54:34.224Z"
@@ -1034,7 +1034,7 @@
       "displayTitle": "Shop System ServerScript",
       "visibility": "PUBLIC",
       "description": "This is the script i’ve written in the video (only use this for developer products)",
-      "filename": "shop-system-serverscript.lua",
+      "filename": "shop-system-serverscript.txt",
       "size": 818,
       "created": "2026-07-14T09:53:08.708Z",
       "updated": "2026-07-14T09:53:08.715Z"
@@ -1044,7 +1044,7 @@
       "displayTitle": "Shop System ServerScript #2",
       "visibility": "PUBLIC",
       "description": "Use this script instead if you wanna use gamepasses instead of developer products (only use gamepasses if you want the item to be able to be only bought once)",
-      "filename": "shop-system-serverscript-2.lua",
+      "filename": "shop-system-serverscript-2.txt",
       "size": 483,
       "created": "2026-07-14T09:47:01.619Z",
       "updated": "2026-07-14T09:47:01.627Z"
@@ -1054,7 +1054,7 @@
       "displayTitle": "Settings System",
       "visibility": "PUBLIC",
       "description": "",
-      "filename": "settings-system.lua",
+      "filename": "settings-system.txt",
       "size": 30112,
       "created": "2026-08-23T19:54:06.551Z",
       "updated": "2026-08-23T19:54:06.554Z"

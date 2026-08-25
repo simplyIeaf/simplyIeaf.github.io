@@ -208,10 +208,6 @@ const app = {
     updateUIForLoggedInUser() {
         document.getElementById('auth-section').style.display = 'none';
         document.getElementById('user-section').style.display = 'flex';
-        const privateFilter = document.getElementById('private-filter');
-        const unlistedFilter = document.getElementById('unlisted-filter');
-        if (privateFilter) privateFilter.style.display = 'block';
-        if (unlistedFilter) unlistedFilter.style.display = 'block';
     },
 
     saveSession() {
@@ -306,10 +302,6 @@ const app = {
         
         document.getElementById('auth-section').style.display = 'block';
         document.getElementById('user-section').style.display = 'none';
-        const privateFilter = document.getElementById('private-filter');
-        const unlistedFilter = document.getElementById('unlisted-filter');
-        if (privateFilter) privateFilter.style.display = 'none';
-        if (unlistedFilter) unlistedFilter.style.display = 'none';
         
         location.href = '#';
         
@@ -1192,7 +1184,7 @@ const app = {
         
         const isEditing = !!this.currentEditingId;
         const newScriptId = utils.sanitizeTitle(title);
-        const filename = newScriptId + '.lua';
+        const filename = newScriptId + '.txt';
         
         saveBtn.disabled = true;
         saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';

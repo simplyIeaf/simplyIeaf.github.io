@@ -238,25 +238,11 @@ input, button, textarea, select {
     overflow: hidden;
 }
 
-.script-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
-    opacity: 0;
-    transition: opacity 0.25s ease;
-}
-
 .script-card:hover { 
     transform: translateY(-4px); 
     border-color: var(--color-primary);
     box-shadow: 0 8px 24px rgba(234, 179, 8, 0.1);
 }
-
-.script-card:hover::before { opacity: 1; }
 
 .card-header-section { 
     display: flex; 
