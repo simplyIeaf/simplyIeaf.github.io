@@ -208,6 +208,10 @@ const app = {
     updateUIForLoggedInUser() {
         document.getElementById('auth-section').style.display = 'none';
         document.getElementById('user-section').style.display = 'flex';
+        const privateFilter = document.getElementById('private-filter');
+        const unlistedFilter = document.getElementById('unlisted-filter');
+        if (privateFilter) privateFilter.style.display = 'flex';
+        if (unlistedFilter) unlistedFilter.style.display = 'flex';
     },
 
     saveSession() {
@@ -302,6 +306,10 @@ const app = {
         
         document.getElementById('auth-section').style.display = 'block';
         document.getElementById('user-section').style.display = 'none';
+        const privateFilter = document.getElementById('private-filter');
+        const unlistedFilter = document.getElementById('unlisted-filter');
+        if (privateFilter) privateFilter.style.display = 'none';
+        if (unlistedFilter) unlistedFilter.style.display = 'none';
         
         location.href = '#';
         
@@ -1088,11 +1096,14 @@ const app = {
         if (editDesc) editDesc.value = s.description || '';
         
         try {
-            const rawUrl = `https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/refs/heads/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}`;
-            const res = await fetch(rawUrl, { cache: 'no-store' });
+            const path = `scripts/${this.originalScriptId}/raw/${s.filename}`;
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
             
             if (res.ok) {
-                const code = await res.text();
+                const file = await res.json();
+                const code = utils.safeAtob(file.content);
                 if (window.cmEditor) window.cmEditor.setValue(code);
             } else {
                 if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
@@ -1100,7 +1111,6 @@ const app = {
         } catch(e) {
             console.error('Load error:', e);
             if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
-        } finally {
         }
         
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
