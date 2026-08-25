@@ -97,7 +97,6 @@ const app = {
     token: null,
     currentUser: null,
     currentFilter: 'all',
-    currentSort: 'newest',
     actionInProgress: false,
     currentEditingId: null,
     originalTitle: null,
@@ -278,7 +277,7 @@ const app = {
                 duration: 3000,
                 gravity: "top",
                 position: "right",
-                style: { background: type === 'success' ? "#10b981" : type === 'error' ? "#ef4444" : "#f59e0b" },
+                style: { background: type === 'success' ? "#eab308" : type === 'error' ? "#ef4444" : "#6366f1" },
                 stopOnFocus: true
             }).showToast();
         } else {
@@ -579,7 +578,6 @@ const app = {
         if (this.actionInProgress) return;
         this.actionInProgress = true;
         saveBtn.disabled = true;
-        if (typeof NProgress !== 'undefined') NProgress.start();
         
         try {
             const botId = this.currentBotId || `bot_${Date.now()}`;
@@ -644,7 +642,6 @@ const app = {
         } finally {
             saveBtn.disabled = false;
             this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
 
@@ -666,16 +663,18 @@ const app = {
         
         list.innerHTML = sorted.map(s => {
             const scriptId = utils.sanitizeTitle(s.title);
-            return `<div class="script-card" onclick="window.location.href='scripts/${scriptId}/index.html'">
+            const date = s.updated && s.updated !== s.created
+                ? new Date(s.updated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : new Date(s.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return `<div class="script-card" onclick="window.location.href='scripts/${scriptId}/'">
                 <div class="card-content">
                     <div class="card-header-section">
                         <h3 class="script-title">${utils.escapeHtml(s.title)}</h3>
                         ${s.visibility !== 'PUBLIC' ? `<span class="badge badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : ''}
                     </div>
-                    ${s.description ? `<p style="color:var(--color-text-muted);font-size:13px;margin:8px 0">${utils.escapeHtml(s.description.substring(0, 150))}${s.description.length > 150 ? '...' : ''}</p>` : ''}
+                    ${s.description ? `<p class="card-description">${utils.escapeHtml(s.description.substring(0, 120))}${s.description.length > 120 ? '...' : ''}</p>` : ''}
                     <div class="card-meta">
-                        <span>${new Date(s.created).toLocaleDateString()}</span>
-                        ${s.updated && s.updated !== s.created ? `<span title="Updated">↻ ${new Date(s.updated).toLocaleDateString()}</span>` : ''}
+                        <span>${date}</span>
                     </div>
                 </div>
             </div>`;
@@ -696,13 +695,7 @@ const app = {
     },
 
     sortLogic(scripts) {
-        return scripts.sort((a, b) => {
-            if (this.currentSort === 'newest') return new Date(b.created || 0) - new Date(a.created || 0);
-            if (this.currentSort === 'oldest') return new Date(a.created || 0) - new Date(b.created || 0);
-            if (this.currentSort === 'alpha') return a.title.localeCompare(b.title);
-            if (this.currentSort === 'updated') return new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0);
-            return 0;
-        });
+        return scripts.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
     },
 
     filterCategory(cat, e) {
@@ -712,11 +705,6 @@ const app = {
             if (e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
         }
         this.currentFilter = cat;
-        this.renderList();
-    },
-
-    setSort(val) {
-        this.currentSort = val;
         this.renderList();
     },
 
@@ -929,8 +917,6 @@ const app = {
         this.actionInProgress = true;
         
         try {
-            if (typeof NProgress !== 'undefined') NProgress.start();
-            
             const script = this.db.scripts[scriptTitle];
             if (!script) throw new Error('Script not found');
             
@@ -967,7 +953,6 @@ const app = {
             await this.loadDatabase();
         } finally {
             this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
 
@@ -1007,7 +992,6 @@ const app = {
         this.actionInProgress = true;
         
         try {
-            if (typeof NProgress !== 'undefined') NProgress.start();
             if (this.scheduledTimers[botId]) {
                 clearTimeout(this.scheduledTimers[botId]);
                 delete this.scheduledTimers[botId];
@@ -1042,7 +1026,6 @@ const app = {
             await this.loadDatabase();
         } finally {
             this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
 
@@ -1113,8 +1096,7 @@ const app = {
         if (editDesc) editDesc.value = s.description || '';
         
         try {
-            if (typeof NProgress !== 'undefined') NProgress.start();
-            const rawUrl = `scripts/${this.originalScriptId}/raw/${s.filename}`;
+            const rawUrl = `https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/refs/heads/${CONFIG.branch}/scripts/${this.originalScriptId}/raw/${s.filename}`;
             const res = await fetch(rawUrl, { cache: 'no-store' });
             
             if (res.ok) {
@@ -1127,7 +1109,6 @@ const app = {
             console.error('Load error:', e);
             if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
         } finally {
-            if (typeof NProgress !== 'undefined') NProgress.done();
         }
         
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
@@ -1216,8 +1197,6 @@ const app = {
         saveBtn.disabled = true;
         saveBtn.textContent = isEditing ? 'Updating...' : 'Publishing...';
         
-        if (typeof NProgress !== 'undefined') NProgress.start();
-        
         try {
             let originalCreationDate = new Date().toISOString();
             if (isEditing && this.db.scripts[this.originalTitle]) {
@@ -1272,7 +1251,6 @@ const app = {
             saveBtn.disabled = false;
             saveBtn.textContent = originalBtnText;
             this.actionInProgress = false;
-            if (typeof NProgress !== 'undefined') NProgress.done();
         }
     },
 
@@ -1292,10 +1270,15 @@ const app = {
         const scriptViewerHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        if (window.location.pathname.endsWith('index.html')) {
+            window.location.replace(window.location.pathname.replace(/index\.html$/, '') + window.location.search + window.location.hash);
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapedTitle} - Leaf's Scripts</title>
-    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
+    <link rel="icon" type="image/png" href="https://yt3.googleusercontent.com/lxpJQz3QU7u-_NeTZVzQOphQHKW4Klu82r9ATc8bYCUrjd4FdOpS-nD0KF--YEXCfQEet5GV=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="../../style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1304,13 +1287,13 @@ const app = {
     <nav class="navbar">
         <div class="nav-content">
             <div class="nav-left">
-                <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
-                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
+                <a href="../../" class="brand" style="text-decoration: none; color: inherit;">
+                    <img src="https://yt3.googleusercontent.com/lxpJQz3QU7u-_NeTZVzQOphQHKW4Klu82r9ATc8bYCUrjd4FdOpS-nD0KF--YEXCfQEet5GV=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
                     <span class="nav-title" style="color:#ffffff;">Leaf's Scripts</span>
                 </a>
             </div>
             <div class="nav-right">
-                <a href="../../index.html" class="btn btn-secondary btn-sm">Back</a>
+                <a href="../../" class="btn btn-secondary btn-sm">Back</a>
             </div>
         </div>
     </nav>
@@ -1334,7 +1317,7 @@ const app = {
                 <div class="toolbar-right">
                     <button class="btn btn-sm" onclick="downloadScript()">Download</button>
                     <button class="btn btn-sm" onclick="copyScript(this)">Copy</button>
-                    <a href="raw/${filename}" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
+                    <a href="https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/refs/heads/${CONFIG.branch}/scripts/${scriptId}/raw/${filename}" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
                 </div>
             </div>
             <pre><code id="code-display" class="language-lua">Loading...</code></pre>
@@ -1346,10 +1329,11 @@ const app = {
     <script>
         const filename = '${filename}';
         const scriptId = '${scriptId}';
+        const rawBaseUrl = 'https://raw.githubusercontent.com/${CONFIG.user}/${CONFIG.repo}/refs/heads/${CONFIG.branch}/scripts/${scriptId}/raw';
         
         async function loadScript() {
             try {
-                const res = await fetch(\`raw/\${filename}\`);
+                const res = await fetch(rawBaseUrl + '/' + filename);
                 const code = await res.text();
                 document.getElementById('code-display').textContent = code;
                 Prism.highlightAll();
@@ -1449,9 +1433,6 @@ function navigate(path) {
 
 window.addEventListener('DOMContentLoaded', () => {
     app.init();
-    if (typeof NProgress !== 'undefined') {
-        NProgress.configure({ showSpinner: false, speed: 400, trickleSpeed: 200 });
-    }
 });
 
 window.app = app;
