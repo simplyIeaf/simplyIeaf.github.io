@@ -133,7 +133,7 @@ const app = {
         } catch(e) {}
         const sessionValid = await this.loadSession();
         await this.loadDatabase();
-        this.handleRouting();
+        await this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
@@ -163,13 +163,7 @@ const app = {
         this.startSessionRefresh();
         this.startBotScheduler();
 
-        if (typeof lucide !== 'undefined') {
-            try {
-                lucide.createIcons();
-            } catch (e) {
-                console.error('Lucide icons error:', e);
-            }
-        }
+        this.refreshIcons();
     },
 
     startSessionRefresh() {
@@ -395,6 +389,9 @@ const app = {
                         return false;
                     }
                     
+                    const authValid = await this.validateAdminAccess();
+                    if (!authValid) return false;
+                    
                     this.updateUIForLoggedInUser();
                     return true;
                 } else {
@@ -433,9 +430,14 @@ const app = {
 
     toggleLoginModal() {
         const modal = document.getElementById('login-modal');
-        modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        const opening = modal.style.display !== 'flex';
+        modal.style.display = opening ? 'flex' : 'none';
         document.getElementById('login-error').style.display = 'none';
-        if (modal.style.display === 'flex') {
+        if (opening) {
+            const panel = modal.querySelector('.modal');
+            if (panel) {
+                this.animate(panel, { opacity: [0, 1], scale: [0.96, 1] }, { duration: 0.22, easing: 'ease-out' });
+            }
             document.getElementById('auth-token').focus();
         }
     },
@@ -757,6 +759,7 @@ const app = {
     },
 
     async saveBot() {
+        if (!this.requireLogin()) return;
         const titleInput = document.getElementById('bot-title');
         const messageInput = document.getElementById('bot-message');
         const scheduleInput = document.getElementById('bot-schedule');
@@ -889,6 +892,7 @@ const app = {
                 </div>
             </div>`;
         }).join('');
+        this.animateListIn('#script-list', '.script-card');
     },
 
     buildSearchIndex() {
@@ -956,6 +960,88 @@ const app = {
         }
     },
 
+    reduceMotion() {
+        try {
+            return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    refreshIcons() {
+        if (typeof lucide !== 'undefined') {
+            try {
+                lucide.createIcons();
+            } catch (e) {
+                console.error('Lucide icons error:', e);
+            }
+        }
+    },
+
+    animate(targets, vars, options) {
+        if (typeof Motion === 'undefined' || this.reduceMotion()) return;
+        try {
+            Motion.animate(targets, vars, options || { duration: 0.3, easing: 'ease-out' });
+        } catch (e) {
+            console.error('Motion error:', e);
+        }
+    },
+
+    animateListIn(rootSelector, itemSelector) {
+        if (typeof Motion === 'undefined' || typeof Motion.animate !== 'function') return;
+        if (this.reduceMotion()) return;
+        const list = document.querySelector(rootSelector);
+        if (!list) return;
+        const items = list.querySelectorAll(itemSelector);
+        if (!items.length) return;
+        items.forEach(el => el.style.opacity = '0');
+        items.forEach((el, i) => {
+            try {
+                Motion.animate(el, { opacity: [0, 1], y: [10, 0] }, {
+                    duration: 0.28,
+                    easing: 'ease-out',
+                    delay: i * 0.04
+                });
+            } catch (e) {}
+        });
+    },
+
+    requireLogin() {
+        if (this.token && this.currentUser) return true;
+        this.toggleLoginModal();
+        return false;
+    },
+
+    async validateAdminAccess() {
+        if (!this.token || !this.currentUser) {
+            this.logout(true);
+            return false;
+        }
+        const now = Date.now();
+        if (this._authValidUntil && now < this._authValidUntil) return true;
+        try {
+            const res = await fetch('https://api.github.com/user', {
+                headers: { 'Authorization': `token ${this.token}` }
+            });
+            if (res.ok) {
+                const user = await res.json();
+                if (user.login && user.login.toLowerCase() === CONFIG.user.toLowerCase()) {
+                    this._authValidUntil = now + 60000;
+                    return true;
+                }
+                this.logout(true);
+                return false;
+            }
+            if (res.status === 401 || res.status === 403) {
+                this.logout(true);
+                return false;
+            }
+            return true;
+        } catch (e) {
+            return true;
+        }
+    },
+
     sortLogic(scripts) {
         const mode = this.sortMode || 'created';
         const copy = [...scripts];
@@ -987,30 +1073,33 @@ const app = {
         this.renderList();
     },
 
-    switchAdminTab(tab) {
-        if (tab === 'admin' && !this.currentUser) {
+    async switchAdminTab(tab) {
+        if (!this.requireLogin()) {
             location.hash = '';
             return;
         }
+        const authValid = await this.validateAdminAccess();
+        if (!authValid) return;
         
+        this.renderAdminTab(tab);
+    },
+
+    renderAdminTab(tab) {
         document.querySelectorAll('.admin-tab').forEach(t => t.style.display = 'none');
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         
+        let target = null;
         if (tab === 'list') {
-            document.getElementById('admin-tab-list').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            target = document.getElementById('admin-tab-list');
             this.renderAdminList();
         } else if (tab === 'bots') {
-            document.getElementById('admin-tab-bots').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[2].classList.add('active');
+            target = document.getElementById('admin-tab-bots');
             this.renderBotsList();
         } else if (tab === 'create-bot') {
-            document.getElementById('admin-tab-bot-editor').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[2].classList.add('active');
+            target = document.getElementById('admin-tab-bot-editor');
             this.resetBotEditor();
         } else {
-            document.getElementById('admin-tab-editor').style.display = 'block';
-            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            target = document.getElementById('admin-tab-editor');
             if (tab === 'create') {
                 this.resetEditor();
             }
@@ -1019,6 +1108,14 @@ const app = {
                 if (window.cmEditor) window.cmEditor.refresh();
             }, 50);
         }
+        
+        if (target) {
+            target.style.display = 'block';
+            this.animate(target, { opacity: [0, 1], y: [6, 0] }, { duration: 0.2, easing: 'ease-out' });
+        }
+        const btn = document.querySelector(`.tab-btn[data-tab="${tab === 'create-bot' ? 'bots' : tab}"]`);
+        if (btn) btn.classList.add('active');
+        this.refreshIcons();
     },
 
     async renderAdminList() {
@@ -1046,13 +1143,15 @@ const app = {
                 </div>
                 <div class="admin-item-right">
                     <button class="item-delete" onclick="event.stopPropagation(); app.deleteScriptConfirmation(this.closest('.admin-item').getAttribute('data-script-title'))" title="Delete script" aria-label="Delete script">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                        <i data-lucide="trash-2" width="16" height="16"></i>
                     </button>
-                    <svg class="item-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    <i data-lucide="chevron-right" class="item-chevron" width="18" height="18"></i>
                 </div>
             </div>`;
         }).join('');
         this.initSwipeToDelete();
+        this.refreshIcons();
+        this.animateListIn('#admin-list', '.admin-item');
     },
 
     renderBotsList() {
@@ -1082,13 +1181,15 @@ const app = {
                 </div>
                 <div class="admin-item-right">
                     <button class="item-delete" onclick="event.stopPropagation(); app.deleteBotConfirmation(this.closest('.admin-item').getAttribute('data-bot-id'))" title="Cancel bot" aria-label="Cancel bot">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                        <i data-lucide="trash-2" width="16" height="16"></i>
                     </button>
-                    <svg class="item-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    <i data-lucide="chevron-right" class="item-chevron" width="18" height="18"></i>
                 </div>
             </div>`;
         }).join('');
         this.initSwipeToDelete();
+        this.refreshIcons();
+        this.animateListIn('#bots-list', '.admin-item');
     },
 
     initSwipeToDelete() {
@@ -1432,9 +1533,10 @@ const app = {
         if (!deleteBtn && actionButtons) {
             deleteBtn = document.createElement('button');
             deleteBtn.className = 'btn btn-delete';
-            deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg> Delete`;
+            deleteBtn.innerHTML = `<i data-lucide="trash-2" width="14" height="14"></i> Delete`;
             deleteBtn.onclick = () => this.deleteScriptConfirmation(title);
             actionButtons.appendChild(deleteBtn);
+            this.refreshIcons();
         }
     },
 
@@ -1469,7 +1571,7 @@ const app = {
     },
 
     async saveScript() {
-        if (!this.currentUser || !this.db) {
+        if (!this.token || !this.currentUser || !this.db) {
             this.showToast('Please login first.', 'error');
             return;
         }
@@ -1622,7 +1724,7 @@ const app = {
                 <h1>${escapedTitle}</h1>
                 <div class="meta-row">
                     <span class="meta-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        <i data-lucide="calendar" width="14" height="14"></i>
                         <span>${formattedDate}</span>
                     </span>
                 </div>
@@ -1644,6 +1746,7 @@ const app = {
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.462.0/dist/umd/lucide.min.js"></script>
     <script>
         const filename = '${filename}';
         const scriptId = '${scriptId}';
@@ -1681,6 +1784,10 @@ const app = {
         }
         
         loadScript();
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
     </script>
 </body>
 </html>`;
@@ -1722,21 +1829,24 @@ const app = {
         if (!putRes.ok) throw new Error(`Failed to create/update file ${path}`);
     },
 
-    handleRouting() {
+    async handleRouting() {
         const hash = location.hash.slice(1);
         document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
         window.scrollTo(0, 0);
         
         if (hash === 'admin') {
-            if (!this.currentUser) {
+            if (!this.currentUser || !this.token) {
                 this.toggleLoginModal();
                 location.hash = '';
                 return;
             }
+            const authValid = await this.validateAdminAccess();
+            if (!authValid) return;
             document.getElementById('view-admin').style.display = 'block';
             this.switchAdminTab('list');
         } else {
             document.getElementById('view-home').style.display = 'block';
+            this.refreshIcons();
         }
     }
 };
