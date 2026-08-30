@@ -122,6 +122,8 @@ const app = {
     pendingEditorCode: null,
     suggestionIndex: -1,
     suggestionItems: null,
+    fuse: null,
+    fuseItems: null,
     scheduledTimers: {},
     
     async init() {
@@ -160,6 +162,14 @@ const app = {
 
         this.startSessionRefresh();
         this.startBotScheduler();
+
+        if (typeof lucide !== 'undefined') {
+            try {
+                lucide.createIcons();
+            } catch (e) {
+                console.error('Lucide icons error:', e);
+            }
+        }
     },
 
     startSessionRefresh() {
@@ -213,9 +223,14 @@ const app = {
                 return true;
             });
         
-        const matches = scripts
-            .filter(s => s.title.toLowerCase().includes(q))
-            .slice(0, 8);
+        let matches;
+        if (this.fuse) {
+            matches = this.fuse.search(q).map(r => r.item).slice(0, 8);
+        } else {
+            matches = scripts
+                .filter(s => s.title.toLowerCase().includes(q))
+                .slice(0, 8);
+        }
         
         if (matches.length === 0) {
             this.hideSuggestions();
@@ -238,9 +253,9 @@ const app = {
             const item = document.createElement('div');
             item.className = 'suggestion-item';
             const idx = s.title.toLowerCase().indexOf(q);
-            const before = utils.escapeHtml(s.title.slice(0, idx));
+            const before = utils.escapeHtml(idx >= 0 ? s.title.slice(0, idx) : s.title);
             const match = idx >= 0 ? utils.escapeHtml(s.title.slice(idx, idx + q.length)) : '';
-            const after = utils.escapeHtml(s.title.slice(idx + q.length));
+            const after = idx >= 0 ? utils.escapeHtml(s.title.slice(idx + q.length)) : '';
             item.innerHTML = `<span class="suggestion-title">${before}<b>${match}</b>${after}</span>` +
                 (s.visibility !== 'PUBLIC' ? `<span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : '');
             item.setAttribute('data-title', utils.escapeAttr(s.title));
@@ -399,6 +414,7 @@ const app = {
         const unlistedFilter = document.getElementById('unlisted-filter');
         if (privateFilter) privateFilter.style.display = 'flex';
         if (unlistedFilter) unlistedFilter.style.display = 'flex';
+        this.positionSortSelect();
     },
 
     saveSession() {
@@ -486,6 +502,8 @@ const app = {
         this.currentUser = null;
         this.db = null;
         this.dbSha = null;
+        this.fuse = null;
+        this.fuseItems = null;
         
         Object.values(this.scheduledTimers).forEach(timer => clearTimeout(timer));
         this.scheduledTimers = {};
@@ -496,6 +514,7 @@ const app = {
         const unlistedFilter = document.getElementById('unlisted-filter');
         if (privateFilter) privateFilter.style.display = 'none';
         if (unlistedFilter) unlistedFilter.style.display = 'none';
+        this.positionSortSelect();
         
         location.href = '#';
         
@@ -549,6 +568,7 @@ const app = {
                 if (res.status === 404) {
                     this.db = { scripts: {}, bots: {} };
                     this.dbSha = null;
+                    this.buildSearchIndex();
                     this.renderList();
                     if (list) list.innerHTML = `<div class="empty-admin-state"><p>No scripts yet</p></div>`;
                     return;
@@ -585,6 +605,7 @@ const app = {
                 this.db = { scripts: {}, bots: {} };
             }
             
+            this.buildSearchIndex();
             this.renderList();
             this.renderAdminList();
             
@@ -870,11 +891,49 @@ const app = {
         }).join('');
     },
 
+    buildSearchIndex() {
+        try {
+            if (typeof Fuse !== 'undefined' && this.db) {
+                const items = Object.entries(this.db.scripts || {}).map(([title, data]) => ({ title, ...data }));
+                this.fuseItems = items;
+                this.fuse = new Fuse(items, {
+                    keys: [
+                        { name: 'title', weight: 0.7 },
+                        { name: 'description', weight: 0.3 }
+                    ],
+                    threshold: 0.4,
+                    ignoreLocation: true,
+                    minMatchCharLength: 2
+                });
+            } else {
+                this.fuse = null;
+                this.fuseItems = null;
+            }
+        } catch (e) {
+            console.error('Fuse init error:', e);
+            this.fuse = null;
+            this.fuseItems = null;
+        }
+    },
+
+    searchScripts(query) {
+        if (!this.fuse) return null;
+        const q = query.trim().toLowerCase();
+        if (!q) return null;
+        try {
+            return new Set(this.fuse.search(q).map(r => r.item.title));
+        } catch (e) {
+            return null;
+        }
+    },
+
     filterLogic(scripts) {
-        const query = this.searchQuery.toLowerCase();
+        const query = this.searchQuery.trim().toLowerCase();
+        const fuzzyMatch = this.searchScripts(query);
         return scripts.filter(s => {
             if (utils.isExpired(s)) return false;
-            if (!s.title.toLowerCase().includes(query)) return false;
+            if (fuzzyMatch && !fuzzyMatch.has(s.title)) return false;
+            if (query && !fuzzyMatch && !s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
             if (s.visibility === 'UNLISTED' && !this.currentUser) return false;
             if (this.currentFilter === 'private' && s.visibility !== 'PRIVATE') return false;
@@ -882,6 +941,19 @@ const app = {
             if (this.currentFilter === 'unlisted' && s.visibility !== 'UNLISTED') return false;
             return true;
         });
+    },
+
+    positionSortSelect() {
+        const select = document.getElementById('sort-select');
+        if (!select) return;
+        const anchor = this.currentUser
+            ? document.getElementById('unlisted-filter')
+            : document.querySelector('.sidebar-link[data-filter="public"]');
+        if (!anchor) return;
+        const parent = anchor.parentNode;
+        if (select.previousElementSibling !== anchor) {
+            parent.insertBefore(select, anchor.nextSibling);
+        }
     },
 
     sortLogic(scripts) {
@@ -978,7 +1050,6 @@ const app = {
                     </button>
                     <svg class="item-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
-                <div class="swipe-hint"><div class="swipe-hint">Swipe or drag to delete</div></div>
             </div>`;
         }).join('');
         this.initSwipeToDelete();
@@ -1015,7 +1086,6 @@ const app = {
                     </button>
                     <svg class="item-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
-                <div class="swipe-hint">Swipe to cancel</div>
             </div>`;
         }).join('');
         this.initSwipeToDelete();

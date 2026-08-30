@@ -260,20 +260,26 @@ input, button, textarea, select {
 }
 
 .sidebar-sort {
+    display: block;
     width: 100%;
     box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
     padding: 11px 14px;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
     font-size: 14px;
     font-weight: 600;
-    color: var(--color-text);
-    background: var(--surface);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
     margin-bottom: 6px;
     cursor: pointer;
-    transition: border-color 0.2s ease;
+    transition: all 0.2s ease;
 }
-.sidebar-sort:hover { border-color: var(--color-primary); }
+.sidebar-sort:hover { color: var(--color-text); background: var(--surface); }
+.sidebar-sort:focus-visible { color: var(--color-text); background: var(--surface); outline: none; }
+.sidebar-sort option { background: var(--surface); color: var(--color-text); }
 
 .script-card {
     background: var(--surface); 
@@ -428,15 +434,6 @@ code {
 .admin-panel { 
     max-width: 900px; 
     margin: 0 auto;
-}
-
-.admin-top-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid var(--color-border);
 }
 
 .admin-header-flex { 
@@ -618,11 +615,6 @@ textarea.input-field {
 }
 .expiration-row .input-field { flex: 1; }
 .expiration-row .btn { flex: 0 0 auto; }
-.expiration-hint {
-    font-size: 11px;
-    color: var(--color-text-muted);
-    opacity: 0.7;
-}
 
 /* CodeMirror AMOLED Integration */
 .CodeMirror {
@@ -760,19 +752,6 @@ textarea.input-field {
     border: 1px solid var(--color-border);
 }
 
-.swipe-hint {
-    position: absolute;
-    right: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--color-danger);
-    font-size: 12px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-}
-
-.admin-item.swiping .swipe-hint { opacity: 0.7; }
 .admin-item.swipe-delete { transform: translateX(300px); opacity: 0; }
 
 .spinner { 
