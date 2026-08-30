@@ -70,6 +70,20 @@ const utils = {
         if (code.length > 100000) return 'Code is too large (max 100KB)';
         return null;
     },
+
+    isExpired(data) {
+        if (!data || !data.expiration) return false;
+        const exp = new Date(data.expiration);
+        if (isNaN(exp.getTime())) return false;
+        return exp.getTime() <= Date.now();
+    },
+
+    toDateTimeLocal(isoString) {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return '';
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+    },
     
     formatDisplayTime(isoString, timezone) {
         const date = new Date(isoString);
@@ -104,18 +118,31 @@ const app = {
     currentBotId: null,
     isLoading: false,
     searchQuery: '',
+    sortMode: 'created',
+    pendingEditorCode: null,
+    suggestionIndex: -1,
+    suggestionItems: null,
     scheduledTimers: {},
     
     async init() {
+        try {
+            const savedSort = localStorage.getItem('script_sort');
+            if (savedSort) this.sortMode = savedSort;
+        } catch(e) {}
         const sessionValid = await this.loadSession();
         await this.loadDatabase();
         this.handleRouting();
         window.addEventListener('hashchange', () => this.handleRouting());
         
         this.debouncedRender = utils.debounce(() => this.renderList(), 300);
+        this.debouncedUpdateSuggestions = utils.debounce(() => this.updateSuggestions(), 150);
         this.initEventListeners();
         
         window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('login-modal');
+                if (modal && modal.style.display === 'flex') this.toggleLoginModal();
+            }
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 if (location.hash === '#admin') {
@@ -157,7 +184,121 @@ const app = {
             searchInput.addEventListener('input', (e) => {
                 this.searchQuery = e.target.value;
                 this.debouncedRender();
+                this.debouncedUpdateSuggestions();
             });
+            searchInput.addEventListener('focus', () => this.updateSuggestions());
+            searchInput.addEventListener('keydown', (e) => this.handleSearchKeys(e));
+            searchInput.addEventListener('blur', () => {
+                setTimeout(() => this.hideSuggestions(), 150);
+            });
+        }
+    },
+
+    updateSuggestions() {
+        const box = document.getElementById('search-suggestions');
+        const input = document.getElementById('search');
+        if (!box || !input || !this.db) return;
+        const q = this.searchQuery.trim().toLowerCase();
+        if (!q || document.activeElement !== input) {
+            this.hideSuggestions();
+            return;
+        }
+        
+        const scripts = Object.entries(this.db.scripts || {})
+            .map(([title, data]) => ({ title, ...data }))
+            .filter(s => {
+                if (utils.isExpired(s)) return false;
+                if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
+                if (s.visibility === 'UNLISTED' && !this.currentUser) return false;
+                return true;
+            });
+        
+        const matches = scripts
+            .filter(s => s.title.toLowerCase().includes(q))
+            .slice(0, 8);
+        
+        if (matches.length === 0) {
+            this.hideSuggestions();
+            return;
+        }
+        
+        box.innerHTML = '';
+        this.suggestionIndex = -1;
+        this.suggestionItems = [];
+        
+        const showAll = document.createElement('div');
+        showAll.className = 'suggestion-item suggestion-showall';
+        showAll.textContent = `Search all for "${this.searchQuery.trim()}"`;
+        showAll.setAttribute('data-title', '');
+        showAll.onmousedown = (e) => { e.preventDefault(); this.applySearchSuggestion(null); };
+        box.appendChild(showAll);
+        this.suggestionItems.push(showAll);
+        
+        matches.forEach(s => {
+            const item = document.createElement('div');
+            item.className = 'suggestion-item';
+            const idx = s.title.toLowerCase().indexOf(q);
+            const before = utils.escapeHtml(s.title.slice(0, idx));
+            const match = idx >= 0 ? utils.escapeHtml(s.title.slice(idx, idx + q.length)) : '';
+            const after = utils.escapeHtml(s.title.slice(idx + q.length));
+            item.innerHTML = `<span class="suggestion-title">${before}<b>${match}</b>${after}</span>` +
+                (s.visibility !== 'PUBLIC' ? `<span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>` : '');
+            item.setAttribute('data-title', utils.escapeAttr(s.title));
+            item.onmousedown = (e) => { e.preventDefault(); this.applySearchSuggestion(s.title); };
+            box.appendChild(item);
+            this.suggestionItems.push(item);
+        });
+        
+        box.style.display = 'block';
+    },
+
+    applySearchSuggestion(title) {
+        const input = document.getElementById('search');
+        if (input && title) {
+            input.value = title;
+            this.searchQuery = title;
+        }
+        this.hideSuggestions();
+        this.renderList();
+    },
+
+    hideSuggestions() {
+        const box = document.getElementById('search-suggestions');
+        if (box) {
+            box.style.display = 'none';
+            box.innerHTML = '';
+        }
+        this.suggestionIndex = -1;
+        this.suggestionItems = null;
+    },
+
+    highlightSuggestion() {
+        if (!this.suggestionItems) return;
+        this.suggestionItems.forEach((item, i) => {
+            item.classList.toggle('active', i === this.suggestionIndex);
+        });
+    },
+
+    handleSearchKeys(e) {
+        const box = document.getElementById('search-suggestions');
+        if (!box || box.style.display === 'none' || !this.suggestionItems || this.suggestionItems.length === 0) return;
+        const count = this.suggestionItems.length;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            this.suggestionIndex = (this.suggestionIndex + 1) % count;
+            this.highlightSuggestion();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            this.suggestionIndex = (this.suggestionIndex - 1 + count) % count;
+            this.highlightSuggestion();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const el = this.suggestionItems[this.suggestionIndex];
+            this.applySearchSuggestion(el ? el.getAttribute('data-title') : null);
+        } else if (e.key === 'Escape') {
+            this.hideSuggestions();
+            e.target.blur();
         }
     },
     
@@ -173,7 +314,53 @@ const app = {
                 matchBrackets: true,
                 indentUnit: 4
             });
+            if (this.pendingEditorCode != null) {
+                window.cmEditor.setValue(this.pendingEditorCode);
+                this.pendingEditorCode = null;
+            }
         }
+    },
+
+    setEditorCode(code) {
+        if (window.cmEditor) {
+            window.cmEditor.setValue(code);
+        } else {
+            this.pendingEditorCode = code;
+        }
+    },
+
+    async loadScriptContent(s) {
+        const path = `scripts/${utils.sanitizeTitle(s.title)}/raw/${s.filename}`;
+        const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
+        let status = null;
+        
+        const attempt = async (useAuth) => {
+            const headers = {};
+            if (useAuth && this.token) headers['Authorization'] = `token ${this.token}`;
+            const res = await fetch(url, { headers });
+            status = res.status;
+            if (!res.ok) return { ok: false };
+            const file = await res.json();
+            return { ok: true, code: utils.safeAtob(file.content) };
+        };
+        
+        try {
+            const r = await attempt(true);
+            if (r.ok) return r;
+        } catch (err) {}
+        try {
+            const r = await attempt(false);
+            if (r.ok) return r;
+        } catch (err) {}
+        
+        return { ok: false, status };
+    },
+
+    describeLoadError(status, s) {
+        if (status === 404) return `-- File not found (${s.filename ? s.filename : s.title})`;
+        if (status === 401) return '-- Invalid auth token — please log in again';
+        if (status === 403 || status === 429) return '-- GitHub rate limit reached — try again in a minute';
+        return '-- Could not fetch script content from GitHub';
     },
 
     async loadSession() {
@@ -255,7 +442,6 @@ const app = {
                 this.toggleLoginModal();
                 document.getElementById('auth-token').value = '';
                 await this.loadDatabase();
-                this.renderList();
                 this.showToast('Logged in successfully!', 'success');
             }
         } finally {
@@ -653,6 +839,11 @@ const app = {
         const filtered = this.filterLogic(scripts);
         const sorted = this.sortLogic(filtered);
         
+        const countEl = document.getElementById('results-count');
+        if (countEl) countEl.textContent = `${sorted.length} ${sorted.length === 1 ? 'script' : 'scripts'}`;
+        const sortSelect = document.getElementById('sort-select');
+        if (sortSelect) sortSelect.value = this.sortMode;
+        
         if (sorted.length === 0) {
             list.innerHTML = `<div class="empty-state">
                 <h2>No scripts found</h2>
@@ -684,6 +875,7 @@ const app = {
     filterLogic(scripts) {
         const query = this.searchQuery.toLowerCase();
         return scripts.filter(s => {
+            if (utils.isExpired(s)) return false;
             if (!s.title.toLowerCase().includes(query)) return false;
             if (s.visibility === 'PRIVATE' && !this.currentUser) return false;
             if (s.visibility === 'UNLISTED' && !this.currentUser) return false;
@@ -695,14 +887,31 @@ const app = {
     },
 
     sortLogic(scripts) {
-        return scripts.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+        const mode = this.sortMode || 'created';
+        const copy = [...scripts];
+        switch (mode) {
+            case 'updated':
+                return copy.sort((a, b) => new Date(b.updated || b.created || 0) - new Date(a.updated || a.created || 0));
+            case 'az':
+                return copy.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+            case 'za':
+                return copy.sort((a, b) => b.title.localeCompare(a.title, undefined, { sensitivity: 'base' }));
+            default:
+                return copy.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+        }
+    },
+
+    setSort(mode) {
+        this.sortMode = mode;
+        try { localStorage.setItem('script_sort', mode); } catch(e) {}
+        this.renderList();
     },
 
     filterCategory(cat, e) {
         if (e) {
             e.preventDefault();
             document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            if (e.target.classList.contains('sidebar-link')) e.target.classList.add('active');
+            if (e.currentTarget.classList.contains('sidebar-link')) e.currentTarget.classList.add('active');
         }
         this.currentFilter = cat;
         this.renderList();
@@ -735,8 +944,8 @@ const app = {
             if (tab === 'create') {
                 this.resetEditor();
             }
+            this.initCodeMirror();
             setTimeout(() => {
-                this.initCodeMirror();
                 if (window.cmEditor) window.cmEditor.refresh();
             }, 50);
         }
@@ -755,17 +964,23 @@ const app = {
         }
         list.innerHTML = sorted.map(s => {
             const updated = s.updated ? new Date(s.updated).toLocaleDateString() : new Date(s.created).toLocaleDateString();
+            const expired = utils.isExpired(s);
+            const expDate = expired ? `Expired ${new Date(s.expiration).toLocaleDateString()}` : `Updated ${updated}`;
             return `<div class="admin-item" data-script-title="${utils.escapeAttr(s.title)}" onclick="app.populateEditor(this.getAttribute('data-script-title'))">
                 <div class="admin-item-left">
                     <strong>${utils.escapeHtml(s.title)}</strong>
                     <div class="admin-meta">
-                        <span class="badge badge-sm badge-${s.visibility.toLowerCase()}">${s.visibility}</span>
-                        <span class="text-muted">Updated ${updated}</span>
+                        <span class="badge badge-sm ${expired ? 'badge-expired' : 'badge-' + s.visibility.toLowerCase()}">${expired ? 'Expired' : s.visibility}</span>
+                        <span class="text-muted">${expDate}</span>
                     </div>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    <button class="item-delete" onclick="event.stopPropagation(); app.deleteScriptConfirmation(this.closest('.admin-item').getAttribute('data-script-title'))" title="Delete script" aria-label="Delete script">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                    </button>
+                    <svg class="item-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
+                <div class="swipe-hint"><div class="swipe-hint">Swipe or drag to delete</div></div>
             </div>`;
         }).join('');
         this.initSwipeToDelete();
@@ -797,7 +1012,10 @@ const app = {
                     </div>
                 </div>
                 <div class="admin-item-right">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    <button class="item-delete" onclick="event.stopPropagation(); app.deleteBotConfirmation(this.closest('.admin-item').getAttribute('data-bot-id'))" title="Cancel bot" aria-label="Cancel bot">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg>
+                    </button>
+                    <svg class="item-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                 </div>
                 <div class="swipe-hint">Swipe to cancel</div>
             </div>`;
@@ -807,56 +1025,85 @@ const app = {
 
     initSwipeToDelete() {
         const adminItems = document.querySelectorAll('.admin-item');
+        const SWIPE_THRESHOLD = 8;
+        const DELETE_THRESHOLD = 100;
+
         adminItems.forEach(item => {
-            let startX = 0, isSwiping = false;
-            
-            item.addEventListener('touchstart', (e) => {
-                startX = e.touches[0].clientX;
+            let startX = null, isSwiping = false, dragging = false, suppressClick = false;
+
+            item.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                if (e.target.closest('.item-delete')) return;
+                startX = e.clientX;
                 isSwiping = false;
+                dragging = true;
                 item.style.transition = 'none';
                 item.classList.add('swiping');
-            }, { passive: true });
-            
-            item.addEventListener('touchmove', (e) => {
-                if (!startX) return;
-                const currentX = e.touches[0].clientX, diff = currentX - startX;
-                if (Math.abs(diff) > 30) {
+                try { item.setPointerCapture(e.pointerId); } catch(err) {}
+            });
+
+            item.addEventListener('pointermove', (e) => {
+                if (!dragging || startX === null) return;
+                const diff = e.clientX - startX;
+                if (Math.abs(diff) > SWIPE_THRESHOLD) {
                     isSwiping = true;
-                    e.preventDefault();
                     if (diff > 0) {
                         item.style.transform = `translateX(${Math.min(diff, 100)}px)`;
                         item.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
                     }
                 }
-            }, { passive: false });
-            
-            item.addEventListener('touchend', (e) => {
-                if (!startX || !isSwiping) return;
-                const endX = e.changedTouches[0].clientX, diff = endX - startX;
-                item.style.transition = 'transform 0.3s ease, background-color 0.3s ease, opacity 0.3s ease';
+            });
+
+            item.addEventListener('pointerup', (e) => {
+                if (!dragging) return;
+                dragging = false;
                 item.classList.remove('swiping');
-                
-                if (diff > 100) {
-                    item.style.transform = 'translateX(300px)';
-                    item.style.opacity = '0';
-                    item.classList.add('swipe-delete');
-                    
-                    setTimeout(() => {
-                        const scriptTitle = item.getAttribute('data-script-title');
-                        const botId = item.getAttribute('data-bot-id');
-                        if (scriptTitle) this.deleteScriptConfirmation(scriptTitle);
-                        else if (botId) this.deleteBotConfirmation(botId);
-                    }, 300);
+
+                const diff = e.clientX - startX;
+                startX = null;
+
+                if (isSwiping) {
+                    suppressClick = true;
+                    item.style.transition = 'transform 0.3s ease, background-color 0.3s ease, opacity 0.3s ease';
+                    if (diff > DELETE_THRESHOLD) {
+                        item.style.transform = 'translateX(300px)';
+                        item.style.opacity = '0';
+                        item.classList.add('swipe-delete');
+                        setTimeout(() => {
+                            const scriptTitle = item.getAttribute('data-script-title');
+                            const botId = item.getAttribute('data-bot-id');
+                            if (scriptTitle) this.deleteScriptConfirmation(scriptTitle);
+                            else if (botId) this.deleteBotConfirmation(botId);
+                        }, 300);
+                    } else {
+                        item.style.transform = '';
+                        item.style.backgroundColor = '';
+                    }
+                    e.preventDefault();
                 } else {
-                    item.style.transform = 'translateX(0)';
+                    item.style.transition = '';
+                    item.style.transform = '';
                     item.style.backgroundColor = '';
                 }
-                startX = 0;
                 isSwiping = false;
             });
-            
+
+            item.addEventListener('pointercancel', () => {
+                dragging = false;
+                isSwiping = false;
+                startX = null;
+                item.style.transition = '';
+                item.style.transform = '';
+                item.style.backgroundColor = '';
+                item.classList.remove('swiping');
+            });
+
             item.addEventListener('click', (e) => {
-                if (isSwiping) { e.preventDefault(); e.stopPropagation(); }
+                if (suppressClick) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    suppressClick = false;
+                }
             });
         });
     },
@@ -1037,6 +1284,9 @@ const app = {
         const editDesc = document.getElementById('edit-desc');
         if (editDesc) editDesc.value = '';
         
+        const editExpiration = document.getElementById('edit-expiration');
+        if (editExpiration) editExpiration.value = '';
+        
         if (window.cmEditor) window.cmEditor.setValue('');
         
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
@@ -1051,6 +1301,7 @@ const app = {
         this.currentEditingId = null;
         this.originalTitle = null;
         this.originalScriptId = null;
+        this.pendingEditorCode = null;
     },
 
     resetBotEditor() {
@@ -1095,22 +1346,14 @@ const app = {
         const editDesc = document.getElementById('edit-desc');
         if (editDesc) editDesc.value = s.description || '';
         
-        try {
-            const path = `scripts/${this.originalScriptId}/raw/${s.filename}`;
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`, {
-                headers: { 'Authorization': `token ${this.token}` }
-            });
-            
-            if (res.ok) {
-                const file = await res.json();
-                const code = utils.safeAtob(file.content);
-                if (window.cmEditor) window.cmEditor.setValue(code);
-            } else {
-                if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
-            }
-        } catch(e) {
-            console.error('Load error:', e);
-            if (window.cmEditor) window.cmEditor.setValue('-- Error loading content');
+        const editExpiration = document.getElementById('edit-expiration');
+        if (editExpiration) editExpiration.value = utils.toDateTimeLocal(s.expiration);
+        
+        const result = await this.loadScriptContent(s);
+        if (result.ok) {
+            this.setEditorCode(result.code);
+        } else {
+            this.setEditorCode(this.describeLoadError(result.status, s));
         }
         
         const saveBtn = document.querySelector('.editor-actions .btn:last-child');
@@ -1181,6 +1424,10 @@ const app = {
         const visibility = visibilityInput.value;
         const code = window.cmEditor ? window.cmEditor.getValue() : '';
         const desc = descInput ? descInput.value.trim() : '';
+        const expirationInput = document.getElementById('edit-expiration');
+        const expiration = expirationInput && expirationInput.value
+            ? new Date(expirationInput.value).toISOString()
+            : null;
         const originalBtnText = saveBtn.textContent;
         
         const titleError = utils.validateTitle(title);
@@ -1210,6 +1457,7 @@ const app = {
                 displayTitle: title,
                 visibility: visibility,
                 description: desc,
+                expiration: expiration,
                 filename: filename,
                 size: code.length,
                 created: originalCreationDate,

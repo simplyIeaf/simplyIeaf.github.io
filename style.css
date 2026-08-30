@@ -173,6 +173,40 @@ input, button, textarea, select {
     box-shadow: 0 0 0 3px var(--color-primary-dim);
 }
 
+.search-suggestions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    z-index: 1100;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    padding: 11px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.15s ease;
+}
+.suggestion-item:last-child { border-bottom: none; }
+.suggestion-item:hover,
+.suggestion-item.active { background: var(--bg-secondary); }
+.suggestion-item b { color: var(--color-primary); font-weight: 700; }
+.suggestion-showall { color: var(--color-text-muted); font-style: italic; }
+
 .nav-right { 
     flex: 0 0 auto;
     display: flex; 
@@ -223,6 +257,30 @@ input, button, textarea, select {
     display: grid; 
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
     gap: 20px;
+}
+
+.list-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.results-count {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.sort-select {
+    width: auto;
+    min-width: 180px;
+}
+
+@media (max-width: 768px) {
+    .sort-select { min-width: 140px; }
 }
 
 .script-card {
@@ -291,6 +349,7 @@ input, button, textarea, select {
 .badge-public { background: var(--color-primary); color: #000; }
 .badge-private { background: var(--surface-hover); color: var(--color-text-muted); border: 1px solid var(--color-border); }
 .badge-unlisted { background: #6366f1; color: #fff; }
+.badge-expired { background: var(--color-danger); color: #fff; }
 
 .script-header-lg { 
     display: flex; 
@@ -560,6 +619,19 @@ textarea.input-field {
     min-height: 120px;
 }
 
+.expiration-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.expiration-row .input-field { flex: 1; }
+.expiration-row .btn { flex: 0 0 auto; }
+.expiration-hint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    opacity: 0.7;
+}
+
 /* CodeMirror AMOLED Integration */
 .CodeMirror {
     background: #000000 !important;
@@ -637,7 +709,10 @@ textarea.input-field {
     touch-action: pan-y;
     user-select: none;
     -webkit-user-select: none;
+    cursor: grab;
 }
+
+.admin-item:active { cursor: grabbing; }
 
 .admin-item:hover { 
     border-color: var(--color-border); 
@@ -653,7 +728,27 @@ textarea.input-field {
     margin-bottom: 10px;
 }
 
-.admin-item-right { color: var(--color-text-muted); display: flex; align-items: center; }
+.admin-item-right { color: var(--color-text-muted); display: flex; align-items: center; gap: 8px; }
+.admin-item-right .item-chevron { flex: 0 0 auto; }
+.item-delete {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+}
+.admin-item:hover .item-delete { opacity: 0.7; transform: scale(1); }
+.item-delete:hover { color: var(--color-danger); background: var(--surface-hover); opacity: 1; }
+
+@media (hover: none) {
+    .item-delete { display: none; }
+}
 .admin-meta { display: flex; align-items: center; gap: 12px; font-size: 13px; }
 .text-muted { color: var(--color-text-muted); }
 .empty-admin-state { text-align: center; padding: 60px 20px; color: var(--color-text-muted); }
@@ -741,7 +836,7 @@ textarea.input-field {
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
-    .navbar { position: absolute; height: 56px; }
+    .navbar { position: fixed; height: 56px; }
     .container { margin-top: 60px; }
     .modal-overlay { padding: 10px; align-items: flex-start; }
     .modal { max-height: 80vh; margin-top: 20px; margin-bottom: 20px; }
