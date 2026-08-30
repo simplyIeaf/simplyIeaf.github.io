@@ -259,29 +259,21 @@ input, button, textarea, select {
     gap: 20px;
 }
 
-.list-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-}
-
-.results-count {
-    font-size: 13px;
-    color: var(--color-text-muted);
+.sidebar-sort {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 14px;
+    font-size: 14px;
     font-weight: 600;
+    color: var(--color-text);
+    background: var(--surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
 }
-
-.sort-select {
-    width: auto;
-    min-width: 180px;
-}
-
-@media (max-width: 768px) {
-    .sort-select { min-width: 140px; }
-}
+.sidebar-sort:hover { border-color: var(--color-primary); }
 
 .script-card {
     background: var(--surface); 

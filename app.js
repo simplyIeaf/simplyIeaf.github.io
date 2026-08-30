@@ -839,8 +839,6 @@ const app = {
         const filtered = this.filterLogic(scripts);
         const sorted = this.sortLogic(filtered);
         
-        const countEl = document.getElementById('results-count');
-        if (countEl) countEl.textContent = `${sorted.length} ${sorted.length === 1 ? 'script' : 'scripts'}`;
         const sortSelect = document.getElementById('sort-select');
         if (sortSelect) sortSelect.value = this.sortMode;
         
