@@ -1058,6 +1058,16 @@
       "size": 30112,
       "created": "2026-08-23T19:54:06.551Z",
       "updated": "2026-08-23T19:54:06.554Z"
+    },
+    "test": {
+      "title": "test",
+      "displayTitle": "test",
+      "visibility": "PUBLIC",
+      "description": "",
+      "filename": "test.txt",
+      "size": 7,
+      "created": "2026-08-30T10:30:52.337Z",
+      "updated": "2026-08-30T10:30:52.337Z"
     }
   },
   "bots": {
