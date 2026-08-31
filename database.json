@@ -882,12 +882,13 @@
     "Round System ServerScript": {
       "title": "Round System ServerScript",
       "displayTitle": "Round System ServerScript",
-      "visibility": "UNLISTED",
-      "description": "Place this Script inside of ServerScriptService",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
       "filename": "round-system-serverscript.txt",
       "size": 17549,
-      "created": "2026-04-21T09:58:22.173Z",
-      "updated": "2026-04-21T09:58:22.174Z"
+      "created": "2026-08-31T08:26:29.748Z",
+      "updated": "2026-08-31T08:26:29.748Z"
     },
     "Better Update Log System Script": {
       "title": "Better Update Log System Script",
