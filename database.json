@@ -963,12 +963,13 @@
     "Donation Leaderboard Script #1": {
       "title": "Donation Leaderboard Script #1",
       "displayTitle": "Donation Leaderboard Script #1",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
+      "expiration": null,
       "filename": "donation-leaderboard-script-1.txt",
       "size": 11286,
-      "created": "2026-05-25T21:37:53.687Z",
-      "updated": "2026-05-25T21:37:53.689Z"
+      "created": "2026-08-31T08:27:04.807Z",
+      "updated": "2026-08-31T08:27:04.807Z"
     },
     "Donation Leaderboard Script #2": {
       "title": "Donation Leaderboard Script #2",
