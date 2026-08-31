@@ -992,12 +992,13 @@
     "Troll System ServerScript": {
       "title": "Troll System ServerScript",
       "displayTitle": "Troll System ServerScript",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
+      "expiration": null,
       "filename": "troll-system-serverscript.txt",
       "size": 4349,
-      "created": "2026-06-06T23:05:03.026Z",
-      "updated": "2026-06-06T23:05:03.026Z"
+      "created": "2026-08-31T08:22:04.053Z",
+      "updated": "2026-08-31T08:22:04.054Z"
     },
     "Keyboard System Script": {
       "title": "Keyboard System Script",
