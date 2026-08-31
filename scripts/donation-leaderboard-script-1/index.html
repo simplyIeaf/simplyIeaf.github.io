@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        if (window.location.pathname.endsWith('index.html')) {
+            window.location.replace(window.location.pathname.replace(/index.html$/, '') + window.location.search + window.location.hash);
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>donation-leaderboard-script-1 - Leaf's Scripts</title>
-    <link rel="icon" type="image/png" href="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj">
+    <title>Donation Leaderboard Script #1 - Leaf's Scripts</title>
+    <link rel="icon" type="image/png" href="https://yt3.googleusercontent.com/lxpJQz3QU7u-_NeTZVzQOphQHKW4Klu82r9ATc8bYCUrjd4FdOpS-nD0KF--YEXCfQEet5GV=s160-c-k-c0x00ffffff-no-rj">
     <link rel="stylesheet" href="../../style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,13 +18,13 @@
     <nav class="navbar">
         <div class="nav-content">
             <div class="nav-left">
-                <a href="../../index.html" class="brand" style="text-decoration: none; color: inherit;">
-                    <img src="https://yt3.ggpht.com/wrMKTrl_4TexkVLuTILn1KZWW6NEbqTyLts9UhZNZhzLkOEBS13lBAi3gVl1Q465QruIDSwCUQ=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
+                <a href="../../" class="brand" style="text-decoration: none; color: inherit;">
+                    <img src="https://yt3.googleusercontent.com/lxpJQz3QU7u-_NeTZVzQOphQHKW4Klu82r9ATc8bYCUrjd4FdOpS-nD0KF--YEXCfQEet5GV=s160-c-k-c0x00ffffff-no-rj" class="nav-icon" alt="Icon">
                     <span class="nav-title" style="color:#ffffff;">Leaf's Scripts</span>
                 </a>
             </div>
             <div class="nav-right">
-                <a href="../../index.html" class="btn btn-secondary btn-sm">Back</a>
+                <a href="../../" class="btn btn-secondary btn-sm">Back</a>
             </div>
         </div>
     </nav>
@@ -27,11 +32,11 @@
     <div class="container">
         <div class="script-header-lg">
             <div>
-                <h1>donation-leaderboard-script-1</h1>
+                <h1>Donation Leaderboard Script #1</h1>
                 <div class="meta-row">
                     <span class="meta-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        <span>05/25/2026</span>
+                        <i data-lucide="calendar" width="14" height="14"></i>
+                        <span>08/31/2026</span>
                     </span>
                 </div>
             </div>
@@ -43,7 +48,7 @@
                 <div class="toolbar-right">
                     <button class="btn btn-sm" onclick="downloadScript()">Download</button>
                     <button class="btn btn-sm" onclick="copyScript(this)">Copy</button>
-                    <a href="raw/donation-leaderboard-script-1.txt" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
+                    <a href="https://raw.githubusercontent.com/simplyIeaf/simplyIeaf.github.io/refs/heads/main/scripts/donation-leaderboard-script-1/raw/donation-leaderboard-script-1.txt" class="btn btn-secondary btn-sm" target="_blank">Raw</a>
                 </div>
             </div>
             <pre><code id="code-display" class="language-lua">Loading...</code></pre>
@@ -52,13 +57,15 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.462.0/dist/umd/lucide.min.js"></script>
     <script>
         const filename = 'donation-leaderboard-script-1.txt';
         const scriptId = 'donation-leaderboard-script-1';
+        const rawBaseUrl = 'https://raw.githubusercontent.com/simplyIeaf/simplyIeaf.github.io/refs/heads/main/scripts/donation-leaderboard-script-1/raw';
         
         async function loadScript() {
             try {
-                const res = await fetch(`raw/${filename}`);
+                const res = await fetch(rawBaseUrl + '/' + filename);
                 const code = await res.text();
                 document.getElementById('code-display').textContent = code;
                 Prism.highlightAll();
@@ -88,6 +95,10 @@
         }
         
         loadScript();
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
     </script>
 </body>
 </html>
