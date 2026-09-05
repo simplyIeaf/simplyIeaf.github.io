@@ -1063,6 +1063,17 @@
       "size": 30112,
       "created": "2026-08-23T19:54:06.551Z",
       "updated": "2026-08-23T19:54:06.554Z"
+    },
+    "Weather System ServerScript": {
+      "title": "Weather System ServerScript",
+      "displayTitle": "Weather System ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "weather-system-serverscript.txt",
+      "size": 4633,
+      "created": "2026-09-05T07:46:49.813Z",
+      "updated": "2026-09-05T07:46:49.821Z"
     }
   },
   "bots": {
