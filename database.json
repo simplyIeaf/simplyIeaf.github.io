@@ -1063,6 +1063,17 @@
       "size": 30112,
       "created": "2026-08-23T19:54:06.551Z",
       "updated": "2026-08-23T19:54:06.554Z"
+    },
+    "Dynamic Weather System LocalScript": {
+      "title": "Dynamic Weather System LocalScript",
+      "displayTitle": "Dynamic Weather System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "Place in StarterGui",
+      "expiration": null,
+      "filename": "dynamic-weather-system-localscript.txt",
+      "size": 25052,
+      "created": "2026-09-05T11:06:15.446Z",
+      "updated": "2026-09-05T11:06:15.456Z"
     }
   },
   "bots": {
