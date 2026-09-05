@@ -1074,6 +1074,17 @@
       "size": 25052,
       "created": "2026-09-05T11:06:15.446Z",
       "updated": "2026-09-05T11:06:15.456Z"
+    },
+    "Dynamic Weather System ServerScript": {
+      "title": "Dynamic Weather System ServerScript",
+      "displayTitle": "Dynamic Weather System ServerScript",
+      "visibility": "UNLISTED",
+      "description": "Place in ServerScriptService",
+      "expiration": null,
+      "filename": "dynamic-weather-system-serverscript.txt",
+      "size": 4677,
+      "created": "2026-09-05T11:09:03.283Z",
+      "updated": "2026-09-05T11:09:03.283Z"
     }
   },
   "bots": {
