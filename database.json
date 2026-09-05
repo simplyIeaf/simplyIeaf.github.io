@@ -1074,6 +1074,17 @@
       "size": 4633,
       "created": "2026-09-05T07:46:49.813Z",
       "updated": "2026-09-05T07:46:49.821Z"
+    },
+    "Weather System LocalScript": {
+      "title": "Weather System LocalScript",
+      "displayTitle": "Weather System LocalScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "weather-system-localscript.txt",
+      "size": 25051,
+      "created": "2026-09-05T07:47:13.878Z",
+      "updated": "2026-09-05T07:47:13.878Z"
     }
   },
   "bots": {
