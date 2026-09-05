@@ -1,0 +1,903 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
+
+local remotes = ReplicatedStorage:WaitForChild("WeatherRemotes")
+local weatherRemote = remotes:WaitForChild("WeatherRemote")
+local weatherFunction = remotes:WaitForChild("WeatherFunction")
+
+local studTextureId = "rbxthumb://type=Asset&id=14905298664&w=150&h=150"
+local weatherIconId = "80213404007045"
+
+local currentScope = "server"
+
+local ok, accessResult, weatherResult = pcall(function()
+	return weatherFunction:InvokeServer()
+end)
+
+local hasAccess = ok and accessResult == true
+local initialWeather = (ok and weatherResult) or "sun"
+
+local baseLighting = {
+	Brightness = Lighting.Brightness,
+	Ambient = Lighting.Ambient,
+	OutdoorAmbient = Lighting.OutdoorAmbient,
+	FogColor = Lighting.FogColor,
+	FogEnd = Lighting.FogEnd,
+}
+
+local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+if not atmosphere then
+	atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.15
+	atmosphere.Haze = 0
+	atmosphere.Glare = 0
+	atmosphere.Parent = Lighting
+end
+
+local baseAtmosphere = {
+	Density = atmosphere.Density,
+	Haze = atmosphere.Haze,
+	Glare = atmosphere.Glare,
+}
+
+local presets = {
+	sun = {
+		Brightness = baseLighting.Brightness,
+		Ambient = baseLighting.Ambient,
+		OutdoorAmbient = baseLighting.OutdoorAmbient,
+		FogColor = baseLighting.FogColor,
+		FogEnd = baseLighting.FogEnd,
+		Density = baseAtmosphere.Density,
+		Haze = baseAtmosphere.Haze,
+		Glare = baseAtmosphere.Glare,
+	},
+	rain = {
+		Brightness = math.max(baseLighting.Brightness * 0.55, 1),
+		Ambient = Color3.fromRGB(90, 95, 105),
+		OutdoorAmbient = Color3.fromRGB(90, 95, 105),
+		FogColor = Color3.fromRGB(120, 125, 135),
+		FogEnd = 400,
+		Density = 0.45,
+		Haze = 1.2,
+		Glare = 0,
+	},
+	fog = {
+		Brightness = math.max(baseLighting.Brightness * 0.7, 1),
+		Ambient = Color3.fromRGB(150, 150, 150),
+		OutdoorAmbient = Color3.fromRGB(150, 150, 150),
+		FogColor = Color3.fromRGB(190, 190, 195),
+		FogEnd = 120,
+		Density = 0.75,
+		Haze = 3,
+		Glare = 0,
+	},
+	wind = {
+		Brightness = baseLighting.Brightness,
+		Ambient = baseLighting.Ambient,
+		OutdoorAmbient = baseLighting.OutdoorAmbient,
+		FogColor = baseLighting.FogColor,
+		FogEnd = 900,
+		Density = 0.2,
+		Haze = 0.4,
+		Glare = 0,
+	},
+	snow = {
+		Brightness = math.max(baseLighting.Brightness * 0.85, 1),
+		Ambient = Color3.fromRGB(180, 185, 195),
+		OutdoorAmbient = Color3.fromRGB(180, 185, 195),
+		FogColor = Color3.fromRGB(210, 215, 225),
+		FogEnd = 350,
+		Density = 0.3,
+		Haze = 1,
+		Glare = 0,
+	},
+	thunder = {
+		Brightness = math.max(baseLighting.Brightness * 0.35, 0.5),
+		Ambient = Color3.fromRGB(45, 48, 60),
+		OutdoorAmbient = Color3.fromRGB(45, 48, 60),
+		FogColor = Color3.fromRGB(70, 72, 85),
+		FogEnd = 300,
+		Density = 0.55,
+		Haze = 1.6,
+		Glare = 0,
+	},
+}
+
+local function tweenLighting(preset, duration)
+	local info = TweenInfo.new(duration or 3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	TweenService:Create(Lighting, info, {
+		Brightness = preset.Brightness,
+		Ambient = preset.Ambient,
+		OutdoorAmbient = preset.OutdoorAmbient,
+		FogColor = preset.FogColor,
+		FogEnd = preset.FogEnd,
+	}):Play()
+	TweenService:Create(atmosphere, info, {
+		Density = preset.Density,
+		Haze = preset.Haze,
+		Glare = preset.Glare,
+	}):Play()
+end
+
+local dropZone = Instance.new("Part")
+dropZone.Name = "RainDropZone"
+dropZone.Size = Vector3.new(1, 1, 1)
+dropZone.Transparency = 1
+dropZone.Anchored = true
+dropZone.CanCollide = false
+dropZone.CanQuery = false
+dropZone.CanTouch = false
+dropZone.Parent = workspace
+
+local precipPlane = Instance.new("Part")
+precipPlane.Name = "PrecipitationPlane"
+precipPlane.Size = Vector3.new(70, 1, 70)
+precipPlane.Transparency = 1
+precipPlane.Anchored = true
+precipPlane.CanCollide = false
+precipPlane.CanQuery = false
+precipPlane.CanTouch = false
+precipPlane.Parent = workspace
+
+RunService.Heartbeat:Connect(function()
+	local camPos = camera.CFrame.Position
+	dropZone.CFrame = CFrame.new(camPos)
+	precipPlane.CFrame = CFrame.new(camPos + Vector3.new(0, 28, 0))
+end)
+
+local RAIN_DROP_COUNT = 200
+local RAIN_HEIGHT = 30
+local RAIN_SPREAD = 50
+local rainDrops = {}
+
+for i = 1, RAIN_DROP_COUNT do
+	local topAtt = Instance.new("Attachment")
+	local bottomAtt = Instance.new("Attachment")
+	local startHeight = math.random() * RAIN_HEIGHT
+	local x = (math.random() - 0.5) * RAIN_SPREAD
+	local z = (math.random() - 0.5) * RAIN_SPREAD
+	local length = 1.1 + math.random() * 0.6
+
+	topAtt.Position = Vector3.new(x, startHeight, z)
+	bottomAtt.Position = Vector3.new(x, startHeight - length, z)
+	topAtt.Parent = dropZone
+	bottomAtt.Parent = dropZone
+
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = topAtt
+	beam.Attachment1 = bottomAtt
+	beam.Width0 = 0.04
+	beam.Width1 = 0.01
+	beam.FaceCamera = true
+	beam.LightEmission = 0.25
+	beam.Color = ColorSequence.new(Color3.fromRGB(190, 210, 230))
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 0.85),
+	})
+	beam.Enabled = false
+	beam.Parent = dropZone
+
+	rainDrops[i] = {
+		top = topAtt,
+		bottom = bottomAtt,
+		beam = beam,
+		length = length,
+		speed = 55 + math.random() * 25,
+	}
+end
+
+local rainConnection = nil
+
+local function stepRain(dt)
+	for _, drop in ipairs(rainDrops) do
+		local pos = drop.top.Position
+		local newY = pos.Y - drop.speed * dt
+		if newY < -5 then
+			newY = RAIN_HEIGHT
+		end
+		drop.top.Position = Vector3.new(pos.X, newY, pos.Z)
+		drop.bottom.Position = Vector3.new(pos.X, newY - drop.length, pos.Z)
+	end
+end
+
+local function setRainActive(active)
+	if active then
+		if rainConnection then
+			return
+		end
+		for _, drop in ipairs(rainDrops) do
+			drop.beam.Enabled = true
+		end
+		rainConnection = RunService.Heartbeat:Connect(stepRain)
+	else
+		if rainConnection then
+			rainConnection:Disconnect()
+			rainConnection = nil
+		end
+		for _, drop in ipairs(rainDrops) do
+			drop.beam.Enabled = false
+		end
+	end
+end
+
+local SNOW_FLAKE_COUNT = 200
+local SNOW_HEIGHT = 30
+local SNOW_SPREAD = 45
+local snowFlakes = {}
+
+for i = 1, SNOW_FLAKE_COUNT do
+	local topAtt = Instance.new("Attachment")
+	local bottomAtt = Instance.new("Attachment")
+	local startHeight = math.random() * SNOW_HEIGHT
+	local x = (math.random() - 0.5) * SNOW_SPREAD
+	local z = (math.random() - 0.5) * SNOW_SPREAD
+	local size = 0.12 + math.random() * 0.1
+
+	topAtt.Position = Vector3.new(x, startHeight, z)
+	bottomAtt.Position = Vector3.new(x, startHeight - size, z)
+	topAtt.Parent = dropZone
+	bottomAtt.Parent = dropZone
+
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = topAtt
+	beam.Attachment1 = bottomAtt
+	beam.Width0 = size * 2.2
+	beam.Width1 = size * 2.2
+	beam.FaceCamera = true
+	beam.LightEmission = 0.4
+	beam.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 0.3),
+	})
+	beam.Enabled = false
+	beam.Parent = dropZone
+
+	snowFlakes[i] = {
+		top = topAtt,
+		bottom = bottomAtt,
+		beam = beam,
+		size = size,
+		baseX = x,
+		baseZ = z,
+		speed = 3 + math.random() * 3,
+		phase = math.random() * math.pi * 2,
+		sway = 1.5 + math.random() * 2,
+	}
+end
+
+local snowConnection = nil
+
+local function stepSnow(dt)
+	local t = os.clock()
+	for _, flake in ipairs(snowFlakes) do
+		local pos = flake.top.Position
+		local newY = pos.Y - flake.speed * dt
+		if newY < -5 then
+			newY = SNOW_HEIGHT
+		end
+		local swayX = flake.baseX + math.sin(t * 0.8 + flake.phase) * flake.sway
+		local swayZ = flake.baseZ + math.cos(t * 0.6 + flake.phase) * flake.sway
+		flake.top.Position = Vector3.new(swayX, newY, swayZ)
+		flake.bottom.Position = Vector3.new(swayX, newY - flake.size, swayZ)
+	end
+end
+
+local function setSnowActive(active)
+	if active then
+		if snowConnection then
+			return
+		end
+		for _, flake in ipairs(snowFlakes) do
+			flake.beam.Enabled = true
+		end
+		snowConnection = RunService.Heartbeat:Connect(stepSnow)
+	else
+		if snowConnection then
+			snowConnection:Disconnect()
+			snowConnection = nil
+		end
+		for _, flake in ipairs(snowFlakes) do
+			flake.beam.Enabled = false
+		end
+	end
+end
+
+local windEmitter = Instance.new("ParticleEmitter")
+windEmitter.Name = "WindEmitter"
+windEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+windEmitter.Color = ColorSequence.new(Color3.fromRGB(200, 190, 160))
+windEmitter.Size = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0.4),
+	NumberSequenceKeypoint.new(1, 0.1),
+})
+windEmitter.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0.6),
+	NumberSequenceKeypoint.new(0.5, 0.8),
+	NumberSequenceKeypoint.new(1, 1),
+})
+windEmitter.Lifetime = NumberRange.new(2, 3.5)
+windEmitter.Speed = NumberRange.new(20, 35)
+windEmitter.SpreadAngle = Vector2.new(15, 15)
+windEmitter.Acceleration = Vector3.new(25, -1, 6)
+windEmitter.Drag = 2
+windEmitter.RotSpeed = NumberRange.new(-90, 90)
+windEmitter.EmissionDirection = Enum.NormalId.Right
+windEmitter.Shape = Enum.ParticleEmitterShape.Box
+windEmitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+windEmitter.Rate = 0
+windEmitter.Enabled = false
+windEmitter.Parent = precipPlane
+
+local windActive = false
+
+RunService:BindToRenderStep("WeatherWindShake", Enum.RenderPriority.Camera.Value + 1, function()
+	if not windActive then
+		return
+	end
+	local t = os.clock() * 9
+	local offset = Vector3.new(math.sin(t) * 0.045, math.sin(t * 1.6) * 0.025, 0)
+	camera.CFrame = camera.CFrame * CFrame.new(offset)
+end)
+
+local WIND_DIRECTION = Vector3.new(25, 0, 6).Unit
+local BASE_WIND_ACCEL = 26
+local HEADWIND_ACCEL = 42
+local windForce = nil
+local windHumanoid = nil
+
+local function setupWindForce(character)
+	local root = character:WaitForChild("HumanoidRootPart", 5)
+	local humanoid = character:WaitForChild("Humanoid", 5)
+	if not root or not humanoid then
+		return
+	end
+
+	windHumanoid = humanoid
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "WeatherWindAttachment"
+	attachment.Parent = root
+
+	windForce = Instance.new("VectorForce")
+	windForce.Name = "WeatherWindForce"
+	windForce.Attachment0 = attachment
+	windForce.RelativeTo = Enum.ActuatorRelativeTo.World
+	windForce.Force = Vector3.new(0, 0, 0)
+	windForce.Parent = root
+end
+
+RunService.Heartbeat:Connect(function()
+	if not (windForce and windForce.Parent) then
+		return
+	end
+
+	if not windActive then
+		windForce.Force = Vector3.new(0, 0, 0)
+		return
+	end
+
+	local mass = windForce.Parent.AssemblyMass
+	local gust = 1 + math.sin(os.clock() * 2.5) * 0.35
+	local force = WIND_DIRECTION * mass * BASE_WIND_ACCEL * gust
+
+	if windHumanoid then
+		local moveDir = windHumanoid.MoveDirection
+		if moveDir.Magnitude > 0.1 then
+			local facing = moveDir.Unit:Dot(WIND_DIRECTION)
+			if facing < 0 then
+				local strength = -facing
+				force += (-moveDir.Unit) * mass * HEADWIND_ACCEL * strength
+			end
+		end
+	end
+
+	windForce.Force = force
+end)
+
+local ambientSound = Instance.new("Sound")
+ambientSound.Name = "WeatherAmbient"
+ambientSound.Looped = true
+ambientSound.Volume = 0
+ambientSound.Parent = SoundService
+
+local ambientIds = {
+	rain = "rbxassetid://1516791621",
+	snow = "rbxassetid://336392497",
+	wind = "rbxassetid://5799870105",
+	thunder = "rbxassetid://1516791621",
+}
+
+local function setAmbientSound(weatherName)
+	local id = ambientIds[weatherName]
+	if not id then
+		TweenService:Create(ambientSound, TweenInfo.new(1.5), {Volume = 0}):Play()
+		task.delay(1.6, function()
+			if ambientSound.Volume <= 0.02 then
+				ambientSound:Stop()
+			end
+		end)
+		return
+	end
+	if ambientSound.SoundId ~= id then
+		ambientSound.SoundId = id
+	end
+	if not ambientSound.IsPlaying then
+		ambientSound:Play()
+	end
+	TweenService:Create(ambientSound, TweenInfo.new(1.5), {Volume = 0.6}):Play()
+end
+
+local flashGui = Instance.new("ScreenGui")
+flashGui.Name = "WeatherFlash"
+flashGui.IgnoreGuiInset = true
+flashGui.ResetOnSpawn = false
+flashGui.DisplayOrder = 50
+flashGui.Parent = playerGui
+
+local flashFrame = Instance.new("Frame")
+flashFrame.Size = UDim2.new(1, 0, 1, 0)
+flashFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+flashFrame.BackgroundTransparency = 1
+flashFrame.BorderSizePixel = 0
+flashFrame.Parent = flashGui
+
+local thunderConnection = nil
+
+local function playThunderStrike()
+	local isNear = math.random() < 0.35
+	local peak = isNear and 0.15 or 0.55
+	local fadeTime = isNear and 0.6 or 1.1
+
+	flashFrame.BackgroundTransparency = peak
+	TweenService:Create(flashFrame, TweenInfo.new(fadeTime, Enum.EasingStyle.Quad), {
+		BackgroundTransparency = 1,
+	}):Play()
+
+	local rumble = Instance.new("Sound")
+	rumble.SoundId = "rbxassetid://6994934244"
+	rumble.Volume = isNear and 1 or 0.5
+	rumble.PlaybackSpeed = 0.9 + math.random() * 0.3
+	rumble.Parent = SoundService
+	rumble:Play()
+	Debris:AddItem(rumble, 6)
+end
+
+local function startThunderLoop()
+	local nextStrike = os.clock() + 2 + math.random() * 3
+	thunderConnection = RunService.Heartbeat:Connect(function()
+		if os.clock() >= nextStrike then
+			playThunderStrike()
+			nextStrike = os.clock() + 3 + math.random() * 6
+		end
+	end)
+end
+
+local function stopThunderLoop()
+	if thunderConnection then
+		thunderConnection:Disconnect()
+		thunderConnection = nil
+	end
+	flashFrame.BackgroundTransparency = 1
+end
+
+local activeTagsRef = {}
+
+local function applyWeather(weatherName)
+	if not presets[weatherName] then
+		weatherName = "sun"
+	end
+
+	setRainActive(weatherName == "rain" or weatherName == "thunder")
+	setSnowActive(weatherName == "snow")
+
+	windActive = weatherName == "wind" or weatherName == "thunder"
+	windEmitter.Enabled = weatherName == "wind"
+	windEmitter.Rate = weatherName == "wind" and 55 or 0
+
+	if weatherName == "thunder" then
+		if not thunderConnection then
+			startThunderLoop()
+		end
+	else
+		stopThunderLoop()
+	end
+
+	tweenLighting(presets[weatherName], 3)
+	setAmbientSound(weatherName)
+
+	for key, tag in pairs(activeTagsRef) do
+		tag.Text = key == weatherName and "Active" or ""
+	end
+end
+
+weatherRemote.OnClientEvent:Connect(applyWeather)
+
+local weatherOptions = {
+	{key = "sun", label = "Sun"},
+	{key = "rain", label = "Rain"},
+	{key = "fog", label = "Fog"},
+	{key = "wind", label = "Wind"},
+	{key = "snow", label = "Snow"},
+	{key = "thunder", label = "Thunder"},
+}
+
+local function createIconButton(parent, iconId)
+	local button = Instance.new("ImageButton")
+	button.Size = UDim2.new(0, 48, 0, 48)
+	button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+	button.ImageColor3 = Color3.fromRGB(60, 60, 60)
+	button.Image = studTextureId
+	button.ScaleType = Enum.ScaleType.Tile
+	button.TileSize = UDim2.new(0, 24, 0, 24)
+	button.Parent = parent
+
+	local buttonAspect = Instance.new("UIAspectRatioConstraint")
+	buttonAspect.AspectRatio = 1
+	buttonAspect.Parent = button
+
+	local uiCorner = Instance.new("UICorner")
+	uiCorner.CornerRadius = UDim.new(0.2, 0)
+	uiCorner.Parent = button
+
+	local buttonStroke = Instance.new("UIStroke")
+	buttonStroke.Thickness = 4
+	buttonStroke.Color = Color3.new(0, 0, 0)
+	buttonStroke.Parent = button
+
+	local icon = Instance.new("ImageLabel")
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	icon.Size = UDim2.new(0.65, 0, 0.65, 0)
+	icon.BackgroundTransparency = 1
+	icon.Image = "rbxthumb://type=Asset&id=" .. iconId .. "&w=150&h=150"
+	icon.Parent = button
+
+	return button
+end
+
+local function buildScopeDropdown(parent)
+	local container = Instance.new("Frame")
+	container.Name = "ScopeDropdown"
+	container.Size = UDim2.new(1, -20, 0, 34)
+	container.Position = UDim2.new(0, 10, 0, 42)
+	container.BackgroundTransparency = 1
+	container.ZIndex = 6
+	container.Parent = parent
+
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 1, 0)
+	button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	button.AutoButtonColor = true
+	button.Text = ""
+	button.ZIndex = 6
+	button.Parent = container
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = button
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = button
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -30, 1, 0)
+	label.Position = UDim2.new(0, 10, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = "Scope: Server"
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.Font = Enum.Font.FredokaOne
+	label.TextSize = 14
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.ZIndex = 7
+	label.Parent = button
+
+	local arrow = Instance.new("TextLabel")
+	arrow.Size = UDim2.new(0, 20, 1, 0)
+	arrow.AnchorPoint = Vector2.new(1, 0)
+	arrow.Position = UDim2.new(1, -6, 0, 0)
+	arrow.BackgroundTransparency = 1
+	arrow.Text = "v"
+	arrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+	arrow.Font = Enum.Font.FredokaOne
+	arrow.TextSize = 14
+	arrow.ZIndex = 7
+	arrow.Parent = button
+
+	local list = Instance.new("Frame")
+	list.Name = "ScopeList"
+	list.Size = UDim2.new(1, 0, 0, 68)
+	list.Position = UDim2.new(0, 0, 1, 4)
+	list.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	list.Visible = false
+	list.ZIndex = 8
+	list.Parent = container
+
+	local listCorner = Instance.new("UICorner")
+	listCorner.CornerRadius = UDim.new(0, 6)
+	listCorner.Parent = list
+
+	local listStroke = Instance.new("UIStroke")
+	listStroke.Thickness = 2
+	listStroke.Parent = list
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = list
+
+	local function makeOption(text, value)
+		local option = Instance.new("TextButton")
+		option.Size = UDim2.new(1, 0, 0, 32)
+		option.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		option.AutoButtonColor = true
+		option.Text = text
+		option.TextColor3 = Color3.fromRGB(255, 255, 255)
+		option.Font = Enum.Font.FredokaOne
+		option.TextSize = 14
+		option.ZIndex = 9
+		option.Parent = list
+
+		option.Activated:Connect(function()
+			currentScope = value
+			label.Text = "Scope: " .. text
+			list.Visible = false
+		end)
+	end
+
+	makeOption("Server", "server")
+	makeOption("Global", "global")
+
+	button.Activated:Connect(function()
+		list.Visible = not list.Visible
+	end)
+
+	return container
+end
+
+local function buildWeatherPanel(parent)
+	local main = Instance.new("Frame")
+	main.Name = "WeatherPanel"
+	main.Size = UDim2.new(0, 220, 0, 340)
+	main.AnchorPoint = Vector2.new(0.5, 0.5)
+	main.Position = UDim2.new(0.5, 0, 0.5, 0)
+	main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	main.Visible = false
+	main.ClipsDescendants = true
+	main.Parent = parent
+
+	local mainStroke = Instance.new("UIStroke")
+	mainStroke.Thickness = 3
+	mainStroke.Parent = main
+
+	local bgStuds = Instance.new("ImageLabel")
+	bgStuds.Size = UDim2.new(1, 0, 1, 0)
+	bgStuds.BackgroundTransparency = 1
+	bgStuds.Image = studTextureId
+	bgStuds.ImageColor3 = Color3.fromRGB(40, 40, 40)
+	bgStuds.ImageTransparency = 0.5
+	bgStuds.ScaleType = Enum.ScaleType.Tile
+	bgStuds.TileSize = UDim2.new(0, 40, 0, 40)
+	bgStuds.Parent = main
+
+	local topBar = Instance.new("Frame")
+	topBar.Size = UDim2.new(1, 0, 0, 34)
+	topBar.BackgroundColor3 = Color3.fromRGB(35, 150, 55)
+	topBar.BorderSizePixel = 0
+	topBar.ZIndex = 10
+	topBar.Parent = main
+
+	local topStuds = Instance.new("ImageLabel")
+	topStuds.Size = UDim2.new(1, 0, 1, 0)
+	topStuds.BackgroundTransparency = 1
+	topStuds.Image = studTextureId
+	topStuds.ImageColor3 = Color3.fromRGB(25, 90, 35)
+	topStuds.ImageTransparency = 0.35
+	topStuds.ScaleType = Enum.ScaleType.Tile
+	topStuds.TileSize = UDim2.new(0, 34, 0, 34)
+	topStuds.ZIndex = 11
+	topStuds.Parent = topBar
+
+	local topStroke = Instance.new("UIStroke")
+	topStroke.Thickness = 3
+	topStroke.Parent = topBar
+
+	local titleText = Instance.new("TextLabel")
+	titleText.Size = UDim2.new(1, -34, 1, 0)
+	titleText.BackgroundTransparency = 1
+	titleText.Text = "Weather"
+	titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleText.Font = Enum.Font.FredokaOne
+	titleText.TextScaled = true
+	titleText.ZIndex = 12
+	titleText.Parent = topBar
+
+	local titleConstraint = Instance.new("UITextSizeConstraint")
+	titleConstraint.MaxTextSize = 20
+	titleConstraint.MinTextSize = 8
+	titleConstraint.Parent = titleText
+
+	local titlePadding = Instance.new("UIPadding")
+	titlePadding.PaddingTop = UDim.new(0, 6)
+	titlePadding.PaddingBottom = UDim.new(0, 6)
+	titlePadding.Parent = titleText
+
+	local titleStroke = Instance.new("UIStroke")
+	titleStroke.Thickness = 2
+	titleStroke.Parent = titleText
+
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Size = UDim2.new(0, 34, 1, 0)
+	closeBtn.Position = UDim2.new(1, -34, 0, 0)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(210, 25, 25)
+	closeBtn.BorderSizePixel = 0
+	closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeBtn.Font = Enum.Font.FredokaOne
+	closeBtn.TextSize = 18
+	closeBtn.ZIndex = 13
+	closeBtn.Parent = topBar
+
+	local closeStroke = Instance.new("UIStroke")
+	closeStroke.Thickness = 3
+	closeStroke.Color = Color3.new(0, 0, 0)
+	closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	closeStroke.Parent = closeBtn
+
+	local closeTxtStroke = Instance.new("UIStroke")
+	closeTxtStroke.Thickness = 2
+	closeTxtStroke.Color = Color3.new(0, 0, 0)
+	closeTxtStroke.Parent = closeBtn
+
+	closeBtn.Activated:Connect(function()
+		main.Visible = false
+	end)
+
+	buildScopeDropdown(main)
+
+	local scrollContainer = Instance.new("ScrollingFrame")
+	scrollContainer.Size = UDim2.new(1, 0, 1, -84)
+	scrollContainer.Position = UDim2.new(0, 0, 0, 84)
+	scrollContainer.BackgroundTransparency = 1
+	scrollContainer.BorderSizePixel = 0
+	scrollContainer.ScrollBarThickness = 6
+	scrollContainer.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+	scrollContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scrollContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollContainer.ZIndex = 3
+	scrollContainer.Active = true
+	scrollContainer.Parent = main
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 8)
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = scrollContainer
+
+	local listPadding = Instance.new("UIPadding")
+	listPadding.PaddingTop = UDim.new(0, 12)
+	listPadding.PaddingBottom = UDim.new(0, 12)
+	listPadding.PaddingLeft = UDim.new(0, 10)
+	listPadding.PaddingRight = UDim.new(0, 10)
+	listPadding.Parent = scrollContainer
+
+	local tags = {}
+
+	for _, option in ipairs(weatherOptions) do
+		local row = Instance.new("TextButton")
+		row.Size = UDim2.new(0.9, 0, 0, 38)
+		row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		row.AutoButtonColor = true
+		row.Text = ""
+		row.ZIndex = 4
+		row.Parent = scrollContainer
+
+		local rowCorner = Instance.new("UICorner")
+		rowCorner.CornerRadius = UDim.new(0, 6)
+		rowCorner.Parent = row
+
+		local rowStroke = Instance.new("UIStroke")
+		rowStroke.Thickness = 2
+		rowStroke.Parent = row
+
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0.6, 0, 1, 0)
+		lbl.Position = UDim2.new(0, 10, 0, 0)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = option.label
+		lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+		lbl.Font = Enum.Font.FredokaOne
+		lbl.TextSize = 15
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.ZIndex = 5
+		lbl.Parent = row
+
+		local activeTag = Instance.new("TextLabel")
+		activeTag.Name = "ActiveTag"
+		activeTag.Size = UDim2.new(0.3, 0, 1, 0)
+		activeTag.AnchorPoint = Vector2.new(1, 0)
+		activeTag.Position = UDim2.new(1, -10, 0, 0)
+		activeTag.BackgroundTransparency = 1
+		activeTag.Text = ""
+		activeTag.TextColor3 = Color3.fromRGB(90, 220, 110)
+		activeTag.Font = Enum.Font.FredokaOne
+		activeTag.TextSize = 12
+		activeTag.TextXAlignment = Enum.TextXAlignment.Right
+		activeTag.ZIndex = 5
+		activeTag.Parent = row
+
+		tags[option.key] = activeTag
+
+		row.Activated:Connect(function()
+			weatherRemote:FireServer({weather = option.key, scope = currentScope})
+		end)
+	end
+
+	return main, tags
+end
+
+local currentGui = nil
+
+local function destroyWeatherGui()
+	if currentGui then
+		currentGui:Destroy()
+		currentGui = nil
+	end
+	activeTagsRef = {}
+end
+
+local function buildWeatherGui()
+	destroyWeatherGui()
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "WeatherToggleGui"
+	gui.ResetOnSpawn = true
+	gui.IgnoreGuiInset = true
+	gui.Parent = playerGui
+	currentGui = gui
+
+	local toggleButton = createIconButton(gui, weatherIconId)
+	toggleButton.AnchorPoint = Vector2.new(1, 0.5)
+	toggleButton.Position = UDim2.new(1, -30, 0.5, 0)
+
+	local panel, tags = buildWeatherPanel(gui)
+	activeTagsRef = tags
+
+	toggleButton.Activated:Connect(function()
+		panel.Visible = not panel.Visible
+	end)
+end
+
+local function onCharacterAdded(character)
+	camera = workspace.CurrentCamera
+	setupWindForce(character)
+
+	if hasAccess then
+		buildWeatherGui()
+	end
+
+	local humanoid = character:WaitForChild("Humanoid", 5)
+	if humanoid then
+		humanoid.Died:Connect(function()
+			destroyWeatherGui()
+		end)
+	end
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+if player.Character then
+	onCharacterAdded(player.Character)
+end
+
+applyWeather(initialWeather)
