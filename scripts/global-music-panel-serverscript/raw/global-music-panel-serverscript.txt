@@ -1,0 +1,109 @@
+local MessagingService = game:GetService("MessagingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local remotesFolder = Instance.new("Folder")
+remotesFolder.Name = "MusicRemotes"
+remotesFolder.Parent = ReplicatedStorage
+
+local musicRemote = Instance.new("RemoteEvent")
+musicRemote.Name = "MusicRemote"
+musicRemote.Parent = remotesFolder
+
+local musicFunction = Instance.new("RemoteFunction")
+musicFunction.Name = "MusicFunction"
+musicFunction.Parent = remotesFolder
+
+local GLOBAL_TOPIC = "MusicGlobalSync"
+local REQUEST_COOLDOWN = 3
+
+local lastRequest = {}
+local currentState = nil
+
+local allowedUserIds = {
+[8033814042] = true, -- replace with your roblox user id here
+}
+
+local function hasMusicAccess(plr)
+    return allowedUserIds[plr.UserId] == true
+end
+
+local function getClientPresetIds(player)
+    local ok, result = pcall(function()
+        return musicFunction:InvokeClient(player)
+    end)
+    if ok and type(result) == "table" then
+        return result
+    end
+    return nil
+end
+
+local function isValidRequest(player, data)
+    if type(data) ~= "table" then return false end
+    if data.mode ~= "preset" and data.mode ~= "custom" then return false end
+    if data.scope ~= "server" and data.scope ~= "global" then return false end
+    if type(data.name) ~= "string" then return false end
+    if #data.name < 1 or #data.name > 40 then return false end
+    
+    local idStr = tostring(data.id)
+    if not idStr:match("^%d+$") then return false end
+    
+    if data.mode == "preset" then
+        local presetIds = getClientPresetIds(player)
+        if not presetIds or not presetIds[idStr] then
+            return false
+        end
+    end
+    
+    return true
+end
+
+local function broadcastLocally(payload)
+    musicRemote:FireAllClients(payload)
+end
+
+musicRemote.OnServerEvent:Connect(function(player, data)
+    if not hasMusicAccess(player) then return end
+    if not isValidRequest(player, data) then return end
+    
+    local now = os.clock()
+    local last = lastRequest[player.UserId] or 0
+    if now - last < REQUEST_COOLDOWN then return end
+    lastRequest[player.UserId] = now
+    
+    local payload = {
+    mode = data.mode,
+    id = tostring(data.id),
+    name = data.name,
+    }
+    
+    currentState = payload
+    
+    if data.scope == "global" then
+        local success = pcall(function()
+            MessagingService:PublishAsync(GLOBAL_TOPIC, payload)
+        end)
+        if not success then
+            broadcastLocally(payload)
+        end
+    else
+        broadcastLocally(payload)
+    end
+end)
+
+musicFunction.OnServerInvoke = function(player)
+    return hasMusicAccess(player), currentState
+end
+
+Players.PlayerRemoving:Connect(function(player)
+    lastRequest[player.UserId] = nil
+end)
+
+pcall(function()
+    MessagingService:SubscribeAsync(GLOBAL_TOPIC, function(message)
+        local payload = message.Data
+        if type(payload) ~= "table" then return end
+        currentState = payload
+        broadcastLocally(payload)
+    end)
+end)
