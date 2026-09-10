@@ -1096,6 +1096,17 @@
       "size": 30282,
       "created": "2026-09-10T07:20:58.375Z",
       "updated": "2026-09-10T07:20:58.389Z"
+    },
+    "Global Music Panel ServerScript": {
+      "title": "Global Music Panel ServerScript",
+      "displayTitle": "Global Music Panel ServerScript",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "global-music-panel-serverscript.txt",
+      "size": 3040,
+      "created": "2026-09-10T07:22:14.666Z",
+      "updated": "2026-09-10T07:22:14.667Z"
     }
   },
   "bots": {
