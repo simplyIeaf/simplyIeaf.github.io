@@ -1,0 +1,959 @@
+local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local remotes = ReplicatedStorage:WaitForChild("MusicRemotes")
+local musicRemote = remotes:WaitForChild("MusicRemote")
+local musicFunction = remotes:WaitForChild("MusicFunction")
+
+local studTextureId = "rbxthumb://type=Asset&id=14905298664&w=150&h=150"
+local musicIconId = "7059338419"
+
+local songIDs = { 
+{id = "1848354536", name = "Relaxed Scene"},
+{id = "1837768517", name = "Bossa Me (a)"},
+{id = "1846575559", name = "Diamonds"},
+{id = "1839857296", name = "Convenience Store"},
+{id = "1840684208", name = "Playground of The Stars (A)"},
+{id = "1840684377", name = "A Short Intermission"},
+{id = "1841647553", name = "Life in an Elevator"},
+}
+
+local presetIdsSet = {}
+for _, song in ipairs(songIDs) do
+    presetIdsSet[song.id] = true
+end
+
+musicFunction.OnClientInvoke = function()
+    return presetIdsSet
+end
+
+local FADE_TIME = 1.5
+local TARGET_VOLUME = 0.5
+local SKIP_DEBOUNCE = 1.5
+local PANEL_COOLDOWN = 3
+
+local fadeInInfo = TweenInfo.new(FADE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local fadeOutInfo = TweenInfo.new(FADE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+
+local connections = {}
+local currentSound = nil
+local songEndedConnection = nil
+local activeFadeTween = nil
+local isTransitioning = false
+local lastSkipTime = 0
+local lastPanelAction = 0
+local currentScope = "server"
+local activeTagsRef = {}
+local songLabelRef = nil
+local currentToggleButton = nil
+local currentPanel = nil
+local hudBuilt = false
+
+local function cancelActiveTween()
+    if activeFadeTween then
+        activeFadeTween:Cancel()
+        activeFadeTween = nil
+    end
+end
+
+local function fadeOut(sound, callback)
+    cancelActiveTween()
+    local tween = TweenService:Create(sound, fadeOutInfo, {Volume = 0})
+    activeFadeTween = tween
+    tween:Play()
+    
+    local conn
+    conn = tween.Completed:Connect(function(playbackState)
+        if conn then
+            conn:Disconnect()
+            conn = nil
+        end
+        if playbackState == Enum.PlaybackState.Completed then
+            sound:Stop()
+            sound.Volume = 0
+            if callback then callback() end
+        end
+    end)
+end
+
+local function fadeIn(sound, isMuted)
+    cancelActiveTween()
+    sound.Volume = 0
+    sound:Play()
+    if not isMuted then
+        local tween = TweenService:Create(sound, fadeInInfo, {Volume = TARGET_VOLUME})
+        activeFadeTween = tween
+        tween:Play()
+    end
+end
+
+local function cleanup()
+    for _, conn in ipairs(connections) do
+        if conn then conn:Disconnect() end
+    end
+    connections = {}
+    
+    if songEndedConnection then
+        songEndedConnection:Disconnect()
+        songEndedConnection = nil
+    end
+    
+    cancelActiveTween()
+    
+    if currentSound then
+        currentSound:Stop()
+        currentSound.Volume = 0
+        currentSound = nil
+    end
+    
+    local folder = SoundService:FindFirstChild("MusicFolder")
+    if folder then folder:Destroy() end
+    
+    _G.MusicState = nil
+    
+    local gui = playerGui:FindFirstChild("MusicInterface")
+    if gui then gui:Destroy() end
+end
+
+game.Close:Connect(cleanup)
+
+if playerGui:FindFirstChild("MusicInterface") then
+    playerGui.MusicInterface:Destroy()
+end
+
+local musicFolder = SoundService:FindFirstChild("MusicFolder")
+local sounds = {}
+local customSound
+
+if not musicFolder then
+    musicFolder = Instance.new("Folder")
+    musicFolder.Name = "MusicFolder"
+    musicFolder.Parent = SoundService
+    
+    local musicGroup = Instance.new("SoundGroup")
+    musicGroup.Name = "MusicGroup"
+    musicGroup.Volume = 1
+    musicGroup.Parent = musicFolder
+    
+    for _, song in ipairs(songIDs) do
+        local sound = Instance.new("Sound")
+        sound.Name = song.name
+        sound.SoundId = "rbxassetid://" .. song.id
+        sound.Volume = 0
+        sound.SoundGroup = musicGroup
+        sound.RollOffMaxDistance = 0
+        sound.Parent = musicFolder
+        table.insert(sounds, sound)
+    end
+    
+    customSound = Instance.new("Sound")
+    customSound.Name = "CustomTrack"
+    customSound.Volume = 0
+    customSound.SoundGroup = musicGroup
+    customSound.RollOffMaxDistance = 0
+    customSound.Parent = musicFolder
+else
+    for _, child in ipairs(musicFolder:GetChildren()) do
+        if child:IsA("Sound") then
+            if child.Name == "CustomTrack" then
+                customSound = child
+            else
+                table.insert(sounds, child)
+            end
+        end
+    end
+    if not customSound then
+        customSound = Instance.new("Sound")
+        customSound.Name = "CustomTrack"
+        customSound.Volume = 0
+        customSound.RollOffMaxDistance = 0
+        customSound.Parent = musicFolder
+    end
+end
+
+_G.MusicState = _G.MusicState or {
+currentSoundName = nil,
+isMuted = false,
+currentTimestamp = 0,
+}
+
+local state = _G.MusicState
+
+local transitionTo
+local playRandomSong
+
+local function refreshDisplay()
+    for name, tag in pairs(activeTagsRef) do
+        tag.Text = (currentSound and currentSound.Name == name) and "Playing" or ""
+    end
+    if songLabelRef then
+        songLabelRef.Text = currentSound and currentSound.Name or "Song Name"
+    end
+end
+
+transitionTo = function(sound)
+    if isTransitioning or sound == nil then return end
+    isTransitioning = true
+    
+    local function begin()
+        if songEndedConnection then
+            songEndedConnection:Disconnect()
+            songEndedConnection = nil
+        end
+        
+        currentSound = sound
+        state.currentSoundName = sound.Name
+        state.currentTimestamp = 0
+        
+        fadeIn(sound, state.isMuted)
+        refreshDisplay()
+        isTransitioning = false
+        
+        songEndedConnection = sound.Ended:Connect(function()
+            playRandomSong()
+        end)
+    end
+    
+    if currentSound and currentSound.Playing and currentSound ~= sound then
+        fadeOut(currentSound, begin)
+    else
+        begin()
+    end
+end
+
+playRandomSong = function()
+    local nextSound
+    repeat
+    nextSound = sounds[math.random(1, #sounds)]
+    until nextSound ~= currentSound or #sounds <= 1
+    transitionTo(nextSound)
+end
+
+local function resumeOrPlay()
+    if state.currentSoundName then
+        for _, sound in ipairs(sounds) do
+            if sound.Name == state.currentSoundName then
+                currentSound = sound
+                
+                if sound.Playing then
+                    cancelActiveTween()
+                    if not state.isMuted then
+                        local tween = TweenService:Create(sound, fadeInInfo, {Volume = TARGET_VOLUME})
+                        activeFadeTween = tween
+                        tween:Play()
+                    end
+                else
+                    sound.TimePosition = state.currentTimestamp or 0
+                    fadeIn(sound, state.isMuted)
+                end
+                
+                if songEndedConnection then
+                    songEndedConnection:Disconnect()
+                end
+                songEndedConnection = sound.Ended:Connect(function()
+                    playRandomSong()
+                end)
+                
+                refreshDisplay()
+                return
+            end
+        end
+        
+        if customSound.Name == state.currentSoundName then
+            currentSound = customSound
+            
+            if customSound.Playing then
+                cancelActiveTween()
+                if not state.isMuted then
+                    local tween = TweenService:Create(customSound, fadeInInfo, {Volume = TARGET_VOLUME})
+                    activeFadeTween = tween
+                    tween:Play()
+                end
+            else
+                customSound.TimePosition = state.currentTimestamp or 0
+                fadeIn(customSound, state.isMuted)
+            end
+            
+            if songEndedConnection then
+                songEndedConnection:Disconnect()
+            end
+            songEndedConnection = customSound.Ended:Connect(function()
+                playRandomSong()
+            end)
+            
+            refreshDisplay()
+            return
+        end
+    end
+    playRandomSong()
+end
+
+local function applyIncoming(payload)
+    if type(payload) ~= "table" then return end
+    
+    if payload.mode == "preset" then
+        local target
+        for _, s in ipairs(sounds) do
+            if s.SoundId == "rbxassetid://" .. tostring(payload.id) then
+                target = s
+                break
+            end
+        end
+        if target then
+            transitionTo(target)
+        end
+    elseif payload.mode == "custom" then
+        customSound.SoundId = "rbxassetid://" .. tostring(payload.id)
+        customSound.Name = payload.name or "Custom Track"
+        transitionTo(customSound)
+    end
+end
+
+musicRemote.OnClientEvent:Connect(applyIncoming)
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MusicInterface"
+screenGui.IgnoreGuiInset = true
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = screenGui
+
+local safeFrame = Instance.new("Frame")
+safeFrame.Name = "SafeFrame"
+safeFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+safeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+safeFrame.BackgroundTransparency = 1
+safeFrame.Parent = screenGui
+
+local currentViewportConnection = nil
+
+local function updateScale()
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    local vp = cam.ViewportSize
+    if vp.X <= 0 or vp.Y <= 0 then return end
+    local scale = math.min(vp.X / 1920, vp.Y / 1080)
+    uiScale.Scale = scale
+    safeFrame.Size = UDim2.new(0, vp.X / scale, 0, vp.Y / scale)
+end
+
+local function setupCamera()
+    if currentViewportConnection then
+        currentViewportConnection:Disconnect()
+    end
+    local cam = workspace.CurrentCamera
+    if cam then
+        currentViewportConnection = cam:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+        updateScale()
+    end
+end
+
+table.insert(connections, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(setupCamera))
+setupCamera()
+
+local function createIconButton(parent, iconId)
+    local button = Instance.new("ImageButton")
+    button.Size = UDim2.new(0, 48, 0, 48)
+    button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    button.ImageColor3 = Color3.fromRGB(60, 60, 60)
+    button.Image = studTextureId
+    button.ScaleType = Enum.ScaleType.Tile
+    button.TileSize = UDim2.new(0, 24, 0, 24)
+    button.Parent = parent
+    
+    local buttonAspect = Instance.new("UIAspectRatioConstraint")
+    buttonAspect.AspectRatio = 1
+    buttonAspect.Parent = button
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0.2, 0)
+    uiCorner.Parent = button
+    
+    local buttonStroke = Instance.new("UIStroke")
+    buttonStroke.Thickness = 4
+    buttonStroke.Color = Color3.new(0, 0, 0)
+    buttonStroke.Parent = button
+    
+    local icon = Instance.new("ImageLabel")
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    icon.Size = UDim2.new(0.65, 0, 0.65, 0)
+    icon.BackgroundTransparency = 1
+    icon.Image = "rbxthumb://type=Asset&id=" .. iconId .. "&w=150&h=150"
+    icon.Parent = button
+    
+    return button
+end
+
+local function buildScopeDropdown(parent, yPos)
+    local container = Instance.new("Frame")
+    container.Name = "ScopeDropdown"
+    container.Size = UDim2.new(1, -20, 0, 36)
+    container.Position = UDim2.new(0, 10, 0, yPos)
+    container.BackgroundTransparency = 1
+    container.ZIndex = 6
+    container.Parent = parent
+    
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, 0, 1, 0)
+    button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    button.AutoButtonColor = true
+    button.Text = ""
+    button.ZIndex = 6
+    button.Parent = container
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = button
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Parent = button
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -30, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "Scope: Server"
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.FredokaOne
+    label.TextSize = 15
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 7
+    label.Parent = button
+    
+    local arrow = Instance.new("TextLabel")
+    arrow.Size = UDim2.new(0, 20, 1, 0)
+    arrow.AnchorPoint = Vector2.new(1, 0)
+    arrow.Position = UDim2.new(1, -6, 0, 0)
+    arrow.BackgroundTransparency = 1
+    arrow.Text = "v"
+    arrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+    arrow.Font = Enum.Font.FredokaOne
+    arrow.TextSize = 15
+    arrow.ZIndex = 7
+    arrow.Parent = button
+    
+    local list = Instance.new("Frame")
+    list.Name = "ScopeList"
+    list.Size = UDim2.new(1, 0, 0, 72)
+    list.Position = UDim2.new(0, 0, 1, 4)
+    list.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    list.Visible = false
+    list.ZIndex = 8
+    list.Parent = container
+    
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 6)
+    listCorner.Parent = list
+    
+    local listStroke = Instance.new("UIStroke")
+    listStroke.Thickness = 2
+    listStroke.Parent = list
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = list
+    
+    local function makeOption(text, value)
+        local option = Instance.new("TextButton")
+        option.Size = UDim2.new(1, 0, 0, 34)
+        option.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        option.AutoButtonColor = true
+        option.Text = text
+        option.TextColor3 = Color3.fromRGB(255, 255, 255)
+        option.Font = Enum.Font.FredokaOne
+        option.TextSize = 15
+        option.ZIndex = 9
+        option.Parent = list
+        
+        option.Activated:Connect(function()
+            currentScope = value
+            label.Text = "Scope: " .. text
+            list.Visible = false
+        end)
+    end
+    
+    makeOption("Server", "server")
+    makeOption("Global", "global")
+    
+    button.Activated:Connect(function()
+        list.Visible = not list.Visible
+    end)
+    
+    return container
+end
+
+local function buildMusicPanel(parent)
+    local main = Instance.new("Frame")
+    main.Name = "MusicPanel"
+    main.Size = UDim2.new(0, 380, 0, 470)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    main.Visible = false
+    main.ClipsDescendants = true
+    main.Parent = parent
+    
+    local mainStroke = Instance.new("UIStroke")
+    mainStroke.Thickness = 3
+    mainStroke.Parent = main
+    
+    local bgStuds = Instance.new("ImageLabel")
+    bgStuds.Size = UDim2.new(1, 0, 1, 0)
+    bgStuds.BackgroundTransparency = 1
+    bgStuds.Image = studTextureId
+    bgStuds.ImageColor3 = Color3.fromRGB(40, 40, 40)
+    bgStuds.ImageTransparency = 0.5
+    bgStuds.ScaleType = Enum.ScaleType.Tile
+    bgStuds.TileSize = UDim2.new(0, 40, 0, 40)
+    bgStuds.Parent = main
+    
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 38)
+    topBar.BackgroundColor3 = Color3.fromRGB(35, 150, 55)
+    topBar.BorderSizePixel = 0
+    topBar.ZIndex = 10
+    topBar.Parent = main
+    
+    local topStuds = Instance.new("ImageLabel")
+    topStuds.Size = UDim2.new(1, 0, 1, 0)
+    topStuds.BackgroundTransparency = 1
+    topStuds.Image = studTextureId
+    topStuds.ImageColor3 = Color3.fromRGB(25, 90, 35)
+    topStuds.ImageTransparency = 0.35
+    topStuds.ScaleType = Enum.ScaleType.Tile
+    topStuds.TileSize = UDim2.new(0, 34, 0, 34)
+    topStuds.ZIndex = 11
+    topStuds.Parent = topBar
+    
+    local topStroke = Instance.new("UIStroke")
+    topStroke.Thickness = 3
+    topStroke.Parent = topBar
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Size = UDim2.new(1, -38, 1, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = "Music"
+    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleText.Font = Enum.Font.FredokaOne
+    titleText.TextScaled = true
+    titleText.ZIndex = 12
+    titleText.Parent = topBar
+    
+    local titleConstraint = Instance.new("UITextSizeConstraint")
+    titleConstraint.MaxTextSize = 24
+    titleConstraint.MinTextSize = 8
+    titleConstraint.Parent = titleText
+    
+    local titlePadding = Instance.new("UIPadding")
+    titlePadding.PaddingTop = UDim.new(0, 6)
+    titlePadding.PaddingBottom = UDim.new(0, 6)
+    titlePadding.Parent = titleText
+    
+    local titleStroke = Instance.new("UIStroke")
+    titleStroke.Thickness = 2
+    titleStroke.Parent = titleText
+    
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 38, 1, 0)
+    closeBtn.Position = UDim2.new(1, -38, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(210, 25, 25)
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.FredokaOne
+    closeBtn.TextSize = 20
+    closeBtn.ZIndex = 13
+    closeBtn.Parent = topBar
+    
+    local closeStroke = Instance.new("UIStroke")
+    closeStroke.Thickness = 3
+    closeStroke.Color = Color3.new(0, 0, 0)
+    closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    closeStroke.Parent = closeBtn
+    
+    local closeTxtStroke = Instance.new("UIStroke")
+    closeTxtStroke.Thickness = 2
+    closeTxtStroke.Color = Color3.new(0, 0, 0)
+    closeTxtStroke.Parent = closeBtn
+    
+    closeBtn.Activated:Connect(function()
+        main.Visible = false
+    end)
+    
+    buildScopeDropdown(main, 48)
+    
+    local customHeader = Instance.new("TextLabel")
+    customHeader.Size = UDim2.new(1, -20, 0, 20)
+    customHeader.Position = UDim2.new(0, 10, 0, 96)
+    customHeader.BackgroundTransparency = 1
+    customHeader.Text = "Custom Track"
+    customHeader.TextColor3 = Color3.fromRGB(150, 220, 160)
+    customHeader.Font = Enum.Font.FredokaOne
+    customHeader.TextSize = 14
+    customHeader.TextXAlignment = Enum.TextXAlignment.Left
+    customHeader.ZIndex = 4
+    customHeader.Parent = main
+    
+    local idBox = Instance.new("TextBox")
+    idBox.Size = UDim2.new(1, -20, 0, 34)
+    idBox.Position = UDim2.new(0, 10, 0, 120)
+    idBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    idBox.PlaceholderText = "Song Asset ID"
+    idBox.Text = ""
+    idBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    idBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+    idBox.Font = Enum.Font.FredokaOne
+    idBox.TextSize = 15
+    idBox.ClearTextOnFocus = false
+    idBox.ZIndex = 4
+    idBox.Parent = main
+    
+    local idCorner = Instance.new("UICorner")
+    idCorner.CornerRadius = UDim.new(0, 6)
+    idCorner.Parent = idBox
+    
+    local idStroke = Instance.new("UIStroke")
+    idStroke.Thickness = 2
+    idStroke.Parent = idBox
+    
+    local nameBox = Instance.new("TextBox")
+    nameBox.Size = UDim2.new(1, -20, 0, 34)
+    nameBox.Position = UDim2.new(0, 10, 0, 160)
+    nameBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    nameBox.PlaceholderText = "Track Name"
+    nameBox.Text = ""
+    nameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+    nameBox.Font = Enum.Font.FredokaOne
+    nameBox.TextSize = 15
+    nameBox.ClearTextOnFocus = false
+    nameBox.ZIndex = 4
+    nameBox.Parent = main
+    
+    local nameCorner = Instance.new("UICorner")
+    nameCorner.CornerRadius = UDim.new(0, 6)
+    nameCorner.Parent = nameBox
+    
+    local nameStroke = Instance.new("UIStroke")
+    nameStroke.Thickness = 2
+    nameStroke.Parent = nameBox
+    
+    local playBtn = Instance.new("TextButton")
+    playBtn.Size = UDim2.new(1, -20, 0, 36)
+    playBtn.Position = UDim2.new(0, 10, 0, 200)
+    playBtn.BackgroundColor3 = Color3.fromRGB(35, 150, 55)
+    playBtn.AutoButtonColor = true
+    playBtn.Text = "Play"
+    playBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    playBtn.Font = Enum.Font.FredokaOne
+    playBtn.TextSize = 16
+    playBtn.ZIndex = 4
+    playBtn.Parent = main
+    
+    local playCorner = Instance.new("UICorner")
+    playCorner.CornerRadius = UDim.new(0, 6)
+    playCorner.Parent = playBtn
+    
+    local playStroke = Instance.new("UIStroke")
+    playStroke.Thickness = 2
+    playStroke.Parent = playBtn
+    
+    playBtn.Activated:Connect(function()
+        local now = os.clock()
+        if (now - lastPanelAction) < PANEL_COOLDOWN then return end
+        
+        local idText = idBox.Text:gsub("%s+", "")
+        if idText == "" or not idText:match("^%d+$") then return end
+        
+        local nameText = nameBox.Text
+        if nameText == "" then
+            nameText = "Custom Track"
+        end
+        if #nameText > 40 then
+            nameText = nameText:sub(1, 40)
+        end
+        
+        lastPanelAction = now
+        
+        local ok, hasAccess = pcall(function()
+            return musicFunction:InvokeServer()
+        end)
+        if not ok or not hasAccess then return end
+        
+        customSound.SoundId = "rbxassetid://" .. idText
+        customSound.Name = nameText
+        transitionTo(customSound)
+        
+        musicRemote:FireServer({mode = "custom", id = idText, name = nameText, scope = currentScope})
+    end)
+    
+    local tracksHeader = Instance.new("TextLabel")
+    tracksHeader.Size = UDim2.new(1, -20, 0, 20)
+    tracksHeader.Position = UDim2.new(0, 10, 0, 248)
+    tracksHeader.BackgroundTransparency = 1
+    tracksHeader.Text = "Tracks"
+    tracksHeader.TextColor3 = Color3.fromRGB(150, 220, 160)
+    tracksHeader.Font = Enum.Font.FredokaOne
+    tracksHeader.TextSize = 14
+    tracksHeader.TextXAlignment = Enum.TextXAlignment.Left
+    tracksHeader.ZIndex = 4
+    tracksHeader.Parent = main
+    
+    local scrollContainer = Instance.new("ScrollingFrame")
+    scrollContainer.Size = UDim2.new(1, 0, 0, 186)
+    scrollContainer.Position = UDim2.new(0, 0, 0, 270)
+    scrollContainer.BackgroundTransparency = 1
+    scrollContainer.BorderSizePixel = 0
+    scrollContainer.ScrollBarThickness = 6
+    scrollContainer.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+    scrollContainer.ScrollingDirection = Enum.ScrollingDirection.Y
+    scrollContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scrollContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollContainer.ZIndex = 3
+    scrollContainer.Active = true
+    scrollContainer.Parent = main
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 8)
+    listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = scrollContainer
+    
+    local listPadding = Instance.new("UIPadding")
+    listPadding.PaddingTop = UDim.new(0, 12)
+    listPadding.PaddingBottom = UDim.new(0, 12)
+    listPadding.PaddingLeft = UDim.new(0, 10)
+    listPadding.PaddingRight = UDim.new(0, 10)
+    listPadding.Parent = scrollContainer
+    
+    local tags = {}
+    
+    for _, song in ipairs(songIDs) do
+        local row = Instance.new("TextButton")
+        row.Size = UDim2.new(0.9, 0, 0, 40)
+        row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        row.AutoButtonColor = true
+        row.Text = ""
+        row.ZIndex = 4
+        row.Parent = scrollContainer
+        
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 6)
+        rowCorner.Parent = row
+        
+        local rowStroke = Instance.new("UIStroke")
+        rowStroke.Thickness = 2
+        rowStroke.Parent = row
+        
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(0.65, 0, 1, 0)
+        lbl.Position = UDim2.new(0, 10, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = song.name
+        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+        lbl.Font = Enum.Font.FredokaOne
+        lbl.TextSize = 14
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.ZIndex = 5
+        lbl.Parent = row
+        
+        local activeTag = Instance.new("TextLabel")
+        activeTag.Name = "ActiveTag"
+        activeTag.Size = UDim2.new(0.3, 0, 1, 0)
+        activeTag.AnchorPoint = Vector2.new(1, 0)
+        activeTag.Position = UDim2.new(1, -10, 0, 0)
+        activeTag.BackgroundTransparency = 1
+        activeTag.Text = ""
+        activeTag.TextColor3 = Color3.fromRGB(90, 220, 110)
+        activeTag.Font = Enum.Font.FredokaOne
+        activeTag.TextSize = 13
+        activeTag.TextXAlignment = Enum.TextXAlignment.Right
+        activeTag.ZIndex = 5
+        activeTag.Parent = row
+        
+        tags[song.name] = activeTag
+        
+        local matchedSound
+        for _, s in ipairs(sounds) do
+            if s.Name == song.name then
+                matchedSound = s
+                break
+            end
+        end
+        
+        if matchedSound then
+            row.Activated:Connect(function()
+                local now = os.clock()
+                if (now - lastPanelAction) < PANEL_COOLDOWN then return end
+                lastPanelAction = now
+                
+                local ok, hasAccess = pcall(function()
+                    return musicFunction:InvokeServer()
+                end)
+                if not ok or not hasAccess then return end
+                
+                transitionTo(matchedSound)
+                musicRemote:FireServer({mode = "preset", id = song.id, name = song.name, scope = currentScope})
+            end)
+        end
+    end
+    
+    activeTagsRef = tags
+    refreshDisplay()
+    
+    return main
+end
+
+local function buildHud(parent)
+    local container = Instance.new("Frame")
+    container.Name = "MusicHud"
+    container.BackgroundTransparency = 1
+    container.AnchorPoint = Vector2.new(0, 1)
+    container.Position = UDim2.new(0, 40, 1, -40)
+    container.Size = UDim2.new(0, 300, 0, 150)
+    container.Parent = parent
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    listLayout.Padding = UDim.new(0, 8)
+    listLayout.Parent = container
+    
+    local function createTextElement(className, name, text, layoutOrder)
+        local element = Instance.new(className)
+        element.Name = name
+        element.Text = text
+        element.Font = Enum.Font.GothamBold
+        element.TextSize = 28
+        element.TextColor3 = Color3.new(1, 1, 1)
+        element.BackgroundTransparency = 1
+        element.TextXAlignment = Enum.TextXAlignment.Left
+        element.Size = UDim2.new(1, 0, 0, 35)
+        element.LayoutOrder = layoutOrder
+        element.Parent = container
+        
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.new(0, 0, 0)
+        stroke.Thickness = 2.5
+        stroke.Parent = element
+        
+        return element
+    end
+    
+    local skipBtn = createTextElement("TextButton", "SkipButton", "Skip", 1)
+    local muteBtn = createTextElement("TextButton", "MuteButton", state.isMuted and "Unmute" or "Mute", 2)
+    local songLbl = createTextElement("TextLabel", "SongLabel", "Song Name", 3)
+    
+    table.insert(connections, skipBtn.Activated:Connect(function()
+        local now = os.clock()
+        if isTransitioning or (now - lastSkipTime) < SKIP_DEBOUNCE then return end
+        lastSkipTime = now
+        playRandomSong()
+    end))
+    
+    table.insert(connections, muteBtn.Activated:Connect(function()
+        state.isMuted = not state.isMuted
+        muteBtn.Text = state.isMuted and "Unmute" or "Mute"
+        
+        if currentSound then
+            cancelActiveTween()
+            if state.isMuted then
+                local tween = TweenService:Create(currentSound, fadeOutInfo, {Volume = 0})
+                activeFadeTween = tween
+                tween:Play()
+            else
+                local tween = TweenService:Create(currentSound, fadeInInfo, {Volume = TARGET_VOLUME})
+                activeFadeTween = tween
+                tween:Play()
+            end
+        end
+    end))
+    
+    songLabelRef = songLbl
+    refreshDisplay()
+    
+    return container
+end
+
+local function destroyToggleAndPanel()
+    if currentPanel then
+        currentPanel:Destroy()
+        currentPanel = nil
+    end
+    if currentToggleButton then
+        currentToggleButton:Destroy()
+        currentToggleButton = nil
+    end
+end
+
+local function buildInterface()
+    destroyToggleAndPanel()
+    
+    local toggleButton = createIconButton(safeFrame, musicIconId)
+    toggleButton.AnchorPoint = Vector2.new(1, 1)
+    toggleButton.Position = UDim2.new(1, -40, 1, -40)
+    currentToggleButton = toggleButton
+    
+    if not hudBuilt then
+        buildHud(safeFrame)
+        hudBuilt = true
+    end
+    
+    local panel = buildMusicPanel(safeFrame)
+    currentPanel = panel
+    
+    table.insert(connections, toggleButton.Activated:Connect(function()
+        panel.Visible = not panel.Visible
+    end))
+end
+
+local function onCharacterDied()
+    if currentSound then
+        state.currentTimestamp = currentSound.TimePosition
+    end
+    destroyToggleAndPanel()
+end
+
+local function onCharacterAdded(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    humanoid.Died:Connect(onCharacterDied)
+    
+    if hudBuilt then
+        buildInterface()
+        resumeOrPlay()
+    end
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+local function requestAccessAndStart()
+    local ok, hasAccess, initialState = pcall(function()
+        return musicFunction:InvokeServer()
+    end)
+    
+    if ok and hasAccess then
+        buildInterface()
+    end
+    
+    if ok and initialState then
+        applyIncoming(initialState)
+    else
+        resumeOrPlay()
+    end
+end
+
+requestAccessAndStart()
