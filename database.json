@@ -1085,6 +1085,17 @@
       "size": 4677,
       "created": "2026-09-05T11:09:03.283Z",
       "updated": "2026-09-05T11:09:03.283Z"
+    },
+    "Global Music Panel LocalScript": {
+      "title": "Global Music Panel LocalScript",
+      "displayTitle": "Global Music Panel LocalScript",
+      "visibility": "UNLISTED",
+      "description": "Put inside of StarterGui",
+      "expiration": null,
+      "filename": "global-music-panel-localscript.txt",
+      "size": 30282,
+      "created": "2026-09-10T07:20:58.375Z",
+      "updated": "2026-09-10T07:20:58.389Z"
     }
   },
   "bots": {
