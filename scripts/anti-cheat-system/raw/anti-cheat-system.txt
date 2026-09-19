@@ -1,0 +1,659 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local Settings = {
+	AntiFly = false,
+	AntiNoclip = false,
+	AntiRootJointDeletion = false,
+	AntiMultiTool = false,
+	AntiGod = false,
+	AntiSpeed = false,
+	AntiBuildingTools = false,
+	AntiAntiIdle = false,
+}
+
+local CHECK_INTERVAL = 0.25
+local MAX_HORIZONTAL_SPEED = 40
+local MAX_VERTICAL_SPEED = 55
+local BASE_LAG_TOLERANCE = 1.15
+local PING_TOLERANCE_SCALE = 2
+local MAX_LAG_TOLERANCE = 2.25
+local ENABLE_KICK = true
+local LOG_FLAGS = true
+
+local STRIKE_LIMIT = 3
+local RESPAWN_BUFFER = 3
+local MAX_AIRTIME = 2.25
+local MAX_FLY_HEIGHT = 9
+local DEFAULT_HIP_HEIGHT = 3.5
+
+local IDLE_SAMPLES = 5
+local IDLE_INTERVAL_SPREAD = 0.05
+local IDLE_MIN_GAP = 1.5
+local IDLE_MOVE_LIMIT = 4
+
+local STRIKE_PREFIX = "AntiCheatStrike_"
+local STRIKE_REASONS = {
+	"SpeedHack",
+	"FlyHack",
+	"Noclip",
+	"RootJointDeletion",
+	"MultiTool",
+	"BuildingTools",
+	"AntiIdle",
+	"GodMode",
+}
+
+local playerState = {}
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.RespectCanCollide = true
+rayParams.IgnoreWater = true
+
+local function log(player, reason, extra)
+	if not LOG_FLAGS then
+		return
+	end
+
+	local msg = "[Anti-Cheat] " .. reason .. " detected for " .. player.Name:lower()
+	if extra then
+		msg = msg .. " - " .. extra
+	end
+	warn(msg)
+end
+
+local function readStrike(value)
+	local count, last = value.Value:match("^(%d+)|(.+)$")
+	return tonumber(count) or 0, tonumber(last) or 0
+end
+
+local function writeStrike(value, count, last)
+	value.Value = string.format("%d|%.3f", count, last)
+end
+
+local function getStrikeValue(player, reason)
+	local name = STRIKE_PREFIX .. reason
+	local value = player:FindFirstChild(name)
+
+	if not value then
+		value = Instance.new("StringValue")
+		value.Name = name
+		value.Value = "0|0"
+		value.Parent = player
+	end
+
+	return value
+end
+
+local function cleanupStrikes(player)
+	for _, child in ipairs(player:GetChildren()) do
+		if child:IsA("StringValue") and child.Name:sub(1, #STRIKE_PREFIX) == STRIKE_PREFIX then
+			child:Destroy()
+		end
+	end
+end
+
+local function setupStrikes(player)
+	cleanupStrikes(player)
+
+	for _, reason in ipairs(STRIKE_REASONS) do
+		getStrikeValue(player, reason)
+	end
+end
+
+local function addStrike(player, reason, extra)
+	if not playerState[player] then
+		return false
+	end
+
+	local value = getStrikeValue(player, reason)
+	local count, last = readStrike(value)
+	local now = os.clock()
+
+	if now - last > 30 then
+		count = 0
+	end
+
+	count += 1
+	log(player, reason, extra)
+
+	if count >= STRIKE_LIMIT then
+		if ENABLE_KICK then
+			writeStrike(value, count, now)
+			playerState[player] = nil
+			player:Kick("[Anti-Cheat] " .. reason .. " detected")
+			return true
+		end
+
+		warn("[Anti-Cheat] " .. reason .. " detected for " .. player.Name:lower() .. " - kick skipped (kick disabled)")
+		count = 0
+	end
+
+	writeStrike(value, count, now)
+	return false
+end
+
+local function getFloor(character, rootPart, humanoid)
+	rayParams.FilterDescendantsInstances = { character }
+	rayParams.CollisionGroup = rootPart.CollisionGroup
+
+	local hipHeight = humanoid.HipHeight > 0 and humanoid.HipHeight or DEFAULT_HIP_HEIGHT
+	local length = rootPart.Size.Y / 2 + hipHeight + 1
+	local result = Workspace:Raycast(rootPart.Position, Vector3.new(0, -length, 0), rayParams)
+
+	return result and result.Instance
+end
+
+local function pathObstructed(character, rootPart, fromPos, toPos, models)
+	local direction = toPos - fromPos
+	local distance = direction.Magnitude
+	if distance < 0.1 then
+		return false
+	end
+
+	local ignore = { character }
+	for _, model in ipairs(models) do
+		if model ~= character then
+			table.insert(ignore, model)
+		end
+	end
+
+	rayParams.FilterDescendantsInstances = ignore
+	rayParams.CollisionGroup = rootPart.CollisionGroup
+
+	local result = Workspace:Raycast(fromPos, direction, rayParams)
+	if result and (result.Position - fromPos).Magnitude < distance - 0.5 then
+		return true, result.Instance.Name
+	end
+
+	return false
+end
+
+local function getSpeedLimit(player, humanoid)
+	local tolerance = BASE_LAG_TOLERANCE
+
+	local ok, ping = pcall(function()
+		return player:GetNetworkPing()
+	end)
+
+	if ok and type(ping) == "number" then
+		tolerance = math.min(tolerance + ping * PING_TOLERANCE_SCALE, MAX_LAG_TOLERANCE)
+	end
+
+	return math.max(MAX_HORIZONTAL_SPEED, humanoid.WalkSpeed) * tolerance
+end
+
+local function underExternalForce(rootPart, humanoid)
+	for _, child in ipairs(rootPart:GetChildren()) do
+		if
+			child:IsA("BodyMover")
+			or child:IsA("LinearVelocity")
+			or child:IsA("VectorForce")
+			or child:IsA("AlignPosition")
+			or child:IsA("AlignOrientation")
+		then
+			return true
+		end
+	end
+
+	local hState = humanoid:GetState()
+	return hState == Enum.HumanoidStateType.Physics
+		or hState == Enum.HumanoidStateType.Ragdoll
+		or hState == Enum.HumanoidStateType.FallingDown
+end
+
+local function isSeated(humanoid)
+	return humanoid.SeatPart ~= nil or humanoid:GetState() == Enum.HumanoidStateType.Seated
+end
+
+local function isClimbingOrSwimming(humanoid)
+	local hState = humanoid:GetState()
+	return hState == Enum.HumanoidStateType.Climbing or hState == Enum.HumanoidStateType.Swimming
+end
+
+local function getParts(player)
+	local character = player.Character
+	if not character then
+		return nil
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not rootPart or not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+
+	return character, rootPart, humanoid
+end
+
+local function newState()
+	return {
+		lastPosition = nil,
+		lastCheck = os.clock(),
+		lastGroundPos = nil,
+		airborneSince = nil,
+		floorPart = nil,
+		floorPos = nil,
+		multiToolChecks = 0,
+		flightUntil = 0,
+		speedUntil = 0,
+		teleportUntil = 0,
+		jumpUntil = 0,
+		jumpSamples = {},
+		wasSeated = false,
+	}
+end
+
+local function resetTracking(state, position, floor)
+	state.lastPosition = position
+	state.lastCheck = os.clock()
+	state.lastGroundPos = position
+	state.airborneSince = nil
+	state.floorPart = floor
+	state.floorPos = floor and floor.Position
+end
+
+local function recordJump(player, state, rootPart)
+	local samples = state.jumpSamples
+	table.insert(samples, { time = os.clock(), pos = rootPart.Position })
+
+	while #samples > IDLE_SAMPLES do
+		table.remove(samples, 1)
+	end
+
+	if not Settings.AntiAntiIdle or #samples < IDLE_SAMPLES then
+		return
+	end
+
+	local first = samples[1].pos
+	local last = samples[#samples].pos
+	local moved = (Vector3.new(last.X, 0, last.Z) - Vector3.new(first.X, 0, first.Z)).Magnitude
+	if moved > IDLE_MOVE_LIMIT then
+		return
+	end
+
+	local minGap, maxGap = math.huge, 0
+	for i = 2, #samples do
+		local gap = samples[i].time - samples[i - 1].time
+		minGap = math.min(minGap, gap)
+		maxGap = math.max(maxGap, gap)
+	end
+
+	if minGap >= IDLE_MIN_GAP and maxGap - minGap <= IDLE_INTERVAL_SPREAD then
+		state.jumpSamples = {}
+		addStrike(player, "AntiIdle", string.format("stationary, jumping every ~%.2fs", (minGap + maxGap) / 2))
+	end
+end
+
+local function trackJumps(player, character, humanoid)
+	humanoid.StateChanged:Connect(function(_, newHumanoidState)
+		if newHumanoidState ~= Enum.HumanoidStateType.Jumping then
+			return
+		end
+
+		local state = playerState[player]
+		if not state then
+			return
+		end
+
+		state.jumpUntil = os.clock() + 0.75
+
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			recordJump(player, state, rootPart)
+		end
+	end)
+end
+
+local function trackDeath(player, character, humanoid)
+	humanoid.Died:Connect(function()
+		if not Settings.AntiGod or not Players.CharacterAutoLoads then
+			return
+		end
+
+		task.delay(Players.RespawnTime + RESPAWN_BUFFER, function()
+			if player.Parent and player.Character == character then
+				if addStrike(player, "GodMode", "did not respawn after death, forcing respawn") then
+					return
+				end
+				player:LoadCharacter()
+			end
+		end)
+	end)
+end
+
+local function checkRootJoint(player, character, humanoid)
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return
+	end
+
+	local joint
+	if humanoid.RigType == Enum.HumanoidRigType.R15 then
+		local lowerTorso = character:FindFirstChild("LowerTorso")
+		joint = lowerTorso and lowerTorso:FindFirstChild("Root")
+	else
+		joint = rootPart:FindFirstChild("RootJoint")
+	end
+
+	local valid = joint and joint:IsA("Motor6D") and joint.Part0 and joint.Part1
+	if not valid then
+		if addStrike(player, "RootJointDeletion", "RootJoint missing or disconnected") then
+			return
+		end
+		humanoid.Health = 0
+	end
+end
+
+local function checkMultiTool(player, character, humanoid)
+	local state = playerState[player]
+	if not state then
+		return
+	end
+
+	local equipped = 0
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("Tool") then
+			equipped += 1
+		end
+	end
+
+	if equipped <= 1 then
+		state.multiToolChecks = 0
+		return
+	end
+
+	state.multiToolChecks += 1
+	if state.multiToolChecks < 2 then
+		return
+	end
+
+	state.multiToolChecks = 0
+	if addStrike(player, "MultiTool", equipped .. " tools equipped at once") then
+		return
+	end
+	humanoid:UnequipTools()
+end
+
+local function findHopperBin(container)
+	if not container then
+		return nil
+	end
+
+	for _, child in ipairs(container:GetChildren()) do
+		if child:IsA("HopperBin") then
+			return child
+		end
+	end
+
+	return nil
+end
+
+local function checkBuildingTools(player, character)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	local bin = findHopperBin(backpack) or findHopperBin(character)
+	if not bin then
+		return
+	end
+
+	local name = bin.Name
+	bin:Destroy()
+	addStrike(player, "BuildingTools", "HopperBin '" .. name .. "' present")
+end
+
+local function runExtraChecks(player, character, humanoid)
+	if Settings.AntiRootJointDeletion then
+		checkRootJoint(player, character, humanoid)
+	end
+
+	if humanoid.Health > 0 and Settings.AntiMultiTool then
+		checkMultiTool(player, character, humanoid)
+	end
+
+	if humanoid.Health > 0 and Settings.AntiBuildingTools then
+		checkBuildingTools(player, character)
+	end
+end
+
+local function updateGroundTracking(player)
+	if not Settings.AntiFly then
+		return
+	end
+
+	local state = playerState[player]
+	if not state then
+		return
+	end
+
+	local character, rootPart, humanoid = getParts(player)
+	if not character or isSeated(humanoid) then
+		return
+	end
+
+	if underExternalForce(rootPart, humanoid) then
+		return
+	end
+
+	local now = os.clock()
+	if getFloor(character, rootPart, humanoid) or isClimbingOrSwimming(humanoid) then
+		state.lastGroundPos = rootPart.Position
+		state.airborneSince = nil
+	elseif not state.airborneSince and now >= state.flightUntil and now >= state.jumpUntil then
+		state.airborneSince = now
+	end
+end
+
+local function checkPlayer(player, humanoidModels)
+	local state = playerState[player]
+	if not state then
+		return
+	end
+
+	local character, rootPart, humanoid = getParts(player)
+	if not character then
+		return
+	end
+
+	runExtraChecks(player, character, humanoid)
+	if humanoid.Health <= 0 then
+		return
+	end
+
+	local now = os.clock()
+	local position = rootPart.Position
+	local floor = getFloor(character, rootPart, humanoid)
+
+	if isSeated(humanoid) then
+		state.wasSeated = true
+		resetTracking(state, position, floor)
+		return
+	end
+
+	if state.wasSeated then
+		state.wasSeated = false
+		state.flightUntil = now + 1.25
+		state.speedUntil = now + 1.25
+		resetTracking(state, position, floor)
+		return
+	end
+
+	if now < state.teleportUntil or underExternalForce(rootPart, humanoid) or not state.lastPosition then
+		resetTracking(state, position, floor)
+		return
+	end
+
+	local dt = now - state.lastCheck
+	if dt <= 0 then
+		return
+	end
+
+	local delta = position - state.lastPosition
+	if floor and floor == state.floorPart and floor.Anchored then
+		delta = delta - (floor.Position - state.floorPos)
+	end
+
+	local horizontalSpeed = Vector3.new(delta.X, 0, delta.Z).Magnitude / dt
+	local verticalSpeed = delta.Y / dt
+	local speedLimit = getSpeedLimit(player, humanoid)
+
+	if Settings.AntiSpeed and now >= state.speedUntil and horizontalSpeed > speedLimit then
+		local detail = string.format("%.1f studs/s (limit %.1f)", horizontalSpeed, speedLimit)
+		if addStrike(player, "SpeedHack", detail) then
+			return
+		end
+	end
+
+	local airGrant = now < state.flightUntil or now < state.jumpUntil
+	if Settings.AntiFly and not airGrant then
+		if verticalSpeed > MAX_VERTICAL_SPEED then
+			local detail = string.format("vertical speed %.1f studs/s", verticalSpeed)
+			if addStrike(player, "FlyHack", detail) then
+				return
+			end
+		end
+
+		if state.airborneSince and state.lastGroundPos then
+			local airtime = now - state.airborneSince
+			local height = position.Y - state.lastGroundPos.Y
+
+			if airtime > MAX_AIRTIME and height > MAX_FLY_HEIGHT then
+				local detail = string.format("airborne %.1fs at +%.1f studs", airtime, height)
+				if addStrike(player, "FlyHack", detail) then
+					return
+				end
+				state.airborneSince = now
+			end
+		end
+	end
+
+	local steady = dt <= CHECK_INTERVAL * 2 and horizontalSpeed <= speedLimit
+	if Settings.AntiNoclip and steady then
+		local blocked, hitName = pathObstructed(character, rootPart, state.lastPosition, position, humanoidModels)
+		if blocked then
+			if addStrike(player, "Noclip", "passed through '" .. tostring(hitName) .. "'") then
+				return
+			end
+			humanoid.Health = 0
+			return
+		end
+	end
+
+	state.lastPosition = position
+	state.lastCheck = now
+	state.floorPart = floor
+	state.floorPos = floor and floor.Position
+end
+
+local AntiCheatAPI = {
+	Settings = Settings,
+}
+
+function AntiCheatAPI.GrantTemporaryFlight(player, duration)
+	local state = playerState[player]
+	if state then
+		state.flightUntil = os.clock() + duration
+	end
+end
+
+function AntiCheatAPI.GrantTemporarySpeedBoost(player, duration)
+	local state = playerState[player]
+	if state then
+		state.speedUntil = os.clock() + duration
+	end
+end
+
+function AntiCheatAPI.GrantTemporaryTeleport(player, duration)
+	local state = playerState[player]
+	if not state then
+		return
+	end
+
+	state.teleportUntil = os.clock() + duration
+
+	local character = player.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	if rootPart then
+		resetTracking(state, rootPart.Position, nil)
+	end
+end
+
+_G.AntiCheatAPI = AntiCheatAPI
+
+local function setupCharacter(player, character)
+	if not character then
+		return
+	end
+
+	local state = playerState[player]
+	local rootPart = character:WaitForChild("HumanoidRootPart", 5)
+	if state and rootPart then
+		resetTracking(state, rootPart.Position, nil)
+	end
+
+	local humanoid = character:WaitForChild("Humanoid", 5)
+	if humanoid then
+		trackJumps(player, character, humanoid)
+		trackDeath(player, character, humanoid)
+	end
+end
+
+local function setupPlayer(player)
+	if playerState[player] then
+		return
+	end
+
+	playerState[player] = newState()
+	setupStrikes(player)
+
+	player.CharacterAdded:Connect(function(character)
+		setupCharacter(player, character)
+	end)
+
+	local existing = player.Character
+	if existing then
+		task.spawn(setupCharacter, player, existing)
+	end
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+
+Players.PlayerRemoving:Connect(function(player)
+	playerState[player] = nil
+	cleanupStrikes(player)
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+	setupPlayer(player)
+end
+
+local elapsed = 0
+
+RunService.Heartbeat:Connect(function(dt)
+	local players = Players:GetPlayers()
+
+	for _, player in ipairs(players) do
+		pcall(updateGroundTracking, player)
+	end
+
+	elapsed += dt
+	if elapsed < CHECK_INTERVAL then
+		return
+	end
+	elapsed = 0
+
+	local humanoidModels = {}
+	for _, child in ipairs(Workspace:GetChildren()) do
+		if child:FindFirstChildOfClass("Humanoid") then
+			table.insert(humanoidModels, child)
+		end
+	end
+
+	for _, player in ipairs(players) do
+		local ok, err = pcall(checkPlayer, player, humanoidModels)
+		if not ok then
+			warn("[Anti-Cheat] Error checking " .. player.Name:lower() .. " - " .. tostring(err))
+		end
+	end
+end)
