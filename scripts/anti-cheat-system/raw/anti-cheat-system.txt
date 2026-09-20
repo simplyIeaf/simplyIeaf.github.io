@@ -52,6 +52,11 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 rayParams.RespectCanCollide = true
 rayParams.IgnoreWater = true
 
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local terrain = Workspace.Terrain
+
 local function log(player, reason, extra)
 	if not LOG_FLAGS then
 		return
@@ -146,6 +151,41 @@ local function getFloor(character, rootPart, humanoid)
 	return result and result.Instance
 end
 
+local function nearTruss(character, rootPart)
+	overlapParams.FilterDescendantsInstances = { character }
+
+	for _, part in ipairs(Workspace:GetPartBoundsInRadius(rootPart.Position, 3, overlapParams)) do
+		if part:IsA("TrussPart") then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function inWater(rootPart)
+	local pos = rootPart.Position
+	local region = Region3.new(pos - Vector3.new(2, 3, 2), pos + Vector3.new(2, 1, 2)):ExpandToGrid(4)
+	local materials, occupancies = terrain:ReadVoxels(region, 4)
+	local size = materials.Size
+
+	for x = 1, size.X do
+		for y = 1, size.Y do
+			for z = 1, size.Z do
+				if materials[x][y][z] == Enum.Material.Water and occupancies[x][y][z] > 0 then
+					return true
+				end
+			end
+		end
+	end
+
+	return false
+end
+
+local function isSupported(character, rootPart, humanoid)
+	return getFloor(character, rootPart, humanoid) ~= nil or nearTruss(character, rootPart) or inWater(rootPart)
+end
+
 local function pathObstructed(character, rootPart, fromPos, toPos, models)
 	local direction = toPos - fromPos
 	local distance = direction.Magnitude
@@ -185,7 +225,11 @@ local function getSpeedLimit(player, humanoid)
 	return math.max(MAX_HORIZONTAL_SPEED, humanoid.WalkSpeed) * tolerance
 end
 
-local function underExternalForce(rootPart, humanoid)
+local function underExternalForce(character, rootPart)
+	if character:GetAttribute("Ragdolled") then
+		return true
+	end
+
 	for _, child in ipairs(rootPart:GetChildren()) do
 		if
 			child:IsA("BodyMover")
@@ -198,19 +242,11 @@ local function underExternalForce(rootPart, humanoid)
 		end
 	end
 
-	local hState = humanoid:GetState()
-	return hState == Enum.HumanoidStateType.Physics
-		or hState == Enum.HumanoidStateType.Ragdoll
-		or hState == Enum.HumanoidStateType.FallingDown
+	return false
 end
 
 local function isSeated(humanoid)
-	return humanoid.SeatPart ~= nil or humanoid:GetState() == Enum.HumanoidStateType.Seated
-end
-
-local function isClimbingOrSwimming(humanoid)
-	local hState = humanoid:GetState()
-	return hState == Enum.HumanoidStateType.Climbing or hState == Enum.HumanoidStateType.Swimming
+	return humanoid.SeatPart ~= nil
 end
 
 local function getParts(player)
@@ -294,16 +330,16 @@ local function trackJumps(player, character, humanoid)
 		end
 
 		local state = playerState[player]
-		if not state then
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if not state or not rootPart then
 			return
 		end
 
-		state.jumpUntil = os.clock() + 0.75
-
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if rootPart then
-			recordJump(player, state, rootPart)
+		if isSupported(character, rootPart, humanoid) then
+			state.jumpUntil = os.clock() + 0.75
 		end
+
+		recordJump(player, state, rootPart)
 	end)
 end
 
@@ -432,12 +468,12 @@ local function updateGroundTracking(player)
 		return
 	end
 
-	if underExternalForce(rootPart, humanoid) then
+	if underExternalForce(character, rootPart) then
 		return
 	end
 
 	local now = os.clock()
-	if getFloor(character, rootPart, humanoid) or isClimbingOrSwimming(humanoid) then
+	if isSupported(character, rootPart, humanoid) then
 		state.lastGroundPos = rootPart.Position
 		state.airborneSince = nil
 	elseif not state.airborneSince and now >= state.flightUntil and now >= state.jumpUntil then
@@ -479,7 +515,7 @@ local function checkPlayer(player, humanoidModels)
 		return
 	end
 
-	if now < state.teleportUntil or underExternalForce(rootPart, humanoid) or not state.lastPosition then
+	if now < state.teleportUntil or underExternalForce(character, rootPart) or not state.lastPosition then
 		resetTracking(state, position, floor)
 		return
 	end
