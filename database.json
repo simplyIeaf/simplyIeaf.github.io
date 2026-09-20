@@ -2388,9 +2388,9 @@
       "timezone": "Europe/Paris",
       "created": "2026-09-20T02:15:27.580Z",
       "sent": false,
-      "status": "scheduled",
+      "status": "cancelled",
       "sentTime": null,
-      "cancelled": false,
+      "cancelled": true,
       "isProcessing": false
     }
   }
