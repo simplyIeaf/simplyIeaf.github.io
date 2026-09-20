@@ -1111,13 +1111,13 @@
     "Anti-Cheat System": {
       "title": "Anti-Cheat System",
       "displayTitle": "Anti-Cheat System",
-      "visibility": "UNLISTED",
+      "visibility": "PUBLIC",
       "description": "",
       "expiration": null,
       "filename": "anti-cheat-system.txt",
-      "size": 15840,
-      "created": "2026-09-19T16:36:02.562Z",
-      "updated": "2026-09-19T16:36:02.563Z"
+      "size": 16580,
+      "created": "2026-09-20T10:43:25.758Z",
+      "updated": "2026-09-20T10:43:25.758Z"
     }
   },
   "bots": {
