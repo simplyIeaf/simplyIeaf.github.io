@@ -1,6 +1,7 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local Plyrs = game:GetService("Players")
+local rS = game:GetService("RunService")
+local sS = game:GetService("ServerStorage")
+local Wrkspc = game:GetService("Workspace")
 
 local Settings = {
 	AntiFly = false,
@@ -25,7 +26,7 @@ local LOG_FLAGS = true
 local STRIKE_LIMIT = 3
 local RESPAWN_BUFFER = 3
 local MAX_AIRTIME = 2.25
-local MAX_FLY_HEIGHT = 9
+local MAX_FLY_HEIGHT = 4
 local DEFAULT_HIP_HEIGHT = 3.5
 
 local IDLE_SAMPLES = 5
@@ -33,7 +34,7 @@ local IDLE_INTERVAL_SPREAD = 0.05
 local IDLE_MIN_GAP = 1.5
 local IDLE_MOVE_LIMIT = 4
 
-local STRIKE_PREFIX = "AntiCheatStrike_"
+local STRIKE_TOTAL_LIMIT = 8
 local STRIKE_REASONS = {
 	"SpeedHack",
 	"FlyHack",
@@ -45,117 +46,139 @@ local STRIKE_REASONS = {
 	"GodMode",
 }
 
-local playerState = {}
+local pS = {}
 
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Exclude
-rayParams.RespectCanCollide = true
-rayParams.IgnoreWater = true
+local rP = RaycastParams.new()
+rP.FilterType = Enum.RaycastFilterType.Exclude
+rP.RespectCanCollide = true
+rP.IgnoreWater = true
 
-local overlapParams = OverlapParams.new()
-overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+local oP = OverlapParams.new()
+oP.FilterType = Enum.RaycastFilterType.Exclude
 
-local terrain = Workspace.Terrain
+local trrn = Wrkspc.Terrain
 
-local function log(player, reason, extra)
+local function log(plyr, rsn, extr)
 	if not LOG_FLAGS then
 		return
 	end
 
-	local msg = "[Anti-Cheat] " .. reason .. " detected for " .. player.Name:lower()
-	if extra then
-		msg = msg .. " - " .. extra
+	local msg = "[Anti-Cheat] " .. rsn .. " detected for " .. plyr.Name:lower()
+	if extr then
+		msg = msg .. " - " .. extr
 	end
 	warn(msg)
 end
 
-local function readStrike(value)
-	local count, last = value.Value:match("^(%d+)|(.+)$")
-	return tonumber(count) or 0, tonumber(last) or 0
+local function jttr(vl, sprd)
+	return vl * (1 + (math.random() * 2 - 1) * sprd)
 end
 
-local function writeStrike(value, count, last)
-	value.Value = string.format("%d|%.3f", count, last)
+local sR = Instance.new("Folder")
+sR.Name = "AntiCheatStrikes"
+sR.Parent = sS
+
+local function rSt(vl)
+	local cnt, lst, total = vl.Value:match("^(%d+)|([^|]+)|(%d+)$")
+	return tonumber(cnt) or 0, tonumber(lst) or 0, tonumber(total) or 0
 end
 
-local function getStrikeValue(player, reason)
-	local name = STRIKE_PREFIX .. reason
-	local value = player:FindFirstChild(name)
+local function wS(vl, cnt, lst, total)
+	vl.Value = string.format("%d|%.3f|%d", cnt, lst, total)
+end
 
-	if not value then
-		value = Instance.new("StringValue")
-		value.Name = name
-		value.Value = "0|0"
-		value.Parent = player
+local function gSF(plyr)
+	local nm = tostring(plyr.UserId)
+	local fldr = sR:FindFirstChild(nm)
+
+	if not fldr then
+		fldr = Instance.new("Folder")
+		fldr.Name = nm
+		fldr.Parent = sR
 	end
 
-	return value
+	return fldr
 end
 
-local function cleanupStrikes(player)
-	for _, child in ipairs(player:GetChildren()) do
-		if child:IsA("StringValue") and child.Name:sub(1, #STRIKE_PREFIX) == STRIKE_PREFIX then
-			child:Destroy()
-		end
+local function gSV(plyr, rsn)
+	local fldr = gSF(plyr)
+	local vl = fldr:FindFirstChild(rsn)
+
+	if not vl then
+		vl = Instance.new("StringValue")
+		vl.Name = rsn
+		vl.Value = "0|0|0"
+		vl.Parent = fldr
+	end
+
+	return vl
+end
+
+local function cS(plyr)
+	local fldr = sR:FindFirstChild(tostring(plyr.UserId))
+	if fldr then
+		fldr:Destroy()
 	end
 end
 
-local function setupStrikes(player)
-	cleanupStrikes(player)
+local function sSt(plyr)
+	cS(plyr)
 
-	for _, reason in ipairs(STRIKE_REASONS) do
-		getStrikeValue(player, reason)
+	for _, rsn in ipairs(STRIKE_REASONS) do
+		gSV(plyr, rsn)
 	end
 end
 
-local function addStrike(player, reason, extra)
-	if not playerState[player] then
+local function aS(plyr, rsn, extr)
+	if not pS[plyr] then
 		return false
 	end
 
-	local value = getStrikeValue(player, reason)
-	local count, last = readStrike(value)
+	local vl = gSV(plyr, rsn)
+	local cnt, lst, total = rSt(vl)
 	local now = os.clock()
 
-	if now - last > 30 then
-		count = 0
+	if now - lst > 30 then
+		cnt = 0
 	end
 
-	count += 1
-	log(player, reason, extra)
+	cnt += 1
+	total += 1
+	log(plyr, rsn, extr)
 
-	if count >= STRIKE_LIMIT then
+	if cnt >= STRIKE_LIMIT or total >= STRIKE_TOTAL_LIMIT then
 		if ENABLE_KICK then
-			writeStrike(value, count, now)
-			playerState[player] = nil
-			player:Kick("[Anti-Cheat] " .. reason .. " detected")
+			wS(vl, cnt, now, total)
+			pS[plyr] = nil
+			plyr:Kick("[Anti-Cheat] " .. rsn .. " detected")
 			return true
 		end
 
-		warn("[Anti-Cheat] " .. reason .. " detected for " .. player.Name:lower() .. " - kick skipped (kick disabled)")
-		count = 0
+		warn("[Anti-Cheat] " .. rsn .. " detected for " .. plyr.Name:lower() .. " - kick skipped (kick disabled)")
+		cnt = 0
+		total = 0
 	end
 
-	writeStrike(value, count, now)
+	wS(vl, cnt, now, total)
 	return false
 end
 
-local function getFloor(character, rootPart, humanoid)
-	rayParams.FilterDescendantsInstances = { character }
-	rayParams.CollisionGroup = rootPart.CollisionGroup
+local function gF(chrctr, rPa, humanoid)
+	rP.FilterDescendantsInstances = { chrctr }
+	rP.CollisionGroup = rPa.CollisionGroup
 
-	local hipHeight = humanoid.HipHeight > 0 and humanoid.HipHeight or DEFAULT_HIP_HEIGHT
-	local length = rootPart.Size.Y / 2 + hipHeight + 1
-	local result = Workspace:Raycast(rootPart.Position, Vector3.new(0, -length, 0), rayParams)
+	local hH = humanoid.HipHeight > 0 and humanoid.HipHeight or DEFAULT_HIP_HEIGHT
+	local lngth = rPa.Size.Y / 2 + hH + 1
+	local rslt = Wrkspc:Raycast(rPa.Position, Vector3.new(0, -lngth, 0), rP)
 
-	return result and result.Instance
+	return rslt and rslt.Instance
 end
 
-local function nearTruss(character, rootPart)
-	overlapParams.FilterDescendantsInstances = { character }
+local function nT(chrctr, rPa)
+	oP.FilterDescendantsInstances = { chrctr }
 
-	for _, part in ipairs(Workspace:GetPartBoundsInRadius(rootPart.Position, 3, overlapParams)) do
-		if part:IsA("TrussPart") then
+	for _, prt in ipairs(Wrkspc:GetPartBoundsInRadius(rPa.Position, 3, oP)) do
+		if prt:IsA("TrussPart") then
 			return true
 		end
 	end
@@ -163,16 +186,16 @@ local function nearTruss(character, rootPart)
 	return false
 end
 
-local function inWater(rootPart)
-	local pos = rootPart.Position
-	local region = Region3.new(pos - Vector3.new(2, 3, 2), pos + Vector3.new(2, 1, 2)):ExpandToGrid(4)
-	local materials, occupancies = terrain:ReadVoxels(region, 4)
-	local size = materials.Size
+local function iW(rPa)
+	local pos = rPa.Position
+	local rgn = Region3.new(pos - Vector3.new(2, 3, 2), pos + Vector3.new(2, 1, 2)):ExpandToGrid(4)
+	local mtrls, occupancies = trrn:ReadVoxels(rgn, 4)
+	local sz = mtrls.Size
 
-	for x = 1, size.X do
-		for y = 1, size.Y do
-			for z = 1, size.Z do
-				if materials[x][y][z] == Enum.Material.Water and occupancies[x][y][z] > 0 then
+	for x = 1, sz.X do
+		for y = 1, sz.Y do
+			for z = 1, sz.Z do
+				if mtrls[x][y][z] == Enum.Material.Water and occupancies[x][y][z] > 0 then
 					return true
 				end
 			end
@@ -182,61 +205,61 @@ local function inWater(rootPart)
 	return false
 end
 
-local function isSupported(character, rootPart, humanoid)
-	return getFloor(character, rootPart, humanoid) ~= nil or nearTruss(character, rootPart) or inWater(rootPart)
+local function iS(chrctr, rPa, humanoid)
+	return gF(chrctr, rPa, humanoid) ~= nil or nT(chrctr, rPa) or iW(rPa)
 end
 
-local function pathObstructed(character, rootPart, fromPos, toPos, models)
-	local direction = toPos - fromPos
-	local distance = direction.Magnitude
-	if distance < 0.1 then
+local function pO(chrctr, rPa, fP, tP, mdls)
+	local drctn = tP - fP
+	local dstnc = drctn.Magnitude
+	if dstnc < 0.1 then
 		return false
 	end
 
-	local ignore = { character }
-	for _, model in ipairs(models) do
-		if model ~= character then
-			table.insert(ignore, model)
+	local ignr = { chrctr }
+	for _, mdl in ipairs(mdls) do
+		if mdl ~= chrctr then
+			table.insert(ignr, mdl)
 		end
 	end
 
-	rayParams.FilterDescendantsInstances = ignore
-	rayParams.CollisionGroup = rootPart.CollisionGroup
+	rP.FilterDescendantsInstances = ignr
+	rP.CollisionGroup = rPa.CollisionGroup
 
-	local result = Workspace:Raycast(fromPos, direction, rayParams)
-	if result and (result.Position - fromPos).Magnitude < distance - 0.5 then
-		return true, result.Instance.Name
+	local rslt = Wrkspc:Raycast(fP, drctn, rP)
+	if rslt and (rslt.Position - fP).Magnitude < dstnc - 0.5 then
+		return true, rslt.Instance.Name
 	end
 
 	return false
 end
 
-local function getSpeedLimit(player, humanoid)
-	local tolerance = BASE_LAG_TOLERANCE
+local function gSL(plyr, humanoid)
+	local tlrnc = BASE_LAG_TOLERANCE
 
 	local ok, ping = pcall(function()
-		return player:GetNetworkPing()
+		return plyr:GetNetworkPing()
 	end)
 
 	if ok and type(ping) == "number" then
-		tolerance = math.min(tolerance + ping * PING_TOLERANCE_SCALE, MAX_LAG_TOLERANCE)
+		tlrnc = math.min(tlrnc + ping * PING_TOLERANCE_SCALE, MAX_LAG_TOLERANCE)
 	end
 
-	return math.max(MAX_HORIZONTAL_SPEED, humanoid.WalkSpeed) * tolerance
+	return math.max(MAX_HORIZONTAL_SPEED, humanoid.WalkSpeed) * tlrnc
 end
 
-local function underExternalForce(character, rootPart)
-	if character:GetAttribute("Ragdolled") then
+local function uEF(chrctr, rPa)
+	if chrctr:GetAttribute("Ragdolled") then
 		return true
 	end
 
-	for _, child in ipairs(rootPart:GetChildren()) do
+	for _, chld in ipairs(rPa:GetChildren()) do
 		if
-			child:IsA("BodyMover")
-			or child:IsA("LinearVelocity")
-			or child:IsA("VectorForce")
-			or child:IsA("AlignPosition")
-			or child:IsA("AlignOrientation")
+			chld:IsA("BodyMover")
+			or chld:IsA("LinearVelocity")
+			or chld:IsA("VectorForce")
+			or chld:IsA("AlignPosition")
+			or chld:IsA("AlignOrientation")
 		then
 			return true
 		end
@@ -245,26 +268,26 @@ local function underExternalForce(character, rootPart)
 	return false
 end
 
-local function isSeated(humanoid)
+local function iSe(humanoid)
 	return humanoid.SeatPart ~= nil
 end
 
-local function getParts(player)
-	local character = player.Character
-	if not character then
+local function gP(plyr)
+	local chrctr = plyr.Character
+	if not chrctr then
 		return nil
 	end
 
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not rootPart or not humanoid or humanoid.Health <= 0 then
+	local rPa = chrctr:FindFirstChild("HumanoidRootPart")
+	local humanoid = chrctr:FindFirstChildOfClass("Humanoid")
+	if not rPa or not humanoid or humanoid.Health <= 0 then
 		return nil
 	end
 
-	return character, rootPart, humanoid
+	return chrctr, rPa, humanoid
 end
 
-local function newState()
+local function nS()
 	return {
 		lastPosition = nil,
 		lastCheck = os.clock(),
@@ -282,293 +305,293 @@ local function newState()
 	}
 end
 
-local function resetTracking(state, position, floor)
-	state.lastPosition = position
-	state.lastCheck = os.clock()
-	state.lastGroundPos = position
-	state.airborneSince = nil
-	state.floorPart = floor
-	state.floorPos = floor and floor.Position
+local function rT(stt, pstn, flr)
+	stt.lastPosition = pstn
+	stt.lastCheck = os.clock()
+	stt.lastGroundPos = pstn
+	stt.airborneSince = nil
+	stt.floorPart = flr
+	stt.floorPos = flr and flr.Position
 end
 
-local function recordJump(player, state, rootPart)
-	local samples = state.jumpSamples
-	table.insert(samples, { time = os.clock(), pos = rootPart.Position })
+local function rJ(plyr, stt, rPa)
+	local smpls = stt.jumpSamples
+	table.insert(smpls, { time = os.clock(), pos = rPa.Position })
 
-	while #samples > IDLE_SAMPLES do
-		table.remove(samples, 1)
+	while #smpls > IDLE_SAMPLES do
+		table.remove(smpls, 1)
 	end
 
-	if not Settings.AntiAntiIdle or #samples < IDLE_SAMPLES then
+	if not Settings.AntiAntiIdle or #smpls < IDLE_SAMPLES then
 		return
 	end
 
-	local first = samples[1].pos
-	local last = samples[#samples].pos
-	local moved = (Vector3.new(last.X, 0, last.Z) - Vector3.new(first.X, 0, first.Z)).Magnitude
-	if moved > IDLE_MOVE_LIMIT then
+	local frst = smpls[1].pos
+	local lst = smpls[#smpls].pos
+	local mvd = (Vector3.new(lst.X, 0, lst.Z) - Vector3.new(frst.X, 0, frst.Z)).Magnitude
+	if mvd > IDLE_MOVE_LIMIT then
 		return
 	end
 
-	local minGap, maxGap = math.huge, 0
-	for i = 2, #samples do
-		local gap = samples[i].time - samples[i - 1].time
-		minGap = math.min(minGap, gap)
+	local mG, maxGap = math.huge, 0
+	for i = 2, #smpls do
+		local gap = smpls[i].time - smpls[i - 1].time
+		mG = math.min(mG, gap)
 		maxGap = math.max(maxGap, gap)
 	end
 
-	if minGap >= IDLE_MIN_GAP and maxGap - minGap <= IDLE_INTERVAL_SPREAD then
-		state.jumpSamples = {}
-		addStrike(player, "AntiIdle", string.format("stationary, jumping every ~%.2fs", (minGap + maxGap) / 2))
+	if mG >= IDLE_MIN_GAP and maxGap - mG <= IDLE_INTERVAL_SPREAD then
+		stt.jumpSamples = {}
+		aS(plyr, "AntiIdle", string.format("stationary, jumping every ~%.2fs", (mG + maxGap) / 2))
 	end
 end
 
-local function trackJumps(player, character, humanoid)
-	humanoid.StateChanged:Connect(function(_, newHumanoidState)
-		if newHumanoidState ~= Enum.HumanoidStateType.Jumping then
+local function tJ(plyr, chrctr, humanoid)
+	humanoid.StateChanged:Connect(function(_, nHS)
+		if nHS ~= Enum.HumanoidStateType.Jumping then
 			return
 		end
 
-		local state = playerState[player]
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if not state or not rootPart then
+		local stt = pS[plyr]
+		local rPa = chrctr:FindFirstChild("HumanoidRootPart")
+		if not stt or not rPa then
 			return
 		end
 
-		if isSupported(character, rootPart, humanoid) then
-			state.jumpUntil = os.clock() + 0.75
+		if iS(chrctr, rPa, humanoid) then
+			stt.jumpUntil = os.clock() + 0.75
 		end
 
-		recordJump(player, state, rootPart)
+		rJ(plyr, stt, rPa)
 	end)
 end
 
-local function trackDeath(player, character, humanoid)
+local function tD(plyr, chrctr, humanoid)
 	humanoid.Died:Connect(function()
-		if not Settings.AntiGod or not Players.CharacterAutoLoads then
+		if not Settings.AntiGod or not Plyrs.CharacterAutoLoads then
 			return
 		end
 
-		task.delay(Players.RespawnTime + RESPAWN_BUFFER, function()
-			if player.Parent and player.Character == character then
-				if addStrike(player, "GodMode", "did not respawn after death, forcing respawn") then
+		task.delay(Plyrs.RespawnTime + RESPAWN_BUFFER, function()
+			if plyr.Parent and plyr.Character == chrctr then
+				if aS(plyr, "GodMode", "did not respawn after death, forcing respawn") then
 					return
 				end
-				player:LoadCharacter()
+				plyr:LoadCharacter()
 			end
 		end)
 	end)
 end
 
-local function checkRootJoint(player, character, humanoid)
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then
+local function cRJ(plyr, chrctr, humanoid)
+	local rPa = chrctr:FindFirstChild("HumanoidRootPart")
+	if not rPa then
 		return
 	end
 
-	local joint
+	local jnt
 	if humanoid.RigType == Enum.HumanoidRigType.R15 then
-		local lowerTorso = character:FindFirstChild("LowerTorso")
-		joint = lowerTorso and lowerTorso:FindFirstChild("Root")
+		local lT = chrctr:FindFirstChild("LowerTorso")
+		jnt = lT and lT:FindFirstChild("Root")
 	else
-		joint = rootPart:FindFirstChild("RootJoint")
+		jnt = rPa:FindFirstChild("RootJoint")
 	end
 
-	local valid = joint and joint:IsA("Motor6D") and joint.Part0 and joint.Part1
-	if not valid then
-		if addStrike(player, "RootJointDeletion", "RootJoint missing or disconnected") then
+	local vld = jnt and jnt:IsA("Motor6D") and jnt.Part0 and jnt.Part1
+	if not vld then
+		if aS(plyr, "RootJointDeletion", "RootJoint missing or disconnected") then
 			return
 		end
 		humanoid.Health = 0
 	end
 end
 
-local function checkMultiTool(player, character, humanoid)
-	local state = playerState[player]
-	if not state then
+local function cMT(plyr, chrctr, humanoid)
+	local stt = pS[plyr]
+	if not stt then
 		return
 	end
 
-	local equipped = 0
-	for _, child in ipairs(character:GetChildren()) do
-		if child:IsA("Tool") then
-			equipped += 1
+	local eqppd = 0
+	for _, chld in ipairs(chrctr:GetChildren()) do
+		if chld:IsA("Tool") then
+			eqppd += 1
 		end
 	end
 
-	if equipped <= 1 then
-		state.multiToolChecks = 0
+	if eqppd <= 1 then
+		stt.multiToolChecks = 0
 		return
 	end
 
-	state.multiToolChecks += 1
-	if state.multiToolChecks < 2 then
+	stt.multiToolChecks += 1
+	if stt.multiToolChecks < 2 then
 		return
 	end
 
-	state.multiToolChecks = 0
-	if addStrike(player, "MultiTool", equipped .. " tools equipped at once") then
+	stt.multiToolChecks = 0
+	if aS(plyr, "MultiTool", eqppd .. " tools equipped at once") then
 		return
 	end
 	humanoid:UnequipTools()
 end
 
-local function findHopperBin(container)
-	if not container then
+local function fHB(cntnr)
+	if not cntnr then
 		return nil
 	end
 
-	for _, child in ipairs(container:GetChildren()) do
-		if child:IsA("HopperBin") then
-			return child
+	for _, chld in ipairs(cntnr:GetChildren()) do
+		if chld:IsA("HopperBin") then
+			return chld
 		end
 	end
 
 	return nil
 end
 
-local function checkBuildingTools(player, character)
-	local backpack = player:FindFirstChildOfClass("Backpack")
-	local bin = findHopperBin(backpack) or findHopperBin(character)
+local function cBT(plyr, chrctr)
+	local bckpck = plyr:FindFirstChildOfClass("Backpack")
+	local bin = fHB(bckpck) or fHB(chrctr)
 	if not bin then
 		return
 	end
 
-	local name = bin.Name
+	local nm = bin.Name
 	bin:Destroy()
-	addStrike(player, "BuildingTools", "HopperBin '" .. name .. "' present")
+	aS(plyr, "BuildingTools", "HopperBin '" .. nm .. "' present")
 end
 
-local function runExtraChecks(player, character, humanoid)
+local function rEC(plyr, chrctr, humanoid)
 	if Settings.AntiRootJointDeletion then
-		checkRootJoint(player, character, humanoid)
+		cRJ(plyr, chrctr, humanoid)
 	end
 
 	if humanoid.Health > 0 and Settings.AntiMultiTool then
-		checkMultiTool(player, character, humanoid)
+		cMT(plyr, chrctr, humanoid)
 	end
 
 	if humanoid.Health > 0 and Settings.AntiBuildingTools then
-		checkBuildingTools(player, character)
+		cBT(plyr, chrctr)
 	end
 end
 
-local function updateGroundTracking(player)
+local function uGT(plyr)
 	if not Settings.AntiFly then
 		return
 	end
 
-	local state = playerState[player]
-	if not state then
+	local stt = pS[plyr]
+	if not stt then
 		return
 	end
 
-	local character, rootPart, humanoid = getParts(player)
-	if not character or isSeated(humanoid) then
+	local chrctr, rPa, humanoid = gP(plyr)
+	if not chrctr or iSe(humanoid) then
 		return
 	end
 
-	if underExternalForce(character, rootPart) then
+	if uEF(chrctr, rPa) then
 		return
 	end
 
 	local now = os.clock()
-	if isSupported(character, rootPart, humanoid) then
-		state.lastGroundPos = rootPart.Position
-		state.airborneSince = nil
-	elseif not state.airborneSince and now >= state.flightUntil and now >= state.jumpUntil then
-		state.airborneSince = now
+	if iS(chrctr, rPa, humanoid) then
+		stt.lastGroundPos = rPa.Position
+		stt.airborneSince = nil
+	elseif not stt.airborneSince and now >= stt.flightUntil and now >= stt.jumpUntil then
+		stt.airborneSince = now
 	end
 end
 
-local function checkPlayer(player, humanoidModels)
-	local state = playerState[player]
-	if not state then
+local function cP(plyr, hM)
+	local stt = pS[plyr]
+	if not stt then
 		return
 	end
 
-	local character, rootPart, humanoid = getParts(player)
-	if not character then
+	local chrctr, rPa, humanoid = gP(plyr)
+	if not chrctr then
 		return
 	end
 
-	runExtraChecks(player, character, humanoid)
+	rEC(plyr, chrctr, humanoid)
 	if humanoid.Health <= 0 then
 		return
 	end
 
 	local now = os.clock()
-	local position = rootPart.Position
-	local floor = getFloor(character, rootPart, humanoid)
+	local pstn = rPa.Position
+	local flr = gF(chrctr, rPa, humanoid)
 
-	if isSeated(humanoid) then
-		state.wasSeated = true
-		resetTracking(state, position, floor)
+	if iSe(humanoid) then
+		stt.wasSeated = true
+		rT(stt, pstn, flr)
 		return
 	end
 
-	if state.wasSeated then
-		state.wasSeated = false
-		state.flightUntil = now + 1.25
-		state.speedUntil = now + 1.25
-		resetTracking(state, position, floor)
+	if stt.wasSeated then
+		stt.wasSeated = false
+		stt.flightUntil = now + 1.25
+		stt.speedUntil = now + 1.25
+		rT(stt, pstn, flr)
 		return
 	end
 
-	if now < state.teleportUntil or underExternalForce(character, rootPart) or not state.lastPosition then
-		resetTracking(state, position, floor)
+	if now < stt.teleportUntil or uEF(chrctr, rPa) or not stt.lastPosition then
+		rT(stt, pstn, flr)
 		return
 	end
 
-	local dt = now - state.lastCheck
+	local dt = now - stt.lastCheck
 	if dt <= 0 then
 		return
 	end
 
-	local delta = position - state.lastPosition
-	if floor and floor == state.floorPart and floor.Anchored then
-		delta = delta - (floor.Position - state.floorPos)
+	local dlt = pstn - stt.lastPosition
+	if flr and flr == stt.floorPart and flr.Anchored then
+		dlt = dlt - (flr.Position - stt.floorPos)
 	end
 
-	local horizontalSpeed = Vector3.new(delta.X, 0, delta.Z).Magnitude / dt
-	local verticalSpeed = delta.Y / dt
-	local speedLimit = getSpeedLimit(player, humanoid)
+	local hS = Vector3.new(dlt.X, 0, dlt.Z).Magnitude / dt
+	local vS = dlt.Y / dt
+	local sL = jttr(gSL(plyr, humanoid), 0.08)
 
-	if Settings.AntiSpeed and now >= state.speedUntil and horizontalSpeed > speedLimit then
-		local detail = string.format("%.1f studs/s (limit %.1f)", horizontalSpeed, speedLimit)
-		if addStrike(player, "SpeedHack", detail) then
+	if Settings.AntiSpeed and now >= stt.speedUntil and hS > sL then
+		local dtl = string.format("%.1f studs/s (limit %.1f)", hS, sL)
+		if aS(plyr, "SpeedHack", dtl) then
 			return
 		end
 	end
 
-	local airGrant = now < state.flightUntil or now < state.jumpUntil
-	if Settings.AntiFly and not airGrant then
-		if verticalSpeed > MAX_VERTICAL_SPEED then
-			local detail = string.format("vertical speed %.1f studs/s", verticalSpeed)
-			if addStrike(player, "FlyHack", detail) then
+	local aG = now < stt.flightUntil or now < stt.jumpUntil
+	if Settings.AntiFly and not aG then
+		if vS > MAX_VERTICAL_SPEED then
+			local dtl = string.format("vertical speed %.1f studs/s", vS)
+			if aS(plyr, "FlyHack", dtl) then
 				return
 			end
 		end
 
-		if state.airborneSince and state.lastGroundPos then
-			local airtime = now - state.airborneSince
-			local height = position.Y - state.lastGroundPos.Y
+		if stt.airborneSince and stt.lastGroundPos then
+			local artm = now - stt.airborneSince
+			local hght = pstn.Y - stt.lastGroundPos.Y
 
-			if airtime > MAX_AIRTIME and height > MAX_FLY_HEIGHT then
-				local detail = string.format("airborne %.1fs at +%.1f studs", airtime, height)
-				if addStrike(player, "FlyHack", detail) then
+			if artm > jttr(MAX_AIRTIME, 0.15) and hght > jttr(MAX_FLY_HEIGHT, 0.2) then
+				local dtl = string.format("airborne %.1fs at +%.1f studs", artm, hght)
+				if aS(plyr, "FlyHack", dtl) then
 					return
 				end
-				state.airborneSince = now
+				stt.airborneSince = now
 			end
 		end
 	end
 
-	local steady = dt <= CHECK_INTERVAL * 2 and horizontalSpeed <= speedLimit
-	if Settings.AntiNoclip and steady then
-		local blocked, hitName = pathObstructed(character, rootPart, state.lastPosition, position, humanoidModels)
-		if blocked then
-			if addStrike(player, "Noclip", "passed through '" .. tostring(hitName) .. "'") then
+	local stdy = dt <= CHECK_INTERVAL * 2 and hS <= sL
+	if Settings.AntiNoclip and stdy then
+		local blckd, hitName = pO(chrctr, rPa, stt.lastPosition, pstn, hM)
+		if blckd then
+			if aS(plyr, "Noclip", "passed through '" .. tostring(hitName) .. "'") then
 				return
 			end
 			humanoid.Health = 0
@@ -576,120 +599,122 @@ local function checkPlayer(player, humanoidModels)
 		end
 	end
 
-	state.lastPosition = position
-	state.lastCheck = now
-	state.floorPart = floor
-	state.floorPos = floor and floor.Position
+	stt.lastPosition = pstn
+	stt.lastCheck = now
+	stt.floorPart = flr
+	stt.floorPos = flr and flr.Position
 end
 
 local AntiCheatAPI = {
 	Settings = Settings,
 }
 
-function AntiCheatAPI.GrantTemporaryFlight(player, duration)
-	local state = playerState[player]
-	if state then
-		state.flightUntil = os.clock() + duration
+function AntiCheatAPI.GrantTemporaryFlight(plyr, drtn)
+	local stt = pS[plyr]
+	if stt then
+		stt.flightUntil = os.clock() + drtn
 	end
 end
 
-function AntiCheatAPI.GrantTemporarySpeedBoost(player, duration)
-	local state = playerState[player]
-	if state then
-		state.speedUntil = os.clock() + duration
+function AntiCheatAPI.GrantTemporarySpeedBoost(plyr, drtn)
+	local stt = pS[plyr]
+	if stt then
+		stt.speedUntil = os.clock() + drtn
 	end
 end
 
-function AntiCheatAPI.GrantTemporaryTeleport(player, duration)
-	local state = playerState[player]
-	if not state then
+function AntiCheatAPI.GrantTemporaryTeleport(plyr, drtn)
+	local stt = pS[plyr]
+	if not stt then
 		return
 	end
 
-	state.teleportUntil = os.clock() + duration
+	stt.teleportUntil = os.clock() + drtn
 
-	local character = player.Character
-	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-	if rootPart then
-		resetTracking(state, rootPart.Position, nil)
+	local chrctr = plyr.Character
+	local rPa = chrctr and chrctr:FindFirstChild("HumanoidRootPart")
+	if rPa then
+		rT(stt, rPa.Position, nil)
 	end
 end
 
 _G.AntiCheatAPI = AntiCheatAPI
 
-local function setupCharacter(player, character)
-	if not character then
+local function sC(plyr, chrctr)
+	if not chrctr then
 		return
 	end
 
-	local state = playerState[player]
-	local rootPart = character:WaitForChild("HumanoidRootPart", 5)
-	if state and rootPart then
-		resetTracking(state, rootPart.Position, nil)
+	local stt = pS[plyr]
+	local rPa = chrctr:WaitForChild("HumanoidRootPart", 5)
+	if stt and rPa then
+		rT(stt, rPa.Position, nil)
 	end
 
-	local humanoid = character:WaitForChild("Humanoid", 5)
+	local humanoid = chrctr:WaitForChild("Humanoid", 5)
 	if humanoid then
-		trackJumps(player, character, humanoid)
-		trackDeath(player, character, humanoid)
+		tJ(plyr, chrctr, humanoid)
+		tD(plyr, chrctr, humanoid)
 	end
 end
 
-local function setupPlayer(player)
-	if playerState[player] then
+local function sP(plyr)
+	if pS[plyr] then
 		return
 	end
 
-	playerState[player] = newState()
-	setupStrikes(player)
+	pS[plyr] = nS()
+	sSt(plyr)
 
-	player.CharacterAdded:Connect(function(character)
-		setupCharacter(player, character)
+	plyr.CharacterAdded:Connect(function(chrctr)
+		sC(plyr, chrctr)
 	end)
 
-	local existing = player.Character
-	if existing then
-		task.spawn(setupCharacter, player, existing)
+	local exstng = plyr.Character
+	if exstng then
+		task.spawn(sC, plyr, exstng)
 	end
 end
 
-Players.PlayerAdded:Connect(setupPlayer)
+Plyrs.PlayerAdded:Connect(sP)
 
-Players.PlayerRemoving:Connect(function(player)
-	playerState[player] = nil
-	cleanupStrikes(player)
+Plyrs.PlayerRemoving:Connect(function(plyr)
+	pS[plyr] = nil
+	cS(plyr)
 end)
 
-for _, player in ipairs(Players:GetPlayers()) do
-	setupPlayer(player)
+for _, plyr in ipairs(Plyrs:GetPlayers()) do
+	sP(plyr)
 end
 
-local elapsed = 0
+local elpsd = 0
+local nC = CHECK_INTERVAL
 
-RunService.Heartbeat:Connect(function(dt)
-	local players = Players:GetPlayers()
+rS.Heartbeat:Connect(function(dt)
+	local plyrs = Plyrs:GetPlayers()
 
-	for _, player in ipairs(players) do
-		pcall(updateGroundTracking, player)
+	for _, plyr in ipairs(plyrs) do
+		pcall(uGT, plyr)
 	end
 
-	elapsed += dt
-	if elapsed < CHECK_INTERVAL then
+	elpsd += dt
+	if elpsd < nC then
 		return
 	end
-	elapsed = 0
+	elpsd = 0
+	nC = jttr(CHECK_INTERVAL, 0.3)
 
-	local humanoidModels = {}
-	for _, child in ipairs(Workspace:GetChildren()) do
-		if child:FindFirstChildOfClass("Humanoid") then
-			table.insert(humanoidModels, child)
+	local hM = {}
+	for _, chld in ipairs(Wrkspc:GetChildren()) do
+		if chld:FindFirstChildOfClass("Humanoid") then
+			table.insert(hM, chld)
 		end
 	end
 
-	for _, player in ipairs(players) do
-		local ok, err = pcall(checkPlayer, player, humanoidModels)
+	for _, plyr in ipairs(plyrs) do
+		local ok, err = pcall(cP, plyr, hM)
 		if not ok then
-			warn("[Anti-Cheat] Error checking " .. player.Name:lower() .. " - " .. tostring(err))
+			warn("[Anti-Cheat] Error checking " .. plyr.Name:lower() .. " - " .. tostring(err))
 		end
 	end
 end)
