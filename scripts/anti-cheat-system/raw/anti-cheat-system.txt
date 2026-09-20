@@ -29,6 +29,15 @@ local MAX_AIRTIME = 2.25
 local MAX_FLY_HEIGHT = 4
 local DEFAULT_HIP_HEIGHT = 3.5
 
+local MAX_EFFECTIVE_HIP = 6
+local HARD_MAX_HSPEED = 120
+local HARD_MAX_VSPEED = 120
+local GRACE_VSPEED_MULT = 1.8
+local JUMP_GRACE_COOLDOWN = 1
+local WINDOW_SPAN = 3.5
+local WINDOW_TOLERANCE = 1.05
+local MAX_GRANT_DURATION = 8
+
 local IDLE_SAMPLES = 5
 local IDLE_INTERVAL_SPREAD = 0.05
 local IDLE_MIN_GAP = 1.5
@@ -168,6 +177,7 @@ local function gF(chrctr, rPa, humanoid)
 	rP.CollisionGroup = rPa.CollisionGroup
 
 	local hH = humanoid.HipHeight > 0 and humanoid.HipHeight or DEFAULT_HIP_HEIGHT
+	hH = math.min(hH, MAX_EFFECTIVE_HIP)
 	local lngth = rPa.Size.Y / 2 + hH + 1
 	local rslt = Wrkspc:Raycast(rPa.Position, Vector3.new(0, -lngth, 0), rP)
 
@@ -245,7 +255,8 @@ local function gSL(plyr, humanoid)
 		tlrnc = math.min(tlrnc + ping * PING_TOLERANCE_SCALE, MAX_LAG_TOLERANCE)
 	end
 
-	return math.max(MAX_HORIZONTAL_SPEED, humanoid.WalkSpeed) * tlrnc
+	local cW = math.min(math.max(MAX_HORIZONTAL_SPEED, humanoid.WalkSpeed), HARD_MAX_HSPEED)
+	return math.min(cW * tlrnc, HARD_MAX_HSPEED)
 end
 
 local function uEF(chrctr, rPa)
@@ -302,6 +313,9 @@ local function nS()
 		jumpUntil = 0,
 		jumpSamples = {},
 		wasSeated = false,
+		lastJumpGrace = 0,
+		windowStart = os.clock(),
+		windowDist = 0,
 	}
 end
 
@@ -312,6 +326,8 @@ local function rT(stt, pstn, flr)
 	stt.airborneSince = nil
 	stt.floorPart = flr
 	stt.floorPos = flr and flr.Position
+	stt.windowStart = os.clock()
+	stt.windowDist = 0
 end
 
 local function rJ(plyr, stt, rPa)
@@ -358,8 +374,10 @@ local function tJ(plyr, chrctr, humanoid)
 			return
 		end
 
-		if iS(chrctr, rPa, humanoid) then
-			stt.jumpUntil = os.clock() + 0.75
+		local now = os.clock()
+		if iS(chrctr, rPa, humanoid) and now - stt.lastJumpGrace >= JUMP_GRACE_COOLDOWN then
+			stt.jumpUntil = now + 0.75
+			stt.lastJumpGrace = now
 		end
 
 		rJ(plyr, stt, rPa)
@@ -564,15 +582,37 @@ local function cP(plyr, hM)
 		end
 	end
 
-	local aG = now < stt.flightUntil or now < stt.jumpUntil
-	if Settings.AntiFly and not aG then
-		if vS > MAX_VERTICAL_SPEED then
-			local dtl = string.format("vertical speed %.1f studs/s", vS)
-			if aS(plyr, "FlyHack", dtl) then
+	if now >= stt.speedUntil then
+		stt.windowDist = (stt.windowDist or 0) + Vector3.new(dlt.X, 0, dlt.Z).Magnitude
+	else
+		stt.windowStart = now
+		stt.windowDist = 0
+	end
+
+	local wSpn = now - (stt.windowStart or now)
+	if wSpn >= WINDOW_SPAN then
+		local avgS = stt.windowDist / math.max(wSpn, 0.01)
+		if Settings.AntiSpeed and now >= stt.speedUntil and avgS > sL * WINDOW_TOLERANCE then
+			local dtl = string.format("avg %.1f studs/s over %.1fs", avgS, wSpn)
+			if aS(plyr, "SpeedHack", dtl) then
 				return
 			end
 		end
+		stt.windowStart = now
+		stt.windowDist = 0
+	end
 
+	local aG = now < stt.flightUntil or now < stt.jumpUntil
+	local vC = math.min(aG and MAX_VERTICAL_SPEED * GRACE_VSPEED_MULT or MAX_VERTICAL_SPEED, HARD_MAX_VSPEED)
+
+	if Settings.AntiFly and vS > vC then
+		local dtl = string.format("vertical speed %.1f studs/s", vS)
+		if aS(plyr, "FlyHack", dtl) then
+			return
+		end
+	end
+
+	if Settings.AntiFly and not aG then
 		if stt.airborneSince and stt.lastGroundPos then
 			local artm = now - stt.airborneSince
 			local hght = pstn.Y - stt.lastGroundPos.Y
@@ -609,17 +649,23 @@ local AntiCheatAPI = {
 	Settings = Settings,
 }
 
+local function cGD(drtn)
+	return math.clamp(tonumber(drtn) or 0, 0, MAX_GRANT_DURATION)
+end
+
 function AntiCheatAPI.GrantTemporaryFlight(plyr, drtn)
 	local stt = pS[plyr]
 	if stt then
-		stt.flightUntil = os.clock() + drtn
+		stt.flightUntil = os.clock() + cGD(drtn)
 	end
 end
 
 function AntiCheatAPI.GrantTemporarySpeedBoost(plyr, drtn)
 	local stt = pS[plyr]
 	if stt then
-		stt.speedUntil = os.clock() + drtn
+		stt.speedUntil = os.clock() + cGD(drtn)
+		stt.windowStart = stt.speedUntil
+		stt.windowDist = 0
 	end
 end
 
@@ -629,7 +675,7 @@ function AntiCheatAPI.GrantTemporaryTeleport(plyr, drtn)
 		return
 	end
 
-	stt.teleportUntil = os.clock() + drtn
+	stt.teleportUntil = os.clock() + cGD(drtn)
 
 	local chrctr = plyr.Character
 	local rPa = chrctr and chrctr:FindFirstChild("HumanoidRootPart")
