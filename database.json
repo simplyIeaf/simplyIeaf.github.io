@@ -2378,6 +2378,20 @@
       "sentTime": "2026-09-10T08:01:04.671Z",
       "cancelled": false,
       "isProcessing": false
+    },
+    "bot_1789870527580": {
+      "id": "bot_1789870527580",
+      "title": "Anti-Cheat System",
+      "message": "ServerScriptService Script Link:\nhttps://simplyieaf.github.io/scripts/anti-cheat-system/",
+      "scheduled": true,
+      "scheduledTime": "2026-09-20T08:30:00.000Z",
+      "timezone": "Europe/Paris",
+      "created": "2026-09-20T02:15:27.580Z",
+      "sent": false,
+      "status": "scheduled",
+      "sentTime": null,
+      "cancelled": false,
+      "isProcessing": false
     }
   }
 }
