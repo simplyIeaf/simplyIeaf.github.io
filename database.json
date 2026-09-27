@@ -1118,6 +1118,17 @@
       "size": 15984,
       "created": "2026-09-20T21:04:51.613Z",
       "updated": "2026-09-20T21:04:51.616Z"
+    },
+    "Crafting System ServerScript": {
+      "title": "Crafting System ServerScript",
+      "displayTitle": "Crafting System ServerScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "crafting-system-serverscript.txt",
+      "size": 3064,
+      "created": "2026-09-27T15:48:37.827Z",
+      "updated": "2026-09-27T15:48:37.831Z"
     }
   },
   "bots": {
