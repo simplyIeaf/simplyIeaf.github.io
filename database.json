@@ -1129,6 +1129,17 @@
       "size": 3064,
       "created": "2026-09-27T15:48:37.827Z",
       "updated": "2026-09-27T15:48:37.831Z"
+    },
+    "Crafting System LocalScript": {
+      "title": "Crafting System LocalScript",
+      "displayTitle": "Crafting System LocalScript",
+      "visibility": "PUBLIC",
+      "description": "",
+      "expiration": null,
+      "filename": "crafting-system-localscript.txt",
+      "size": 19558,
+      "created": "2026-09-27T15:49:27.610Z",
+      "updated": "2026-09-27T15:49:27.610Z"
     }
   },
   "bots": {
