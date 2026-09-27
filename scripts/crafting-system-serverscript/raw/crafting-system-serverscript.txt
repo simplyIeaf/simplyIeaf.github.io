@@ -1,0 +1,119 @@
+local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local craftingFolder = ReplicatedStorage:WaitForChild("Crafting")
+local requestCraft = craftingFolder:WaitForChild("RequestCraft")
+local craftEvent = craftingFolder:WaitForChild("CraftEvent")
+
+local outputsFolder = ServerStorage:WaitForChild("Crafting")
+
+local recipes = {
+["Sword+Sword"] = "Sword"
+}
+
+local busy = {}
+local lastCraftAttempt = {}
+
+local function ownsTool(plr, tool)
+    if typeof(tool) ~= "Instance" then
+        return false
+    end
+    
+    if not tool:IsA("Tool") then
+        return false
+    end
+    
+    local backpack = plr:FindFirstChildOfClass("Backpack")
+    
+    if backpack and tool.Parent == backpack then
+        return true
+    end
+    
+    if plr.Character and tool.Parent == plr.Character then
+        return true
+    end
+    
+    return false
+end
+
+local function resolveRecipe(plr, toolA, toolB)
+    if toolA == toolB then
+        return false, "Those are the same tool"
+    end
+    
+    if not ownsTool(plr, toolA) or not ownsTool(plr, toolB) then
+        return false, "You don't have those tools"
+    end
+    
+    local outputName = recipes[toolA.Name .. "+" .. toolB.Name] or recipes[toolB.Name .. "+" .. toolA.Name]
+    
+    if not outputName then
+        return false, "Those don't combine into anything"
+    end
+    
+    local template = outputsFolder:FindFirstChild(outputName)
+    
+    if not template then
+        return false, "That recipe isn't ready yet"
+    end
+    
+    return true, outputName, template
+end
+
+craftEvent.OnServerEvent:Connect(function(plr, toolA, toolB)
+    local valid, outputName, template = resolveRecipe(plr, toolA, toolB)
+    
+    if not valid then
+        craftEvent:FireClient(plr, false, outputName)
+        return
+    end
+    
+    local textureId = template.TextureId
+    
+    craftEvent:FireClient(plr, true, "Will craft " .. outputName, textureId)
+end)
+
+requestCraft.OnServerInvoke = function(plr, toolA, toolB)
+    local now = os.clock()
+    
+    if lastCraftAttempt[plr.UserId] and now - lastCraftAttempt[plr.UserId] < 0.5 then
+        return false, "Slow down"
+    end
+    
+    if busy[plr.UserId] then
+        return false, "Still crafting"
+    end
+    
+    lastCraftAttempt[plr.UserId] = now
+    busy[plr.UserId] = true
+    
+    local valid, outputName, template = resolveRecipe(plr, toolA, toolB)
+    
+    if not valid then
+        busy[plr.UserId] = nil
+        return false, outputName
+    end
+    
+    local ok, err = pcall(function()
+        toolA:Destroy()
+        toolB:Destroy()
+        
+        local crafted = template:Clone()
+        crafted.Parent = plr:FindFirstChildOfClass("Backpack") or plr.Character
+    end)
+    
+    busy[plr.UserId] = nil
+    
+    if not ok then
+        warn(err)
+        return false, "Something went wrong"
+    end
+    
+    return true, "Crafted " .. outputName
+end
+
+Players.PlayerRemoving:Connect(function(plr)
+    busy[plr.UserId] = nil
+    lastCraftAttempt[plr.UserId] = nil
+end)
