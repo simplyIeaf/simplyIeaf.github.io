@@ -1,0 +1,661 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
+
+local craftingFolder = ReplicatedStorage:WaitForChild("Crafting")
+local requestCraft = craftingFolder:WaitForChild("RequestCraft")
+local craftEvent = craftingFolder:WaitForChild("CraftEvent")
+
+local connections = {}
+local screenGui
+local craftFrame
+local humanoidConnection
+local lastCraftToggle = 0
+
+local studTextureId = "rbxthumb://type=Asset&id=14905298664&w=150&h=150"
+local craftIconId = "293035200"
+
+local craftSlotTools = {nil, nil}
+local refreshInventoryGrid
+local updateOutputSlot
+
+local function createSquareButton(parent, iconId)
+    local button = Instance.new("ImageButton")
+    button.Size = UDim2.new(0, 96, 0, 96)
+    button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    button.ImageColor3 = Color3.fromRGB(60, 60, 60)
+    button.Image = studTextureId
+    button.ScaleType = Enum.ScaleType.Tile
+    button.TileSize = UDim2.new(0, 48, 0, 48)
+    button.Parent = parent
+    
+    local buttonAspect = Instance.new("UIAspectRatioConstraint")
+    buttonAspect.AspectRatio = 1
+    buttonAspect.Parent = button
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0.2, 0)
+    uiCorner.Parent = button
+    
+    local buttonStroke = Instance.new("UIStroke")
+    buttonStroke.Thickness = 4
+    buttonStroke.Color = Color3.new(0, 0, 0)
+    buttonStroke.Parent = button
+    
+    local icon = Instance.new("ImageLabel")
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    icon.Size = UDim2.new(0.65, 0, 0.65, 0)
+    icon.BackgroundTransparency = 1
+    icon.Image = "rbxthumb://type=Asset&id=" .. iconId .. "&w=150&h=150"
+    icon.Parent = button
+    
+    return button
+end
+
+local function createIconSlot(size)
+    local slot = Instance.new("TextButton")
+    slot.Size = UDim2.new(0, size, 0, size)
+    slot.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    slot.AutoButtonColor = false
+    slot.Text = ""
+    slot.ZIndex = 4
+    
+    local slotCorner = Instance.new("UICorner")
+    slotCorner.CornerRadius = UDim.new(0, 8)
+    slotCorner.Parent = slot
+    
+    local slotStroke = Instance.new("UIStroke")
+    slotStroke.Thickness = 3
+    slotStroke.Parent = slot
+    
+    local icon = Instance.new("ImageLabel")
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    icon.Size = UDim2.new(0, size - 16, 0, size - 16)
+    icon.BackgroundTransparency = 1
+    icon.ZIndex = 5
+    icon.Parent = slot
+    
+    return slot, icon
+end
+
+local function buildCraftingUI(parent)
+    local main = Instance.new("Frame")
+    main.Name = "CraftingFrame"
+    main.Size = UDim2.new(0, 700, 0, 550)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    main.Visible = false
+    main.ClipsDescendants = true
+    main.Parent = parent
+    
+    local mainStroke = Instance.new("UIStroke")
+    mainStroke.Thickness = 4
+    mainStroke.Parent = main
+    
+    local bgStuds = Instance.new("ImageLabel")
+    bgStuds.Size = UDim2.new(1, 0, 1, 0)
+    bgStuds.BackgroundTransparency = 1
+    bgStuds.Image = studTextureId
+    bgStuds.ImageColor3 = Color3.fromRGB(40, 40, 40)
+    bgStuds.ImageTransparency = 0.5
+    bgStuds.ScaleType = Enum.ScaleType.Tile
+    bgStuds.TileSize = UDim2.new(0, 50, 0, 50)
+    bgStuds.Parent = main
+    
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 50)
+    topBar.BackgroundColor3 = Color3.fromRGB(35, 150, 55)
+    topBar.BorderSizePixel = 0
+    topBar.ZIndex = 10
+    topBar.Parent = main
+    
+    local topStuds = Instance.new("ImageLabel")
+    topStuds.Size = UDim2.new(1, 0, 1, 0)
+    topStuds.BackgroundTransparency = 1
+    topStuds.Image = studTextureId
+    topStuds.ImageColor3 = Color3.fromRGB(25, 90, 35)
+    topStuds.ImageTransparency = 0.35
+    topStuds.ScaleType = Enum.ScaleType.Tile
+    topStuds.TileSize = UDim2.new(0, 50, 0, 50)
+    topStuds.ZIndex = 11
+    topStuds.Parent = topBar
+    
+    local topStroke = Instance.new("UIStroke")
+    topStroke.Thickness = 4
+    topStroke.Parent = topBar
+    
+    local titleText = Instance.new("TextLabel")
+    titleText.Size = UDim2.new(1, -50, 1, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = "Crafting"
+    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleText.Font = Enum.Font.FredokaOne
+    titleText.TextScaled = true
+    titleText.ZIndex = 12
+    titleText.Parent = topBar
+    
+    local titleConstraint = Instance.new("UITextSizeConstraint")
+    titleConstraint.MaxTextSize = 28
+    titleConstraint.MinTextSize = 8
+    titleConstraint.Parent = titleText
+    
+    local titlePadding = Instance.new("UIPadding")
+    titlePadding.PaddingTop = UDim.new(0, 8)
+    titlePadding.PaddingBottom = UDim.new(0, 8)
+    titlePadding.Parent = titleText
+    
+    local titleStroke = Instance.new("UIStroke")
+    titleStroke.Thickness = 3
+    titleStroke.Parent = titleText
+    
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 50, 1, 0)
+    closeBtn.Position = UDim2.new(1, -50, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(210, 25, 25)
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.FredokaOne
+    closeBtn.TextSize = 24
+    closeBtn.ZIndex = 13
+    closeBtn.Parent = topBar
+    
+    local closeStroke = Instance.new("UIStroke")
+    closeStroke.Thickness = 4
+    closeStroke.Color = Color3.new(0, 0, 0)
+    closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    closeStroke.Parent = closeBtn
+    
+    local closeTxtStroke = Instance.new("UIStroke")
+    closeTxtStroke.Thickness = 3
+    closeTxtStroke.Color = Color3.new(0, 0, 0)
+    closeTxtStroke.Parent = closeBtn
+    
+    table.insert(
+    connections,
+    closeBtn.Activated:Connect(function()
+        local now = os.clock()
+        
+        if now - lastCraftToggle < 0.25 then
+            return
+        end
+        
+        lastCraftToggle = now
+        main.Visible = false
+    end)
+    )
+    
+    local content = Instance.new("Frame")
+    content.Size = UDim2.new(1, 0, 1, -50)
+    content.Position = UDim2.new(0, 0, 0, 50)
+    content.BackgroundTransparency = 1
+    content.ZIndex = 2
+    content.Parent = main
+    
+    local leftPanel = Instance.new("Frame")
+    leftPanel.Size = UDim2.new(0.6, -5, 1, 0)
+    leftPanel.Position = UDim2.new(0, 0, 0, 0)
+    leftPanel.BackgroundTransparency = 1
+    leftPanel.ZIndex = 2
+    leftPanel.Parent = content
+    
+    local divider = Instance.new("Frame")
+    divider.Size = UDim2.new(0, 2, 1, -20)
+    divider.Position = UDim2.new(0.6, -1, 0, 10)
+    divider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    divider.BorderSizePixel = 0
+    divider.ZIndex = 3
+    divider.Parent = content
+    
+    local rightPanel = Instance.new("Frame")
+    rightPanel.Size = UDim2.new(0.4, -5, 1, 0)
+    rightPanel.Position = UDim2.new(0.6, 5, 0, 0)
+    rightPanel.BackgroundTransparency = 1
+    rightPanel.ZIndex = 2
+    rightPanel.Parent = content
+    
+    local grid = Instance.new("ScrollingFrame")
+    grid.Name = "InventoryGrid"
+    grid.Size = UDim2.new(1, 0, 1, 0)
+    grid.Position = UDim2.new(0, 0, 0, 0)
+    grid.BackgroundTransparency = 1
+    grid.BorderSizePixel = 0
+    grid.ScrollBarThickness = 8
+    grid.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+    grid.ScrollingDirection = Enum.ScrollingDirection.Y
+    grid.ScrollingEnabled = true
+    grid.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    grid.CanvasSize = UDim2.new(0, 0, 0, 0)
+    grid.ZIndex = 3
+    grid.Active = true
+    grid.Parent = leftPanel
+    
+    local gridLayout = Instance.new("UIGridLayout")
+    gridLayout.CellSize = UDim2.new(0, 76, 0, 76)
+    gridLayout.CellPadding = UDim2.new(0, 10, 0, 10)
+    gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    gridLayout.Parent = grid
+    
+    local gridPadding = Instance.new("UIPadding")
+    gridPadding.PaddingTop = UDim.new(0, 10)
+    gridPadding.PaddingLeft = UDim.new(0, 10)
+    gridPadding.PaddingRight = UDim.new(0, 10)
+    gridPadding.PaddingBottom = UDim.new(0, 10)
+    gridPadding.Parent = grid
+    
+    local craftBox = Instance.new("Frame")
+    craftBox.Size = UDim2.new(1, -30, 0, 320)
+    craftBox.AnchorPoint = Vector2.new(0.5, 0.5)
+    craftBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+    craftBox.BackgroundTransparency = 1
+    craftBox.ZIndex = 3
+    craftBox.Parent = rightPanel
+    
+    local inputRow = Instance.new("Frame")
+    inputRow.Size = UDim2.new(1, 0, 0, 90)
+    inputRow.Position = UDim2.new(0, 0, 0, 0)
+    inputRow.BackgroundTransparency = 1
+    inputRow.ZIndex = 4
+    inputRow.Parent = craftBox
+    
+    local inputRowLayout = Instance.new("UIListLayout")
+    inputRowLayout.FillDirection = Enum.FillDirection.Horizontal
+    inputRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    inputRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    inputRowLayout.Padding = UDim.new(0, 15)
+    inputRowLayout.Parent = inputRow
+    
+    local craftSlot1, craftIcon1 = createIconSlot(90)
+    craftSlot1.Parent = inputRow
+    
+    local craftSlot2, craftIcon2 = createIconSlot(90)
+    craftSlot2.Parent = inputRow
+    
+    local arrowLabel = Instance.new("TextLabel")
+    arrowLabel.Size = UDim2.new(1, 0, 0, 30)
+    arrowLabel.Position = UDim2.new(0, 0, 0, 95)
+    arrowLabel.BackgroundTransparency = 1
+    arrowLabel.Text = "V"
+    arrowLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    arrowLabel.Font = Enum.Font.FredokaOne
+    arrowLabel.TextSize = 22
+    arrowLabel.ZIndex = 4
+    arrowLabel.Parent = craftBox
+    
+    local outputSlot, outputIcon = createIconSlot(90)
+    outputSlot.AnchorPoint = Vector2.new(0.5, 0)
+    outputSlot.Position = UDim2.new(0.5, 0, 0, 130)
+    outputSlot.Parent = craftBox
+    
+    local outputValid = false
+    local lastPreviewA
+    local lastPreviewB
+    
+    local renderCraftSlot
+    local placeIntoCraftSlot
+    local clearCraftSlot
+    
+    renderCraftSlot = function(index)
+        local slotIcon = index == 1 and craftIcon1 or craftIcon2
+        local slotFrame = index == 1 and craftSlot1 or craftSlot2
+        local tool = craftSlotTools[index]
+        
+        if tool then
+            slotIcon.Image = tool.TextureId ~= "" and tool.TextureId or studTextureId
+            slotFrame.BackgroundColor3 = Color3.fromRGB(35, 120, 55)
+        else
+            slotIcon.Image = ""
+            slotFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        end
+    end
+    
+    updateOutputSlot = function()
+        if not craftSlotTools[1] or not craftSlotTools[2] then
+            outputValid = false
+            outputIcon.Image = ""
+            outputSlot.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            lastPreviewA = nil
+            lastPreviewB = nil
+            return
+        end
+        
+        if craftSlotTools[1] == lastPreviewA and craftSlotTools[2] == lastPreviewB then
+            return
+        end
+        
+        lastPreviewA = craftSlotTools[1]
+        lastPreviewB = craftSlotTools[2]
+        
+        outputValid = false
+        outputIcon.Image = ""
+        outputSlot.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        
+        craftEvent:FireServer(craftSlotTools[1], craftSlotTools[2])
+    end
+    
+    placeIntoCraftSlot = function(tool)
+        if craftSlotTools[1] == nil then
+            craftSlotTools[1] = tool
+        elseif craftSlotTools[2] == nil then
+            craftSlotTools[2] = tool
+        else
+            return
+        end
+        
+        renderCraftSlot(1)
+        renderCraftSlot(2)
+        refreshInventoryGrid()
+        updateOutputSlot()
+    end
+    
+    clearCraftSlot = function(index)
+        craftSlotTools[index] = nil
+        renderCraftSlot(index)
+        refreshInventoryGrid()
+        updateOutputSlot()
+    end
+    
+    refreshInventoryGrid = function()
+        for i = 1, 2 do
+            if craftSlotTools[i] and not craftSlotTools[i].Parent then
+                craftSlotTools[i] = nil
+                renderCraftSlot(i)
+            end
+        end
+        
+        for _, child in ipairs(grid:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        
+        local list = {}
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        
+        if backpack then
+            for _, item in ipairs(backpack:GetChildren()) do
+                if item:IsA("Tool") then
+                    table.insert(list, item)
+                end
+            end
+        end
+        
+        if player.Character then
+            for _, item in ipairs(player.Character:GetChildren()) do
+                if item:IsA("Tool") then
+                    table.insert(list, item)
+                end
+            end
+        end
+        
+        for _, tool in ipairs(list) do
+            if tool ~= craftSlotTools[1] and tool ~= craftSlotTools[2] then
+                local itemSlot, itemIcon = createIconSlot(76)
+                itemSlot.Parent = grid
+                itemIcon.Image = tool.TextureId ~= "" and tool.TextureId or studTextureId
+                
+                table.insert(
+                connections,
+                itemSlot.Activated:Connect(function()
+                    placeIntoCraftSlot(tool)
+                end)
+                )
+            end
+        end
+    end
+    
+    table.insert(
+    connections,
+    craftSlot1.Activated:Connect(function()
+        if craftSlotTools[1] then
+            clearCraftSlot(1)
+        end
+    end)
+    )
+    
+    table.insert(
+    connections,
+    craftSlot2.Activated:Connect(function()
+        if craftSlotTools[2] then
+            clearCraftSlot(2)
+        end
+    end)
+    )
+    
+    table.insert(
+    connections,
+    craftEvent.OnClientEvent:Connect(function(valid, message, textureId)
+        outputValid = valid
+        
+        if valid then
+            outputIcon.Image = textureId and textureId ~= "" and textureId or studTextureId
+            outputSlot.BackgroundColor3 = Color3.fromRGB(35, 120, 55)
+        else
+            outputIcon.Image = ""
+            outputSlot.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        end
+    end)
+    )
+    
+    table.insert(
+    connections,
+    outputSlot.Activated:Connect(function()
+        if not outputValid then
+            return
+        end
+        
+        if not craftSlotTools[1] or not craftSlotTools[2] then
+            return
+        end
+        
+        outputSlot.Active = false
+        
+        local success = requestCraft:InvokeServer(craftSlotTools[1], craftSlotTools[2])
+        
+        outputSlot.Active = true
+        
+        if success then
+            craftSlotTools[1] = nil
+            craftSlotTools[2] = nil
+            renderCraftSlot(1)
+            renderCraftSlot(2)
+            refreshInventoryGrid()
+            updateOutputSlot()
+        end
+    end)
+    )
+    
+    table.insert(
+    connections,
+    main:GetPropertyChangedSignal("Visible"):Connect(function()
+        if main.Visible then
+            refreshInventoryGrid()
+            updateOutputSlot()
+        end
+    end)
+    )
+    
+    return main
+end
+
+local function getTouchGuiDisplayOrder()
+    if not UserInputService.TouchEnabled then
+        return nil
+    end
+    
+    local touchGui = playerGui:FindFirstChild("TouchGui")
+    
+    if not touchGui then
+        touchGui = playerGui:WaitForChild("TouchGui", 3)
+    end
+    
+    if touchGui and touchGui:IsA("ScreenGui") then
+        return touchGui.DisplayOrder
+    end
+    
+    return nil
+end
+
+local function cleanupUI()
+    for _, connection in ipairs(connections) do
+        connection:Disconnect()
+    end
+    
+    table.clear(connections)
+    
+    if screenGui then
+        screenGui:Destroy()
+        screenGui = nil
+    end
+    
+    craftFrame = nil
+    craftSlotTools[1] = nil
+    craftSlotTools[2] = nil
+end
+
+local function createUI()
+    if craftFrame and craftFrame.Parent then
+        return
+    end
+    
+    if not screenGui then
+        screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "CraftingUI"
+        screenGui.IgnoreGuiInset = true
+        screenGui.ResetOnSpawn = false
+        
+        local touchDisplayOrder = getTouchGuiDisplayOrder()
+        
+        if touchDisplayOrder then
+            screenGui.DisplayOrder = touchDisplayOrder - 1
+        end
+        
+        screenGui.Parent = playerGui
+    end
+    
+    local uiScale = Instance.new("UIScale")
+    uiScale.Parent = screenGui
+    
+    local safeFrame = Instance.new("Frame")
+    safeFrame.Name = "SafeFrame"
+    safeFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    safeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    safeFrame.BackgroundTransparency = 1
+    safeFrame.Parent = screenGui
+    
+    local function update()
+        local vp = camera.ViewportSize
+        
+        if vp.X <= 0 or vp.Y <= 0 then
+            return
+        end
+        
+        local scale = math.min(
+        vp.X / 1920,
+        vp.Y / 1080
+        )
+        
+        uiScale.Scale = scale
+        
+        safeFrame.Size = UDim2.new(
+        0,
+        vp.X / scale,
+        0,
+        vp.Y / scale
+        )
+    end
+    
+    table.insert(
+    connections,
+    camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
+    )
+    
+    update()
+    
+    local sideContainer = Instance.new("Frame")
+    sideContainer.AnchorPoint = Vector2.new(1, 0.5)
+    sideContainer.Position = UDim2.new(1, -38, 0.5, 0)
+    sideContainer.Size = UDim2.new(0, 96, 0, 96)
+    sideContainer.BackgroundTransparency = 1
+    sideContainer.Parent = safeFrame
+    
+    local craftBtn = createSquareButton(
+    sideContainer,
+    craftIconId
+    )
+    
+    craftFrame = buildCraftingUI(safeFrame)
+    
+    table.insert(
+    connections,
+    craftBtn.Activated:Connect(function()
+        local now = os.clock()
+        
+        if now - lastCraftToggle < 0.5 then
+            return
+        end
+        
+        lastCraftToggle = now
+        craftFrame.Visible = not craftFrame.Visible
+    end)
+    )
+end
+
+local function watchInventoryChanges(character, backpack)
+    local function onToolChanged(item)
+        if not item:IsA("Tool") then
+            return
+        end
+        
+        if craftFrame and craftFrame.Visible then
+            refreshInventoryGrid()
+            updateOutputSlot()
+        end
+    end
+    
+    if backpack then
+        table.insert(connections, backpack.ChildAdded:Connect(onToolChanged))
+        table.insert(connections, backpack.ChildRemoved:Connect(onToolChanged))
+    end
+    
+    table.insert(connections, character.ChildAdded:Connect(onToolChanged))
+    table.insert(connections, character.ChildRemoved:Connect(onToolChanged))
+end
+
+local function onCharacterAdded(character)
+    task.wait(0.1)
+    
+    camera = workspace.CurrentCamera
+    
+    if humanoidConnection then
+        humanoidConnection:Disconnect()
+        humanoidConnection = nil
+    end
+    
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    humanoidConnection = humanoid.Died:Connect(function()
+        cleanupUI()
+    end)
+    
+    createUI()
+    
+    local backpack = player:WaitForChild("Backpack", 5)
+    
+    watchInventoryChanges(character, backpack)
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+createUI()
+
+if player.Character then
+    onCharacterAdded(player.Character)
+end
