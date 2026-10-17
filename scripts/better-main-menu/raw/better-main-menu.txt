@@ -1,0 +1,1005 @@
+local TITLE_TEXT = "my awesome game"
+local CreditsConfig = {
+{Username = "simplyIeaf", Role = "epic scripter"},
+{Username = "builderman", Role = "builder"},
+{Username = "Roblox", Role = "the guy himself"},
+}
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local studTextureId = "rbxthumb://type=Asset&id=14905298664&w=150&h=150"
+
+local screenGui
+local camera
+local menuCamPart
+local cameraConnection
+local characterConnection
+local isPlaying = false
+local isDay = true
+local graphicsIndex = 2
+local graphicsOptions = {"Low", "Medium", "High"}
+local hidePlayers = false
+local originalPlayerParts = {}
+local originalHumanoidSettings = {}
+local originalCoreGui = {}
+local originalCameraType
+local originalCameraSubject
+local originalCameraCFrame
+local originalClockTime = Lighting.ClockTime
+local originalGlobalShadows = Lighting.GlobalShadows
+local originalOutdoorAmbient = Lighting.OutdoorAmbient
+local blur
+local settingsPopup
+local creditsPopup
+local titleLabel
+local uiScale
+
+local function getCamera()
+    local current = Workspace.CurrentCamera
+    while not current do
+        Workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+        current = Workspace.CurrentCamera
+    end
+    camera = current
+    return camera
+end
+
+local function calculateUIScale()
+    local current = getCamera()
+    local viewport = current.ViewportSize
+    if viewport.X <= 0 or viewport.Y <= 0 then
+        return 1
+    end
+    return math.max(math.min(viewport.X / 1920, viewport.Y / 1080), 0.55)
+end
+
+local function safeSetCoreGui(coreType, enabled)
+    pcall(function()
+        StarterGui:SetCoreGuiEnabled(coreType, enabled)
+    end)
+end
+
+local function safeSetResetButton(enabled)
+    pcall(function()
+        StarterGui:SetCore("ResetButtonCallback", enabled)
+    end)
+end
+
+local function setCharacterLocked(character, locked)
+    if not character then
+        return
+    end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        humanoid = character:WaitForChild("Humanoid", 5)
+    end
+    if not humanoid then
+        return
+    end
+    if locked then
+        if not originalHumanoidSettings[humanoid] then
+            originalHumanoidSettings[humanoid] = {
+            WalkSpeed = humanoid.WalkSpeed,
+            JumpPower = humanoid.JumpPower,
+            JumpHeight = humanoid.JumpHeight,
+            UseJumpPower = humanoid.UseJumpPower,
+            AutoRotate = humanoid.AutoRotate,
+            PlatformStand = humanoid.PlatformStand
+            }
+        end
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        humanoid.JumpHeight = 0
+        humanoid.AutoRotate = false
+        humanoid.PlatformStand = true
+    else
+        local original = originalHumanoidSettings[humanoid]
+        if original then
+            humanoid.WalkSpeed = original.WalkSpeed
+            humanoid.JumpPower = original.JumpPower
+            humanoid.JumpHeight = original.JumpHeight
+            humanoid.UseJumpPower = original.UseJumpPower
+            humanoid.AutoRotate = original.AutoRotate
+            humanoid.PlatformStand = original.PlatformStand
+            originalHumanoidSettings[humanoid] = nil
+        else
+            humanoid.PlatformStand = false
+            humanoid.WalkSpeed = 16
+            humanoid.UseJumpPower = true
+            humanoid.JumpPower = 50
+        end
+    end
+end
+
+local function setCameraToMenu()
+    local current = getCamera()
+    menuCamPart = Workspace:FindFirstChild("MenuCamera")
+    if not menuCamPart then
+        menuCamPart = Workspace:WaitForChild("MenuCamera", 15)
+    end
+    if not menuCamPart or not menuCamPart:IsA("BasePart") then
+        warn("Main menu camera part 'MenuCamera' was not found in Workspace or is not a BasePart.")
+        return false
+    end
+    current.CameraType = Enum.CameraType.Scriptable
+    current.CFrame = menuCamPart.CFrame
+    current.Focus = menuCamPart.CFrame * CFrame.new(0, 0, -20)
+    if cameraConnection then
+        cameraConnection:Disconnect()
+        cameraConnection = nil
+    end
+    cameraConnection = RunService:BindToRenderStep("MainMenuCamera", Enum.RenderPriority.Camera.Value + 1, function()
+        if isPlaying then
+            return
+        end
+        local activeCamera = Workspace.CurrentCamera
+        if not activeCamera or not menuCamPart or not menuCamPart.Parent then
+            return
+        end
+        if activeCamera.CameraType ~= Enum.CameraType.Scriptable then
+            activeCamera.CameraType = Enum.CameraType.Scriptable
+        end
+        activeCamera.CFrame = menuCamPart.CFrame
+        activeCamera.Focus = menuCamPart.CFrame * CFrame.new(0, 0, -20)
+    end)
+    return true
+end
+
+local function stopMenuCamera()
+    pcall(function()
+        RunService:UnbindFromRenderStep("MainMenuCamera")
+    end)
+    cameraConnection = nil
+end
+
+local function makeCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 8)
+    corner.Parent = parent
+    return corner
+end
+
+local function makeStroke(parent, thickness, color)
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = thickness or 5
+    stroke.Color = color or Color3.new(0, 0, 0)
+    stroke.Transparency = 0
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = parent
+    return stroke
+end
+
+local function makeTextOutline(textObject, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Name = "TextOutline"
+    stroke.Color = Color3.new(0, 0, 0)
+    stroke.Thickness = thickness or 2.8
+    stroke.Transparency = 0
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+    stroke.Parent = textObject
+    return stroke
+end
+
+local function makeStudTexture(parent, color, transparency, tileSize)
+    local texture = Instance.new("ImageLabel")
+    texture.Name = "StudTexture"
+    texture.Size = UDim2.fromScale(1, 1)
+    texture.Position = UDim2.fromScale(0, 0)
+    texture.BackgroundTransparency = 1
+    texture.BorderSizePixel = 0
+    texture.Active = false
+    texture.Image = studTextureId
+    texture.ImageColor3 = color or Color3.fromRGB(70, 70, 70)
+    texture.ImageTransparency = transparency == nil and 0.55 or transparency
+    texture.ScaleType = Enum.ScaleType.Tile
+    texture.TileSize = UDim2.fromOffset(tileSize or 48, tileSize or 48)
+    texture.ZIndex = parent.ZIndex
+    texture.Parent = parent
+    return texture
+end
+
+local function makeText(parent, text, font, size, color)
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color or Color3.new(1, 1, 1)
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.TextStrokeTransparency = 1
+    label.Font = font or Enum.Font.FredokaOne
+    label.TextSize = size or 20
+    label.Parent = parent
+    makeTextOutline(label, 5)
+    return label
+end
+
+local function applyStudButton(button, baseColor, imageTransparency, tileSize)
+    local texture = Instance.new("ImageLabel")
+    texture.Name = "StudTexture"
+    texture.AnchorPoint = Vector2.new(0.5, 0.5)
+    texture.Position = UDim2.fromScale(0.5, 0.5)
+    texture.Size = UDim2.new(1, -8, 1, -8)
+    texture.BackgroundTransparency = 1
+    texture.BorderSizePixel = 0
+    texture.Active = false
+    texture.Image = studTextureId
+    texture.ImageColor3 = baseColor or button.BackgroundColor3
+    texture.ImageTransparency = imageTransparency == nil and 0.48 or imageTransparency
+    texture.ScaleType = Enum.ScaleType.Tile
+    texture.TileSize = UDim2.fromOffset(tileSize or 42, tileSize or 42)
+    texture.ZIndex = button.ZIndex + 1
+    texture.Parent = button
+    makeCorner(texture, 5)
+    
+    local textLayer = Instance.new("TextLabel")
+    textLayer.Name = "ButtonLabel"
+    textLayer.Size = UDim2.fromScale(1, 1)
+    textLayer.Position = UDim2.fromScale(0, 0)
+    textLayer.BackgroundTransparency = 1
+    textLayer.BorderSizePixel = 0
+    textLayer.Text = button.Text
+    textLayer.TextColor3 = button.TextColor3
+    textLayer.TextStrokeColor3 = Color3.new(0, 0, 0)
+    textLayer.TextStrokeTransparency = 1
+    textLayer.Font = button.Font
+    textLayer.TextSize = button.TextSize
+    textLayer.TextScaled = button.TextScaled
+    textLayer.TextWrapped = button.TextWrapped
+    textLayer.TextTruncate = button.TextTruncate
+    textLayer.TextXAlignment = button.TextXAlignment
+    textLayer.TextYAlignment = button.TextYAlignment
+    textLayer.Active = false
+    textLayer.ZIndex = button.ZIndex + 2
+    textLayer.Parent = button
+    makeTextOutline(textLayer, 2.8)
+    button.TextTransparency = 1
+    
+    local function syncText()
+        if not textLayer.Parent then
+            return
+        end
+        textLayer.Text = button.Text
+        textLayer.TextColor3 = button.TextColor3
+        textLayer.Font = button.Font
+        textLayer.TextSize = button.TextSize
+        textLayer.TextScaled = button.TextScaled
+        textLayer.TextWrapped = button.TextWrapped
+        textLayer.TextTruncate = button.TextTruncate
+        textLayer.TextXAlignment = button.TextXAlignment
+        textLayer.TextYAlignment = button.TextYAlignment
+    end
+    
+    button:GetPropertyChangedSignal("Text"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextColor3"):Connect(syncText)
+    button:GetPropertyChangedSignal("Font"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextSize"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextScaled"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextWrapped"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextTruncate"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextXAlignment"):Connect(syncText)
+    button:GetPropertyChangedSignal("TextYAlignment"):Connect(syncText)
+    
+    local scale = Instance.new("UIScale")
+    scale.Name = "InteractionScale"
+    scale.Scale = 1
+    scale.Parent = button
+    
+    local base = baseColor or button.BackgroundColor3
+    local function brighten(color, amount)
+        return Color3.new(
+        math.clamp(color.R + amount, 0, 1),
+        math.clamp(color.G + amount, 0, 1),
+        math.clamp(color.B + amount, 0, 1)
+        )
+    end
+    local hover = brighten(base, 0.12)
+    local function setColor(color)
+        base = color
+        hover = brighten(color, 0.12)
+        TweenService:Create(button, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = color
+        }):Play()
+        TweenService:Create(texture, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        ImageColor3 = color
+        }):Play()
+    end
+    
+    button.MouseEnter:Connect(function()
+        if button.Parent then
+            TweenService:Create(button, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = hover
+            }):Play()
+            TweenService:Create(texture, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            ImageColor3 = hover
+            }):Play()
+        end
+    end)
+    button.MouseLeave:Connect(function()
+        if button.Parent then
+            TweenService:Create(button, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = base
+            }):Play()
+            TweenService:Create(texture, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            ImageColor3 = base
+            }):Play()
+        end
+    end)
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if button.Parent then
+                TweenService:Create(button, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    BackgroundColor3 = brighten(base, 0.18)
+                }):Play()
+                TweenService:Create(texture, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    ImageColor3 = brighten(base, 0.18)
+                }):Play()
+            end
+        end
+    end)
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if button.Parent then
+                local targetColor = base
+                TweenService:Create(button, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    BackgroundColor3 = targetColor
+                }):Play()
+                TweenService:Create(texture, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    ImageColor3 = targetColor
+                }):Play()
+            end
+        end
+    end)
+    return setColor, texture, textLayer, scale
+end
+
+local function animatePopup(popup, show)
+    if not popup or not popup.Parent then
+        return
+    end
+    popup.Position = UDim2.fromScale(0.5, 0.5)
+    popup.GroupTransparency = 0
+    local scale = popup:FindFirstChild("PopupScale")
+    if scale then
+        scale.Scale = 1
+    end
+    popup.Visible = show
+end
+
+local function styleButton(button, color, textSize)
+    button.BackgroundColor3 = color
+    button.BorderSizePixel = 0
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextStrokeColor3 = Color3.new(0, 0, 0)
+    button.TextStrokeTransparency = 0
+    button.Font = Enum.Font.FredokaOne
+    button.TextSize = textSize or 20
+    button.AutoButtonColor = false
+    makeCorner(button, 7)
+    makeStroke(button, 3)
+    applyStudButton(button, color, 0.48, 42)
+end
+
+local function createPopup(popupTitle, height)
+    local popup = Instance.new("CanvasGroup")
+    popup.Name = popupTitle .. "Popup"
+    popup.Size = UDim2.fromOffset(500, height or 430)
+    popup.AnchorPoint = Vector2.new(0.5, 0.5)
+    popup.Position = UDim2.fromScale(0.5, 0.5)
+    popup.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    popup.Visible = false
+    popup.ClipsDescendants = true
+    popup.BackgroundTransparency = 0
+    popup.GroupTransparency = 0
+    popup.ZIndex = 20
+    popup.Parent = screenGui
+    local popupScale = Instance.new("UIScale")
+    popupScale.Name = "PopupScale"
+    popupScale.Scale = 1
+    popupScale.Parent = popup
+    makeStroke(popup, 4)
+    makeStudTexture(popup, Color3.fromRGB(40, 40, 40), 0.5, 50)
+    
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 50)
+    topBar.BackgroundColor3 = Color3.fromRGB(35, 150, 55)
+    topBar.BorderSizePixel = 0
+    topBar.ZIndex = 21
+    topBar.Parent = popup
+    makeStudTexture(topBar, Color3.fromRGB(25, 90, 35), 0.35, 50)
+    makeStroke(topBar, 4)
+    
+    local title = makeText(topBar, popupTitle, Enum.Font.FredokaOne, 28)
+    title.Size = UDim2.new(1, -60, 1, 0)
+    title.Position = UDim2.fromOffset(5, 0)
+    title.ZIndex = 22
+    title.TextScaled = false
+    local titleConstraint = Instance.new("UITextSizeConstraint")
+    titleConstraint.MaxTextSize = 28
+    titleConstraint.MinTextSize = 14
+    titleConstraint.Parent = title
+    
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.fromOffset(50, 50)
+    closeButton.Position = UDim2.new(1, -50, 0, 0)
+    closeButton.BackgroundColor3 = Color3.fromRGB(210, 25, 25)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.new(1, 1, 1)
+    closeButton.Font = Enum.Font.FredokaOne
+    closeButton.TextSize = 24
+    closeButton.ZIndex = 23
+    closeButton.Parent = topBar
+    makeCorner(closeButton, 4)
+    makeStroke(closeButton, 3)
+    applyStudButton(closeButton, Color3.fromRGB(210, 25, 25), 0.38, 34)
+    
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name = popupTitle .. "Scroll"
+    scroll.Size = UDim2.new(1, 0, 1, -50)
+    scroll.Position = UDim2.fromOffset(0, 50)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 8
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+    scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.CanvasSize = UDim2.new()
+    scroll.ElasticBehavior = Enum.ElasticBehavior.Always
+    scroll.Active = true
+    scroll.ZIndex = 22
+    scroll.Parent = popup
+    
+    local list = Instance.new("UIListLayout")
+    list.Padding = UDim.new(0, 15)
+    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    list.SortOrder = Enum.SortOrder.LayoutOrder
+    list.Parent = scroll
+    
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, 24)
+    padding.PaddingBottom = UDim.new(0, 24)
+    padding.PaddingLeft = UDim.new(0, 5)
+    padding.PaddingRight = UDim.new(0, 5)
+    padding.Parent = scroll
+    
+    local function close()
+        animatePopup(popup, false)
+    end
+    closeButton.Activated:Connect(close)
+    return popup, scroll, close
+end
+
+local function createSettingRow(parent, labelText, height)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(0.9, 0, 0, height or 60)
+    row.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    row.BorderSizePixel = 0
+    row.ZIndex = 23
+    row.Parent = parent
+    makeCorner(row, 8)
+    makeStroke(row, 3)
+    makeStudTexture(row, Color3.fromRGB(48, 48, 48), 0.62, 42)
+    row.MouseEnter:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = Color3.fromRGB(43, 43, 43)
+        }):Play()
+    end)
+    row.MouseLeave:Connect(function()
+        TweenService:Create(row, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        }):Play()
+    end)
+    
+    local label = makeText(row, labelText, Enum.Font.FredokaOne, 20)
+    label.Size = UDim2.new(0.5, -10, 1, 0)
+    label.Position = UDim2.fromOffset(15, 0)
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 24
+    return row
+end
+
+local function createToggle(parent, initialText, initialState, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.fromOffset(120, 40)
+    button.AnchorPoint = Vector2.new(1, 0.5)
+    button.Position = UDim2.new(1, -15, 0.5, 0)
+    button.Text = initialText
+    button.ZIndex = 25
+    button.Parent = parent
+    local on = initialState
+    button.BackgroundColor3 = on and Color3.fromRGB(40, 200, 40) or Color3.fromRGB(200, 40, 40)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextStrokeColor3 = Color3.new(0, 0, 0)
+    button.TextStrokeTransparency = 0
+    button.Font = Enum.Font.FredokaOne
+    button.TextSize = 16
+    button.AutoButtonColor = false
+    makeCorner(button, 6)
+    makeStroke(button, 2)
+    local setButtonColor = applyStudButton(button, button.BackgroundColor3, 0.42, 34)
+    button.Activated:Connect(function()
+        on = not on
+        setButtonColor(on and Color3.fromRGB(40, 200, 40) or Color3.fromRGB(200, 40, 40))
+        callback(on)
+    end)
+    return button
+end
+
+local function createSlider(parent, labelText, minValue, maxValue, initialValue, callback)
+    local row = createSettingRow(parent, labelText)
+    local slider = Instance.new("Frame")
+    slider.Size = UDim2.new(0.4, 0, 0, 15)
+    slider.AnchorPoint = Vector2.new(1, 0.5)
+    slider.Position = UDim2.new(1, -20, 0.5, 0)
+    slider.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    slider.BorderSizePixel = 0
+    slider.ZIndex = 25
+    slider.Parent = row
+    makeCorner(slider, 10)
+    makeStroke(slider, 2)
+    makeStudTexture(slider, Color3.fromRGB(28, 28, 28), 0.62, 24)
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(math.clamp((initialValue - minValue) / (maxValue - minValue), 0, 1), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(40, 200, 40)
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 26
+    fill.Parent = slider
+    makeCorner(fill, 10)
+    makeStudTexture(fill, Color3.fromRGB(30, 160, 45), 0.48, 24)
+    
+    local knob = Instance.new("TextButton")
+    knob.Size = UDim2.fromOffset(25, 25)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(1, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1)
+    knob.Text = ""
+    knob.ZIndex = 27
+    knob.Parent = fill
+    makeCorner(knob, 20)
+    makeStroke(knob, 2)
+    applyStudButton(knob, Color3.fromRGB(235, 235, 235), 0.38, 22)
+    
+    local dragging = false
+    local function update(input)
+        if slider.AbsoluteSize.X <= 0 then
+            return
+        end
+        local pct = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+        fill.Size = UDim2.new(pct, 0, 1, 0)
+        callback(minValue + pct * (maxValue - minValue))
+    end
+    slider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            update(input)
+        end
+    end)
+    knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            update(input)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    return row
+end
+
+local function setPlayerCharactersHidden(hidden)
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            for _, object in ipairs(otherPlayer.Character:GetDescendants()) do
+                if object:IsA("BasePart") then
+                    if hidden then
+                        if originalPlayerParts[object] == nil then
+                            originalPlayerParts[object] = {kind = "part", value = object.LocalTransparencyModifier}
+                        end
+                        object.LocalTransparencyModifier = 1
+                    elseif originalPlayerParts[object] then
+                        object.LocalTransparencyModifier = originalPlayerParts[object].value
+                        originalPlayerParts[object] = nil
+                    end
+                elseif object:IsA("Decal") or object:IsA("Texture") then
+                    if hidden then
+                        if originalPlayerParts[object] == nil then
+                            originalPlayerParts[object] = {kind = "texture", value = object.Transparency}
+                        end
+                        object.Transparency = 1
+                    elseif originalPlayerParts[object] then
+                        object.Transparency = originalPlayerParts[object].value
+                        originalPlayerParts[object] = nil
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function restorePlayerCharacters()
+    for object, info in pairs(originalPlayerParts) do
+        if object and object.Parent then
+            if info.kind == "part" then
+                object.LocalTransparencyModifier = info.value
+            else
+                object.Transparency = info.value
+            end
+        end
+        originalPlayerParts[object] = nil
+    end
+end
+
+local function buildSettings()
+    local popup, scroll = createPopup("Settings", 500)
+    settingsPopup = popup
+    
+    createSlider(scroll, "Field of View", 70, 120, getCamera().FieldOfView, function(value)
+        getCamera().FieldOfView = value
+    end)
+    
+    local timeRow = createSettingRow(scroll, "Time of Day")
+    local timeButton
+    timeButton = createToggle(timeRow, isDay and "Day" or "Night", isDay, function(value)
+        isDay = value
+        timeButton.Text = value and "Day" or "Night"
+        TweenService:Create(Lighting, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+        ClockTime = value and 14 or 2
+        }):Play()
+    end)
+    
+    local graphicsRow = createSettingRow(scroll, "Graphics")
+    local graphicsButton = Instance.new("TextButton")
+    graphicsButton.Size = UDim2.fromOffset(120, 40)
+    graphicsButton.AnchorPoint = Vector2.new(1, 0.5)
+    graphicsButton.Position = UDim2.new(1, -15, 0.5, 0)
+    graphicsButton.BackgroundColor3 = Color3.fromRGB(40, 200, 40)
+    graphicsButton.Text = graphicsOptions[graphicsIndex]
+    graphicsButton.TextColor3 = Color3.new(1, 1, 1)
+    graphicsButton.TextStrokeColor3 = Color3.new(0, 0, 0)
+    graphicsButton.TextStrokeTransparency = 0
+    graphicsButton.Font = Enum.Font.FredokaOne
+    graphicsButton.TextSize = 16
+    graphicsButton.AutoButtonColor = false
+    graphicsButton.ZIndex = 25
+    graphicsButton.Parent = graphicsRow
+    makeCorner(graphicsButton, 6)
+    makeStroke(graphicsButton, 2)
+    applyStudButton(graphicsButton, Color3.fromRGB(40, 200, 40), 0.42, 34)
+    graphicsButton.Activated:Connect(function()
+        graphicsIndex = graphicsIndex % #graphicsOptions + 1
+        graphicsButton.Text = graphicsOptions[graphicsIndex]
+        if graphicsIndex == 1 then
+            Lighting.GlobalShadows = false
+            Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        elseif graphicsIndex == 2 then
+            Lighting.GlobalShadows = true
+            Lighting.OutdoorAmbient = Color3.fromRGB(160, 160, 160)
+        else
+            Lighting.GlobalShadows = true
+            Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
+        end
+    end)
+    
+    local hideRow = createSettingRow(scroll, "Hide Players")
+    local hideButton
+    hideButton = createToggle(hideRow, hidePlayers and "Hidden" or "Visible", hidePlayers, function(value)
+        hidePlayers = value
+        hideButton.Text = value and "Hidden" or "Visible"
+        setPlayerCharactersHidden(value)
+    end)
+    
+    local _, _, closeSettings = popup, scroll, nil
+    return popup
+end
+
+local function buildCredits()
+    local popup, scroll = createPopup("Credits", 350)
+    creditsPopup = popup
+    for index = 1, math.min(#CreditsConfig, 8) do
+        local credit = CreditsConfig[index]
+        local row = createSettingRow(scroll, "", 65)
+        local thumb = Instance.new("ImageLabel")
+        thumb.Size = UDim2.fromOffset(48, 48)
+        thumb.Position = UDim2.fromOffset(8, 8)
+        thumb.BackgroundTransparency = 1
+        thumb.ZIndex = 25
+        thumb.Parent = row
+        makeCorner(thumb, 8)
+        makeStroke(thumb, 2)
+        
+        local name = makeText(row, credit.Username, Enum.Font.FredokaOne, 18)
+        name.Size = UDim2.new(0.42, -55, 1, 0)
+        name.Position = UDim2.fromOffset(65, 0)
+        name.TextXAlignment = Enum.TextXAlignment.Left
+        name.TextTruncate = Enum.TextTruncate.AtEnd
+        name.ZIndex = 25
+        
+        local role = makeText(row, credit.Role, Enum.Font.FredokaOne, 15, Color3.fromRGB(210, 210, 210))
+        role.Size = UDim2.new(0.48, -8, 1, 0)
+        role.Position = UDim2.new(0.52, 0, 0, 0)
+        role.TextXAlignment = Enum.TextXAlignment.Right
+        role.TextTruncate = Enum.TextTruncate.AtEnd
+        role.ZIndex = 25
+        
+        task.spawn(function()
+            local success, userId = pcall(function()
+                return Players:GetUserIdFromNameAsync(credit.Username)
+            end)
+            if success and userId and thumb.Parent then
+                local ok, image = pcall(function()
+                    return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+                end)
+                if ok and thumb.Parent then
+                    thumb.Image = image
+                end
+            end
+        end)
+    end
+    return popup
+end
+
+local function createMenuButton(parent, text, color)
+    local baseColor = color or Color3.fromRGB(35, 150, 55)
+    local button = Instance.new("TextButton")
+    button.Name = text:gsub("%s+", "") .. "Button"
+    button.Size = UDim2.new(1, -32, 0, 58)
+    button.BackgroundColor3 = baseColor
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextStrokeColor3 = Color3.new(0, 0, 0)
+    button.TextStrokeTransparency = 0
+    button.Font = Enum.Font.FredokaOne
+    button.TextSize = text == "Play" and 25 or 22
+    button.AutoButtonColor = false
+    button.ZIndex = 5
+    button.Parent = parent
+    makeCorner(button, 8)
+    makeStroke(button, 5)
+    applyStudButton(button, baseColor, 0.48, 40)
+    return button
+end
+
+local function restoreCamera()
+    stopMenuCamera()
+    local current = getCamera()
+    current.CameraType = Enum.CameraType.Custom
+    local character = player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        current.CameraSubject = humanoid
+    elseif originalCameraSubject and originalCameraSubject.Parent then
+        current.CameraSubject = originalCameraSubject
+    end
+    if originalCameraType and originalCameraType ~= Enum.CameraType.Scriptable then
+        current.CameraType = originalCameraType
+    else
+        current.CameraType = Enum.CameraType.Custom
+    end
+end
+
+local function startGame()
+    if isPlaying then
+        return
+    end
+    isPlaying = true
+    
+    local fadeGui = Instance.new("ScreenGui")
+    fadeGui.Name = "PlayTransitionFade"
+    fadeGui.IgnoreGuiInset = true
+    fadeGui.ResetOnSpawn = false
+    fadeGui.DisplayOrder = 1000
+    fadeGui.Parent = playerGui
+    
+    local fadeFrame = Instance.new("Frame")
+    fadeFrame.Size = UDim2.fromScale(1, 1)
+    fadeFrame.Position = UDim2.fromScale(0, 0)
+    fadeFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+    fadeFrame.BackgroundTransparency = 1
+    fadeFrame.BorderSizePixel = 0
+    fadeFrame.Parent = fadeGui
+    
+    local fadeIn = TweenService:Create(fadeFrame, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+    BackgroundTransparency = 0
+    })
+    fadeIn:Play()
+    fadeIn.Completed:Wait()
+    
+    stopMenuCamera()
+    setCharacterLocked(player.Character, false)
+    restorePlayerCharacters()
+    safeSetCoreGui(Enum.CoreGuiType.Chat, originalCoreGui.Chat ~= false)
+    safeSetCoreGui(Enum.CoreGuiType.PlayerList, originalCoreGui.PlayerList ~= false)
+    safeSetCoreGui(Enum.CoreGuiType.Backpack, originalCoreGui.Backpack ~= false)
+    safeSetResetButton(true)
+    
+    restoreCamera()
+    if blur then
+        blur.Size = 0
+        blur:Destroy()
+        blur = nil
+    end
+    if screenGui then
+        screenGui:Destroy()
+        screenGui = nil
+    end
+    
+    local fadeOut = TweenService:Create(fadeFrame, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+    BackgroundTransparency = 1
+    })
+    fadeOut:Play()
+    fadeOut.Completed:Wait()
+    fadeGui:Destroy()
+end
+
+local function initialize()
+    camera = getCamera()
+    originalCameraType = camera.CameraType
+    originalCameraSubject = camera.CameraSubject
+    originalCameraCFrame = camera.CFrame
+    originalCoreGui.Chat = true
+    originalCoreGui.PlayerList = true
+    originalCoreGui.Backpack = true
+    pcall(function()
+        originalCoreGui.Chat = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Chat)
+        originalCoreGui.PlayerList = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.PlayerList)
+        originalCoreGui.Backpack = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Backpack)
+    end)
+    
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "MainMenu"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 20
+    screenGui.Parent = playerGui
+    
+    uiScale = Instance.new("UIScale")
+    uiScale.Scale = calculateUIScale()
+    uiScale.Parent = screenGui
+    
+    camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+        if uiScale and uiScale.Parent then
+            uiScale.Scale = calculateUIScale()
+        end
+    end)
+    Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        if not isPlaying then
+            task.defer(function()
+                getCamera()
+                if uiScale and uiScale.Parent then
+                    uiScale.Scale = calculateUIScale()
+                end
+                setCameraToMenu()
+            end)
+        end
+    end)
+    
+    local background = Instance.new("Frame")
+    background.Size = UDim2.fromScale(1, 1)
+    background.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    background.BackgroundTransparency = 0.2
+    background.BorderSizePixel = 0
+    background.Parent = screenGui
+    makeStudTexture(background, Color3.fromRGB(40, 40, 40), 0.65, 60)
+    
+    local topBanner = Instance.new("Frame")
+    topBanner.Size = UDim2.new(1, 0, 0, 100)
+    topBanner.BackgroundColor3 = Color3.fromRGB(35, 150, 55)
+    topBanner.BorderSizePixel = 0
+    topBanner.Position = UDim2.new(0, 0, 0, 0)
+    topBanner.Parent = screenGui
+    makeStudTexture(topBanner, Color3.fromRGB(25, 90, 35), 0.35, 50)
+    makeStroke(topBanner, 4)
+    
+    titleLabel = makeText(topBanner, TITLE_TEXT, Enum.Font.FredokaOne, 48)
+    titleLabel.Size = UDim2.new(1, -30, 1, 0)
+    titleLabel.Position = UDim2.fromOffset(15, 0)
+    titleLabel.TextScaled = true
+    titleLabel.TextTransparency = 0
+    titleLabel.TextStrokeTransparency = 0
+    titleLabel.ZIndex = 3
+    local titleConstraint = Instance.new("UITextSizeConstraint")
+    titleConstraint.MaxTextSize = 48
+    titleConstraint.MinTextSize = 24
+    titleConstraint.Parent = titleLabel
+    
+    local menuPanel = Instance.new("Frame")
+    menuPanel.Name = "MainMenuButtonPanel"
+    menuPanel.Size = UDim2.fromOffset(330, 250)
+    menuPanel.AnchorPoint = Vector2.new(0, 0.5)
+    local menuPanelTargetPosition = UDim2.new(0, 55, 0.55, 0)
+    menuPanel.Position = UDim2.new(0, -380, 0.55, 0)
+    menuPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    menuPanel.BackgroundTransparency = 0
+    menuPanel.BorderSizePixel = 0
+    menuPanel.ClipsDescendants = true
+    menuPanel.Parent = screenGui
+    makeCorner(menuPanel, 10)
+    makeStroke(menuPanel, 5)
+    makeStudTexture(menuPanel, Color3.fromRGB(40, 40, 40), 0.6, 50)
+    
+    local playButton = createMenuButton(menuPanel, "Play", Color3.fromRGB(35, 150, 55))
+    local settingsButton = createMenuButton(menuPanel, "Settings", Color3.fromRGB(45, 45, 45))
+    local creditsButton = createMenuButton(menuPanel, "Credits", Color3.fromRGB(45, 45, 45))
+    
+    local buttonHeight = 58
+    local buttonWidth = UDim2.new(1, -32, 0, buttonHeight)
+    playButton.Size = buttonWidth
+    playButton.Position = UDim2.new(0, 16, 0, 18)
+    settingsButton.Size = buttonWidth
+    settingsButton.Position = UDim2.new(0, 16, 0, 96)
+    creditsButton.Size = buttonWidth
+    creditsButton.Position = UDim2.new(0, 16, 0, 174)
+    
+    playButton.BackgroundTransparency = 0
+    settingsButton.BackgroundTransparency = 0
+    creditsButton.BackgroundTransparency = 0
+    
+    settingsPopup = buildSettings()
+    creditsPopup = buildCredits()
+    
+    playButton.Activated:Connect(startGame)
+    settingsButton.Activated:Connect(function()
+        if isPlaying then
+            return
+        end
+        if creditsPopup.Visible then
+            animatePopup(creditsPopup, false)
+        end
+        animatePopup(settingsPopup, not settingsPopup.Visible)
+    end)
+    creditsButton.Activated:Connect(function()
+        if isPlaying then
+            return
+        end
+        if settingsPopup.Visible then
+            animatePopup(settingsPopup, false)
+        end
+        animatePopup(creditsPopup, not creditsPopup.Visible)
+    end)
+    
+    TweenService:Create(
+    menuPanel,
+    TweenInfo.new(0.65, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    {Position = menuPanelTargetPosition}
+    ):Play()
+    
+    blur = Lighting:FindFirstChild("MainMenuBlur")
+    if not blur then
+        blur = Instance.new("BlurEffect")
+        blur.Name = "MainMenuBlur"
+        blur.Size = 18
+        blur.Parent = Lighting
+    else
+        blur.Size = 18
+    end
+    
+    safeSetCoreGui(Enum.CoreGuiType.Chat, false)
+    safeSetResetButton(false)
+    setCharacterLocked(player.Character, true)
+    characterConnection = player.CharacterAdded:Connect(function(character)
+        if not isPlaying then
+            task.wait(0.15)
+            setCharacterLocked(character, true)
+            setCameraToMenu()
+        end
+    end)
+    setCameraToMenu()
+end
+
+initialize()
