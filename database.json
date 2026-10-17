@@ -1140,6 +1140,17 @@
       "size": 19558,
       "created": "2026-09-27T15:49:27.610Z",
       "updated": "2026-09-27T15:49:27.610Z"
+    },
+    "Better Main Menu": {
+      "title": "Better Main Menu",
+      "displayTitle": "Better Main Menu",
+      "visibility": "UNLISTED",
+      "description": "",
+      "expiration": null,
+      "filename": "better-main-menu.txt",
+      "size": 36883,
+      "created": "2026-10-17T06:42:11.357Z",
+      "updated": "2026-10-17T06:42:11.357Z"
     }
   },
   "bots": {
